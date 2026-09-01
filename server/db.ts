@@ -37,7 +37,6 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_media_type        ON media_items(type);
   CREATE INDEX IF NOT EXISTS idx_media_status      ON media_items(status);
   CREATE INDEX IF NOT EXISTS idx_media_added       ON media_items(added_at);
-  CREATE INDEX IF NOT EXISTS idx_media_release     ON media_items(release_date);
 
   CREATE TABLE IF NOT EXISTS settings (
     key   TEXT PRIMARY KEY,
@@ -76,3 +75,6 @@ const newCols: [string, string][] = [
 for (const [col, def] of newCols) {
   if (!cols.includes(col)) db.exec(`ALTER TABLE media_items ADD COLUMN ${col} ${def}`)
 }
+
+// Indexes that depend on migrated columns must be created after the ALTERs above
+db.exec(`CREATE INDEX IF NOT EXISTS idx_media_release ON media_items(release_date)`)
