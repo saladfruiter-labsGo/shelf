@@ -15,7 +15,7 @@ export const TYPE_COLOR: Record<MediaType, string> = {
 }
 
 export const STATUS_LABEL = {
-  wishlist:    'Quero ver',
+  wishlist:    'Wishlist',
   in_progress: 'Em andamento',
   completed:   'Concluído',
   dropped:     'Abandonado',
@@ -30,4 +30,13 @@ export function formatRuntime(minutes: number): string {
 
 export function cn(...classes: (string | false | null | undefined)[]): string {
   return classes.filter(Boolean).join(' ')
+}
+
+export function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })
+}
+
+export function daysUntil(dateStr: string): number {
+  const ms = new Date(dateStr).getTime() - Date.now()
+  return Math.ceil(ms / 86_400_000)
 }

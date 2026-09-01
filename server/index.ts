@@ -8,6 +8,8 @@ import searchRoutes   from './routes/search.js'
 import mediaRoutes    from './routes/media.js'
 import wrapRoutes     from './routes/wrap.js'
 import settingsRoutes from './routes/settings.js'
+import detailsRoutes  from './routes/details.js'
+import listsRoutes    from './routes/lists.js'
 
 const app = new Hono()
 
@@ -18,6 +20,8 @@ app.route('/api/search',   searchRoutes)
 app.route('/api/media',    mediaRoutes)
 app.route('/api/wrap',     wrapRoutes)
 app.route('/api/settings', settingsRoutes)
+app.route('/api/details',  detailsRoutes)
+app.route('/api/lists',    listsRoutes)
 
 app.get('/api/health', (c) => c.json({ ok: true }))
 

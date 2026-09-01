@@ -1,19 +1,16 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Layout } from './components/Layout'
-import { Dashboard } from './pages/Dashboard'
-import { Library } from './pages/Library'
+import { Dashboard }  from './pages/Dashboard'
+import { Library }    from './pages/Library'
 import { MediaDetail } from './pages/MediaDetail'
-import { Wrap } from './pages/Wrap'
-import { Settings } from './pages/Settings'
+import { Wrap }       from './pages/Wrap'
+import { Settings }   from './pages/Settings'
+import { Lists }      from './pages/Lists'
+import { ListDetail } from './pages/ListDetail'
 
 const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 60_000,
-      retry: 1,
-    },
-  },
+  defaultOptions: { queries: { staleTime: 60_000, retry: 1 } },
 })
 
 export function App() {
@@ -22,11 +19,13 @@ export function App() {
       <BrowserRouter>
         <Routes>
           <Route element={<Layout />}>
-            <Route index element={<Dashboard />} />
+            <Route index          element={<Dashboard />} />
             <Route path="library" element={<Library />} />
             <Route path="media/:id" element={<MediaDetail />} />
-            <Route path="wrap" element={<Wrap />} />
+            <Route path="wrap"    element={<Wrap />} />
             <Route path="settings" element={<Settings />} />
+            <Route path="lists"   element={<Lists />} />
+            <Route path="lists/:id" element={<ListDetail />} />
           </Route>
         </Routes>
       </BrowserRouter>

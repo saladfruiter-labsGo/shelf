@@ -10,10 +10,8 @@ app.get('/', (c) => {
 
   let sql = 'SELECT * FROM media_items WHERE 1=1'
   const params: (string | number)[] = []
-
   if (type)   { sql += ' AND type = ?';   params.push(type) }
   if (status) { sql += ' AND status = ?'; params.push(status) }
-
   sql += ' ORDER BY added_at DESC LIMIT ?'
   params.push(limit)
 
@@ -22,16 +20,33 @@ app.get('/', (c) => {
 
 app.get('/recent', (c) => {
   const perType = parseInt(c.req.query('per_type') ?? '12')
-  const types = ['movie', 'series', 'game', 'book']
   const result: Record<string, unknown[]> = {}
-
-  for (const t of types) {
-    result[t] = db
-      .prepare('SELECT * FROM media_items WHERE type = ? ORDER BY added_at DESC LIMIT ?')
-      .all(t, perType)
+  for (const t of ['movie', 'series', 'game', 'book']) {
+    result[t] = db.prepare('SELECT * FROM media_items WHERE type = ? ORDER BY added_at DESC LIMIT ?').all(t, perType)
   }
-
   return c.json(result)
+})
+
+app.get('/upcoming', (c) => {
+  const today = new Date().toISOString().slice(0, 10)
+  const in30  = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+
+  const wishlist = db.prepare(`
+    SELECT * FROM media_items
+    WHERE status = 'wishlist'
+    ORDER BY release_date ASC NULLS LAST, added_at DESC
+    LIMIT 24
+  `).all()
+
+  const hype = db.prepare(`
+    SELECT * FROM media_items
+    WHERE hype = 1
+       OR (release_date IS NOT NULL AND release_date BETWEEN ? AND ?)
+    ORDER BY release_date ASC, added_at DESC
+    LIMIT 24
+  `).all(today, in30)
+
+  return c.json({ wishlist, hype })
 })
 
 app.get('/:id', (c) => {
@@ -42,24 +57,26 @@ app.get('/:id', (c) => {
 
 app.post('/', async (c) => {
   const body = await c.req.json()
-  const { external_id, type, title, cover_url, year, genre, runtime, status = 'wishlist', notes } = body
+  const { external_id, type, title, cover_url, year, genre, runtime, status = 'wishlist',
+          notes, synopsis, creators, author, release_date } = body
 
   if (!external_id || !type || !title) {
     return c.json({ error: 'external_id, type and title are required' }, 400)
   }
 
   try {
-    const result = db.prepare(`
-      INSERT INTO media_items (external_id, type, title, cover_url, year, genre, runtime, status, notes)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(external_id, type, title, cover_url ?? null, year ?? null, genre ?? null, runtime ?? null, status, notes ?? null)
+    const res = db.prepare(`
+      INSERT INTO media_items
+        (external_id, type, title, cover_url, year, genre, runtime, status, notes,
+         synopsis, creators, author, release_date)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(external_id, type, title, cover_url ?? null, year ?? null, genre ?? null,
+           runtime ?? null, status, notes ?? null,
+           synopsis ?? null, creators ?? null, author ?? null, release_date ?? null)
 
-    const item = db.prepare('SELECT * FROM media_items WHERE id = ?').get(result.lastInsertRowid)
-    return c.json(item, 201)
-  } catch (e: unknown) {
-    if ((e as NodeJS.ErrnoException).message?.includes('UNIQUE')) {
-      return c.json({ error: 'Already in library' }, 409)
-    }
+    return c.json(db.prepare('SELECT * FROM media_items WHERE id = ?').get(res.lastInsertRowid), 201)
+  } catch (e: any) {
+    if (e.message?.includes('UNIQUE')) return c.json({ error: 'Already in library' }, 409)
     throw e
   }
 })
@@ -67,14 +84,12 @@ app.post('/', async (c) => {
 app.patch('/:id', async (c) => {
   const id   = c.req.param('id')
   const body = await c.req.json()
-  const allowed = ['rating', 'status', 'notes', 'runtime']
-  const fields  = Object.keys(body).filter((k) => allowed.includes(k))
-
+  const allowed = ['rating', 'status', 'notes', 'runtime', 'synopsis', 'creators', 'author', 'release_date', 'hype']
+  const fields  = Object.keys(body).filter(k => allowed.includes(k))
   if (fields.length === 0) return c.json({ error: 'No valid fields' }, 400)
 
-  const set    = fields.map((f) => `${f} = ?`).join(', ')
-  const values = fields.map((f) => body[f])
-
+  const set    = fields.map(f => `${f} = ?`).join(', ')
+  const values = fields.map(f => body[f])
   db.prepare(`UPDATE media_items SET ${set}, updated_at = datetime('now') WHERE id = ?`).run(...values, id)
 
   const item = db.prepare('SELECT * FROM media_items WHERE id = ?').get(id)
@@ -83,8 +98,7 @@ app.patch('/:id', async (c) => {
 })
 
 app.delete('/:id', (c) => {
-  const id  = c.req.param('id')
-  const res = db.prepare('DELETE FROM media_items WHERE id = ?').run(id)
+  const res = db.prepare('DELETE FROM media_items WHERE id = ?').run(c.req.param('id'))
   if (res.changes === 0) return c.json({ error: 'Not found' }, 404)
   return c.json({ ok: true })
 })
