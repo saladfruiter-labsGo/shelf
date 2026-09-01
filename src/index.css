@@ -1,0 +1,102 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg:           #F6F3EE;
+  --surface:      #EDEAE3;
+  --card:         #E3DED5;
+  --card-hover:   #D8D2C7;
+  --border:       #C8C2B5;
+  --border-strong:#A09890;
+  --text-primary: #1A1612;
+  --text-secondary:#4A4540;
+  --text-muted:   #7A736A;
+  --accent:       #C8841A;
+  --accent-bg:    #C8841A22;
+  --movies:       #B83030;
+  --movies-bg:    #B8303022;
+  --games:        #148A50;
+  --games-bg:     #148A5022;
+  --series:       #6B40C8;
+  --series-bg:    #6B40C822;
+  --books:        #965C08;
+  --books-bg:     #965C0822;
+}
+
+.dark {
+  --bg:           #0C1118;
+  --surface:      #141C28;
+  --card:         #1C2838;
+  --card-hover:   #233044;
+  --border:       #283548;
+  --border-strong:#3A4E68;
+  --text-primary: #EDF2F8;
+  --text-secondary:#94A8C0;
+  --text-muted:   #5A7090;
+  --accent:       #E8A030;
+  --accent-bg:    #E8A03022;
+  --movies:       #D94444;
+  --movies-bg:    #D9444422;
+  --games:        #20C97A;
+  --games-bg:     #20C97A22;
+  --series:       #8A5FE8;
+  --series-bg:    #8A5FE822;
+  --books:        #C47A0A;
+  --books-bg:     #C47A0A22;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-family: 'DM Sans', system-ui, sans-serif;
+  background-color: var(--bg);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  background-color: var(--bg);
+  color: var(--text-primary);
+  min-height: 100vh;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 3px;
+}
+
+.font-display {
+  font-family: 'Playfair Display', Georgia, serif;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.2s ease-out forwards;
+}
+
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+.animate-scale-in {
+  animation: scale-in 0.2s ease-out forwards;
+}

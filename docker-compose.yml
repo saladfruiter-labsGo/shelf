@@ -1,0 +1,14 @@
+services:
+  shelf:
+    build: .
+    container_name: shelf
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - /mnt/user/appdata/shelf/data:/app/data
+    env_file:
+      - .env
+    environment:
+      - PORT=3000
+      - DATA_DIR=/app/data
