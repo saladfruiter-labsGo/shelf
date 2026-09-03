@@ -58,7 +58,7 @@ app.get('/:id', (c) => {
 app.post('/', async (c) => {
   const body = await c.req.json()
   const { external_id, type, title, cover_url, year, genre, runtime, status = 'wishlist',
-          notes, synopsis, creators, author, release_date } = body
+          notes, synopsis, creators, author, release_date, completed_at } = body
 
   if (!external_id || !type || !title) {
     return c.json({ error: 'external_id, type and title are required' }, 400)
@@ -68,11 +68,12 @@ app.post('/', async (c) => {
     const res = db.prepare(`
       INSERT INTO media_items
         (external_id, type, title, cover_url, year, genre, runtime, status, notes,
-         synopsis, creators, author, release_date)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         synopsis, creators, author, release_date, completed_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(external_id, type, title, cover_url ?? null, year ?? null, genre ?? null,
            runtime ?? null, status, notes ?? null,
-           synopsis ?? null, creators ?? null, author ?? null, release_date ?? null)
+           synopsis ?? null, creators ?? null, author ?? null, release_date ?? null,
+           completed_at ?? null)
 
     return c.json(db.prepare('SELECT * FROM media_items WHERE id = ?').get(res.lastInsertRowid), 201)
   } catch (e: any) {
@@ -84,7 +85,7 @@ app.post('/', async (c) => {
 app.patch('/:id', async (c) => {
   const id   = c.req.param('id')
   const body = await c.req.json()
-  const allowed = ['rating', 'status', 'notes', 'runtime', 'synopsis', 'creators', 'author', 'release_date', 'hype']
+  const allowed = ['rating', 'status', 'notes', 'runtime', 'synopsis', 'creators', 'author', 'release_date', 'hype', 'completed_at']
   const fields  = Object.keys(body).filter(k => allowed.includes(k))
   if (fields.length === 0) return c.json({ error: 'No valid fields' }, 400)
 

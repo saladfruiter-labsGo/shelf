@@ -2,9 +2,10 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
-import type { MediaType, SearchResult } from '../types'
+import type { MediaStatus, MediaType, SearchResult } from '../types'
 import { CategoryTag } from './CategoryTag'
-import { TYPE_LABEL } from '../lib/utils'
+import { StarRating } from './StarRating'
+import { TYPE_LABEL, STATUS_LABEL } from '../lib/utils'
 
 interface Props {
   open:    boolean
@@ -16,6 +17,13 @@ const TYPE_FILTERS: { label: string; value: MediaType; tag: string; emoji: strin
   { label: 'Séries',  value: 'series', tag: '/series',  emoji: '📺' },
   { label: 'Jogos',   value: 'game',   tag: '/jogos',   emoji: '🎮' },
   { label: 'Livros',  value: 'book',   tag: '/livros',  emoji: '📚' },
+]
+
+const STATUSES: { value: MediaStatus; label: string }[] = [
+  { value: 'wishlist',    label: 'Wishlist' },
+  { value: 'in_progress', label: 'Em curso' },
+  { value: 'completed',   label: 'Concluído' },
+  { value: 'dropped',     label: 'Abandonei' },
 ]
 
 const TAG_MAP: Record<string, MediaType> = {
@@ -32,17 +40,106 @@ function parseInput(raw: string): { tagType: MediaType | null; q: string } {
   return { tagType, q: m[2].trim() }
 }
 
+// ─── Confirmation panel ────────────────────────────────────────────────
+interface ConfirmProps {
+  result:   SearchResult
+  onBack:   () => void
+  onAdd:    (opts: { status: MediaStatus; rating: number; completed_at: string | null }) => void
+  isPending: boolean
+}
+
+function ConfirmPanel({ result, onBack, onAdd, isPending }: ConfirmProps) {
+  const [status, setStatus]       = useState<MediaStatus>('wishlist')
+  const [rating, setRating]       = useState(0)
+  const [completedAt, setCompletedAt] = useState('')
+
+  const showDate = status === 'completed'
+
+  return (
+    <div className="p-4">
+      {/* Selected item preview */}
+      <div className="flex items-center gap-3 mb-4 p-3 bg-card rounded-lg border border-border">
+        <div className="w-9 h-12 flex-shrink-0 rounded overflow-hidden bg-surface border border-border">
+          {result.cover_url
+            ? <img src={result.cover_url} alt="" className="w-full h-full object-cover" />
+            : <div className="w-full h-full flex items-center justify-center text-base text-muted">
+                {TYPE_FILTERS.find(f => f.value === result.type)?.emoji}
+              </div>
+          }
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium text-primary truncate">{result.title}</p>
+          <p className="text-xs text-muted">{result.year}{result.author ? ` · ${result.author}` : ''}</p>
+        </div>
+        <button onClick={onBack} className="text-muted hover:text-primary text-lg leading-none flex-shrink-0">←</button>
+      </div>
+
+      {/* Status */}
+      <div className="mb-4">
+        <p className="text-xs text-muted uppercase tracking-wide mb-2">Status</p>
+        <div className="flex flex-wrap gap-1.5">
+          {STATUSES.map(s => (
+            <button
+              key={s.value}
+              type="button"
+              onClick={() => setStatus(s.value)}
+              className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                status === s.value
+                  ? 'bg-accent text-bg'
+                  : 'bg-card text-muted hover:text-primary border border-border'
+              }`}
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Rating */}
+      <div className="mb-4">
+        <p className="text-xs text-muted uppercase tracking-wide mb-2">Avaliação</p>
+        <StarRating value={rating} onChange={setRating} size="lg" />
+        {rating > 0 && (
+          <span className="text-xs text-muted ml-1 mt-1 inline-block">{rating} estrela{rating !== 1 ? 's' : ''}</span>
+        )}
+      </div>
+
+      {/* Completion date (only when completed) */}
+      {showDate && (
+        <div className="mb-4">
+          <p className="text-xs text-muted uppercase tracking-wide mb-2">Data de conclusão</p>
+          <input
+            type="date"
+            value={completedAt}
+            onChange={e => setCompletedAt(e.target.value)}
+            className="bg-card border border-border rounded-md px-3 py-1.5 text-sm text-primary outline-none focus:border-accent w-full"
+          />
+        </div>
+      )}
+
+      {/* Add button */}
+      <button
+        onClick={() => onAdd({ status, rating, completed_at: showDate && completedAt ? completedAt : null })}
+        disabled={isPending}
+        className="w-full py-2 bg-accent text-bg rounded-lg text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-60"
+      >
+        {isPending ? 'Adicionando...' : '+ Adicionar à biblioteca'}
+      </button>
+    </div>
+  )
+}
+
+// ─── Main modal ────────────────────────────────────────────────────────
 export function SearchModal({ open, onClose }: Props) {
-  const [rawInput,   setRawInput]   = useState('')
-  const [manualType, setManualType] = useState<MediaType | null>(null)
-  const [debouncedQ, setDebouncedQ] = useState('')
+  const [rawInput,    setRawInput]    = useState('')
+  const [manualType,  setManualType]  = useState<MediaType | null>(null)
+  const [debouncedQ,  setDebouncedQ]  = useState('')
+  const [confirming,  setConfirming]  = useState<SearchResult | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
-  const navigate = useNavigate()
-  const qc       = useQueryClient()
+  const navigate  = useNavigate()
+  const qc        = useQueryClient()
 
   const { tagType, q: cleanQ } = parseInput(rawInput)
-
-  // Active type: tag overrides manual
   const activeType: MediaType | null = tagType ?? manualType
 
   useEffect(() => {
@@ -55,19 +152,22 @@ export function SearchModal({ open, onClose }: Props) {
       setRawInput('')
       setDebouncedQ('')
       setManualType(null)
+      setConfirming(null)
       setTimeout(() => inputRef.current?.focus(), 60)
     }
   }, [open])
 
   const handleKey = useCallback((e: KeyboardEvent) => {
-    if (e.key === 'Escape') onClose()
-  }, [onClose])
+    if (e.key === 'Escape') {
+      if (confirming) { setConfirming(null); return }
+      onClose()
+    }
+  }, [onClose, confirming])
   useEffect(() => {
     window.addEventListener('keydown', handleKey)
     return () => window.removeEventListener('keydown', handleKey)
   }, [handleKey])
 
-  // Search only fires when a type is active
   const searchEnabled = !!activeType && debouncedQ.length >= 2
 
   const { data, isFetching } = useQuery({
@@ -78,7 +178,12 @@ export function SearchModal({ open, onClose }: Props) {
   })
 
   const addMutation = useMutation({
-    mutationFn: (result: SearchResult) =>
+    mutationFn: ({ result, status, rating, completed_at }: {
+      result: SearchResult
+      status: MediaStatus
+      rating: number
+      completed_at: string | null
+    }) =>
       api.media.add({
         external_id:  result.external_id,
         type:         result.type,
@@ -87,12 +192,14 @@ export function SearchModal({ open, onClose }: Props) {
         year:         result.year,
         genre:        result.genre,
         runtime:      null,
-        status:       'wishlist',
+        status,
+        rating,
         notes:        null,
         synopsis:     null,
         creators:     null,
         author:       result.author,
         release_date: result.release_date,
+        completed_at,
       }),
     onSuccess: (item) => {
       qc.invalidateQueries({ queryKey: ['media'] })
@@ -110,135 +217,142 @@ export function SearchModal({ open, onClose }: Props) {
   }
 
   const selectManual = (type: MediaType) => {
-    if (tagType) {
-      // Clear typed tag, keep query
-      setRawInput(cleanQ)
-    }
+    if (tagType) setRawInput(cleanQ)
     setManualType(prev => prev === type ? null : type)
     inputRef.current?.focus()
   }
 
   if (!open) return null
 
-  const showTag = tagType !== null
-
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center pt-24 px-4">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
       <div className="relative w-full max-w-xl bg-surface border border-border rounded-xl shadow-2xl animate-scale-in overflow-hidden">
 
-        {/* Input row */}
-        <div className="flex items-center gap-2 px-4 py-3 border-b border-border">
-          <svg className="w-5 h-5 text-muted flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
-
-          {showTag && (
-            <span className="flex items-center gap-1 flex-shrink-0 bg-accent-bg text-accent text-xs px-2 py-1 rounded-full font-medium">
-              {TYPE_FILTERS.find(f => f.value === tagType)?.emoji} {TYPE_LABEL[tagType!]}
-              <button onClick={clearTag} className="ml-1 leading-none hover:text-primary">×</button>
-            </span>
-          )}
-
-          <input
-            ref={inputRef}
-            value={rawInput}
-            onChange={e => setRawInput(e.target.value)}
-            placeholder={
-              activeType
-                ? `Buscar ${TYPE_LABEL[activeType].toLowerCase()}s...`
-                : 'Selecione um tipo abaixo ou use /filmes, /series...'
+        {/* Confirmation panel — replaces results */}
+        {confirming ? (
+          <ConfirmPanel
+            result={confirming}
+            onBack={() => setConfirming(null)}
+            isPending={addMutation.isPending}
+            onAdd={({ status, rating, completed_at }) =>
+              addMutation.mutate({ result: confirming, status, rating, completed_at })
             }
-            className="flex-1 bg-transparent text-primary placeholder:text-muted outline-none text-base min-w-0"
           />
+        ) : (
+          <>
+            {/* Input row */}
+            <div className="flex items-center gap-2 px-4 py-3 border-b border-border">
+              <svg className="w-5 h-5 text-muted flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
 
-          {isFetching && <div className="w-4 h-4 border-2 border-accent border-t-transparent rounded-full animate-spin flex-shrink-0" />}
-          <kbd className="hidden sm:block text-xs text-muted bg-card px-1.5 py-0.5 rounded border border-border flex-shrink-0">Esc</kbd>
-        </div>
+              {tagType && (
+                <span className="flex items-center gap-1 flex-shrink-0 bg-accent-bg text-accent text-xs px-2 py-1 rounded-full font-medium">
+                  {TYPE_FILTERS.find(f => f.value === tagType)?.emoji} {TYPE_LABEL[tagType]}
+                  <button onClick={clearTag} className="ml-1 leading-none hover:text-primary">×</button>
+                </span>
+              )}
 
-        {/* Type selector */}
-        <div className="flex gap-1 px-3 py-2 border-b border-border">
-          {TYPE_FILTERS.map(f => {
-            const active = activeType === f.value
-            return (
-              <button
-                key={f.value}
-                onClick={() => selectManual(f.value)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
-                  active ? 'bg-accent text-bg' : 'bg-card text-muted hover:text-primary'
-                }`}
-              >
-                {f.emoji} {f.label}
-              </button>
-            )
-          })}
-        </div>
+              <input
+                ref={inputRef}
+                value={rawInput}
+                onChange={e => setRawInput(e.target.value)}
+                placeholder={
+                  activeType
+                    ? `Buscar ${TYPE_LABEL[activeType].toLowerCase()}s...`
+                    : 'Selecione um tipo abaixo ou use /filmes, /series...'
+                }
+                className="flex-1 bg-transparent text-primary placeholder:text-muted outline-none text-base min-w-0"
+              />
 
-        {/* Results / hints */}
-        <div className="max-h-80 overflow-y-auto">
-          {!activeType ? (
-            // No type selected — show tag hints
-            <div className="px-4 py-6">
-              <p className="text-xs text-muted uppercase tracking-wide mb-3">Buscar por categoria</p>
-              <div className="grid grid-cols-2 gap-2">
-                {TYPE_FILTERS.map(f => (
+              {isFetching && <div className="w-4 h-4 border-2 border-accent border-t-transparent rounded-full animate-spin flex-shrink-0" />}
+              <kbd className="hidden sm:block text-xs text-muted bg-card px-1.5 py-0.5 rounded border border-border flex-shrink-0">Esc</kbd>
+            </div>
+
+            {/* Type selector */}
+            <div className="flex gap-1 px-3 py-2 border-b border-border">
+              {TYPE_FILTERS.map(f => {
+                const active = activeType === f.value
+                return (
                   <button
                     key={f.value}
-                    onClick={() => setManualType(f.value)}
-                    className="flex items-center gap-2 px-3 py-2.5 bg-card rounded-lg text-sm text-secondary hover:text-primary hover:bg-card-hover transition-colors text-left"
+                    onClick={() => selectManual(f.value)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
+                      active ? 'bg-accent text-bg' : 'bg-card text-muted hover:text-primary'
+                    }`}
                   >
-                    <span className="text-lg">{f.emoji}</span>
-                    <div>
-                      <p className="font-medium">{f.label}</p>
-                      <p className="text-xs text-muted font-mono">{f.tag}</p>
-                    </div>
+                    {f.emoji} {f.label}
                   </button>
-                ))}
-              </div>
+                )
+              })}
             </div>
-          ) : debouncedQ.length < 2 ? (
-            <p className="text-center text-muted text-sm py-8">
-              Digite para buscar {TYPE_LABEL[activeType].toLowerCase()}s...
-            </p>
-          ) : data?.results && data.results.length > 0 ? (
-            <ul>
-              {data.results.map(result => (
-                <li key={`${result.type}-${result.external_id}`}>
-                  <button
-                    className="w-full flex items-center gap-3 px-4 py-3 hover:bg-card transition-colors text-left"
-                    onClick={() => addMutation.mutate(result)}
-                    disabled={addMutation.isPending}
-                  >
-                    <div className="w-10 h-14 flex-shrink-0 rounded overflow-hidden bg-card border border-border">
-                      {result.cover_url
-                        ? <img src={result.cover_url} alt="" className="w-full h-full object-cover" />
-                        : <div className="w-full h-full flex items-center justify-center text-muted text-lg">
-                            {TYPE_FILTERS.find(f => f.value === result.type)?.emoji}
+
+            {/* Results / hints */}
+            <div className="max-h-80 overflow-y-auto">
+              {!activeType ? (
+                <div className="px-4 py-6">
+                  <p className="text-xs text-muted uppercase tracking-wide mb-3">Buscar por categoria</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {TYPE_FILTERS.map(f => (
+                      <button
+                        key={f.value}
+                        onClick={() => setManualType(f.value)}
+                        className="flex items-center gap-2 px-3 py-2.5 bg-card rounded-lg text-sm text-secondary hover:text-primary hover:bg-card-hover transition-colors text-left"
+                      >
+                        <span className="text-lg">{f.emoji}</span>
+                        <div>
+                          <p className="font-medium">{f.label}</p>
+                          <p className="text-xs text-muted font-mono">{f.tag}</p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : debouncedQ.length < 2 ? (
+                <p className="text-center text-muted text-sm py-8">
+                  Digite para buscar {TYPE_LABEL[activeType].toLowerCase()}s...
+                </p>
+              ) : data?.results && data.results.length > 0 ? (
+                <ul>
+                  {data.results.map(result => (
+                    <li key={`${result.type}-${result.external_id}`}>
+                      <button
+                        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-card transition-colors text-left"
+                        onClick={() => setConfirming(result)}
+                      >
+                        <div className="w-10 h-14 flex-shrink-0 rounded overflow-hidden bg-card border border-border">
+                          {result.cover_url
+                            ? <img src={result.cover_url} alt="" className="w-full h-full object-cover" />
+                            : <div className="w-full h-full flex items-center justify-center text-muted text-lg">
+                                {TYPE_FILTERS.find(f => f.value === result.type)?.emoji}
+                              </div>
+                          }
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-primary truncate">{result.title}</p>
+                          <div className="flex items-center gap-2 mt-1 flex-wrap">
+                            <CategoryTag type={result.type} size="sm" />
+                            {result.year && <span className="text-xs text-muted">{result.year}</span>}
+                            {result.type === 'book' && result.author
+                              ? <span className="text-xs text-muted truncate">{result.author}</span>
+                              : result.genre
+                              ? <span className="text-xs text-muted truncate">{result.genre}</span>
+                              : null
+                            }
                           </div>
-                      }
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-primary truncate">{result.title}</p>
-                      <div className="flex items-center gap-2 mt-1 flex-wrap">
-                        <CategoryTag type={result.type} size="sm" />
-                        {result.year && <span className="text-xs text-muted">{result.year}</span>}
-                        {result.type === 'book' && result.author
-                          ? <span className="text-xs text-muted truncate">{result.author}</span>
-                          : result.genre
-                          ? <span className="text-xs text-muted truncate">{result.genre}</span>
-                          : null
-                        }
-                      </div>
-                    </div>
-                    <span className="text-xs text-muted flex-shrink-0">+ Adicionar</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          ) : !isFetching ? (
-            <p className="text-center text-muted text-sm py-8">Nenhum resultado para "{debouncedQ}"</p>
-          ) : null}
-        </div>
+                        </div>
+                        <span className="text-xs text-accent flex-shrink-0">Selecionar →</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : !isFetching ? (
+                <p className="text-center text-muted text-sm py-8">Nenhum resultado para "{debouncedQ}"</p>
+              ) : null}
+            </div>
+          </>
+        )}
       </div>
     </div>
   )

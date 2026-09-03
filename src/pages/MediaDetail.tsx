@@ -16,102 +16,228 @@ const TYPE_HEX: Record<MediaType, string> = {
   book:   '#C47A0A',
 }
 
+const TYPE_LABEL_STORY: Record<MediaType, string> = {
+  movie: 'FILME', series: 'SÉRIE', game: 'JOGO', book: 'LIVRO',
+}
+
+// ─── Canvas helpers ──────────────────────────────────────────────────
+function loadImage(url: string): Promise<HTMLImageElement> {
+  return new Promise((res, rej) => {
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+    img.onload = () => res(img)
+    img.onerror = rej
+    img.src = url
+  })
+}
+
+function drawCover(
+  ctx: CanvasRenderingContext2D,
+  img: HTMLImageElement,
+  dx: number, dy: number, dw: number, dh: number,
+) {
+  const scaleX = dw / img.naturalWidth
+  const scaleY = dh / img.naturalHeight
+  const scale  = Math.max(scaleX, scaleY)
+  const sw = dw / scale
+  const sh = dh / scale
+  const sx = (img.naturalWidth  - sw) / 2
+  const sy = (img.naturalHeight - sh) / 2
+  ctx.drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh)
+}
+
+function roundedClipPath(
+  ctx: CanvasRenderingContext2D,
+  x: number, y: number, w: number, h: number, r: number,
+) {
+  ctx.beginPath()
+  ctx.moveTo(x + r, y)
+  ctx.lineTo(x + w - r, y)
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r)
+  ctx.lineTo(x + w, y + h - r)
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h)
+  ctx.lineTo(x + r, y + h)
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r)
+  ctx.lineTo(x, y + r)
+  ctx.quadraticCurveTo(x, y, x + r, y)
+  ctx.closePath()
+}
+
+function drawStar5pt(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number, color: string) {
+  ctx.fillStyle = color
+  ctx.beginPath()
+  for (let i = 0; i < 10; i++) {
+    const rad = i % 2 === 0 ? r : r * 0.42
+    const angle = (i * Math.PI) / 5 - Math.PI / 2
+    const x = cx + Math.cos(angle) * rad
+    const y = cy + Math.sin(angle) * rad
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y)
+  }
+  ctx.closePath()
+  ctx.fill()
+}
+
+function drawRatingStars(ctx: CanvasRenderingContext2D, cx: number, topY: number, rating: number, starSize: number) {
+  const gap  = starSize * 0.25
+  const total = 5 * starSize + 4 * gap
+  let x = cx - total / 2
+
+  for (let i = 1; i <= 5; i++) {
+    const scx = x + starSize / 2
+    const scy = topY + starSize / 2
+
+    drawStar5pt(ctx, scx, scy, starSize / 2, '#283548')
+
+    if (rating >= i) {
+      drawStar5pt(ctx, scx, scy, starSize / 2, '#E8A030')
+    } else if (rating >= i - 0.5) {
+      ctx.save()
+      ctx.beginPath()
+      ctx.rect(x, topY, starSize / 2, starSize)
+      ctx.clip()
+      drawStar5pt(ctx, scx, scy, starSize / 2, '#E8A030')
+      ctx.restore()
+    }
+
+    x += starSize + gap
+  }
+}
+
+function wrapText(ctx: CanvasRenderingContext2D, text: string, maxW: number, maxLines: number): string[] {
+  const words = text.split(' ')
+  const lines: string[] = []
+  let line = ''
+  for (const word of words) {
+    const test = line ? `${line} ${word}` : word
+    if (ctx.measureText(test).width > maxW && line) {
+      lines.push(line)
+      if (lines.length >= maxLines) return lines
+      line = word
+    } else {
+      line = test
+    }
+  }
+  if (line && lines.length < maxLines) lines.push(line)
+  return lines
+}
+
 // ─── Story generator ────────────────────────────────────────────────
 async function generateItemStory(item: MediaItem): Promise<void> {
+  const W = 1080, H = 1920
   const canvas = document.createElement('canvas')
-  canvas.width  = 1080
-  canvas.height = 1920
+  canvas.width  = W
+  canvas.height = H
   const ctx = canvas.getContext('2d')!
-
   const typeColor = TYPE_HEX[item.type]
 
   // Background
-  const grad = ctx.createLinearGradient(0, 0, 1080, 1920)
-  grad.addColorStop(0, '#0C1118')
-  grad.addColorStop(0.6, '#141C28')
-  grad.addColorStop(1, '#0C1118')
-  ctx.fillStyle = grad
-  ctx.fillRect(0, 0, 1080, 1920)
+  ctx.fillStyle = '#0C1118'
+  ctx.fillRect(0, 0, W, H)
 
-  // Decorative glow
+  // Radial glow behind cover
+  const glow = ctx.createRadialGradient(W / 2, 520, 0, W / 2, 520, 720)
+  glow.addColorStop(0, typeColor + '35')
+  glow.addColorStop(0.6, typeColor + '10')
+  glow.addColorStop(1, 'transparent')
+  ctx.fillStyle = glow
+  ctx.fillRect(0, 0, W, H)
+
+  // Cover
+  const CW = 460, CH = 690, CX = (W - CW) / 2, CY = 130, CR = 28
+
+  // Shadow layer
   ctx.save()
-  ctx.globalAlpha = 0.18
-  ctx.fillStyle = typeColor
-  ctx.beginPath()
-  ctx.arc(540, 700, 600, 0, Math.PI * 2)
+  ctx.shadowColor = typeColor
+  ctx.shadowBlur  = 80
+  ctx.shadowOffsetY = 24
+  roundedClipPath(ctx, CX, CY, CW, CH, CR)
+  ctx.fillStyle = '#1C2838'
   ctx.fill()
   ctx.restore()
 
-  // Cover image
+  // Image with clip
   if (item.cover_url) {
     try {
-      const img = await new Promise<HTMLImageElement>((res, rej) => {
-        const i = new Image()
-        i.crossOrigin = 'anonymous'
-        i.onload = () => res(i)
-        i.onerror = rej
-        i.src = item.cover_url!
-      })
-      const cw = 480, ch = 720
-      const cx = (1080 - cw) / 2, cy = 220
+      const img = await loadImage(item.cover_url)
       ctx.save()
-      ctx.shadowColor = typeColor
-      ctx.shadowBlur  = 60
-      ctx.drawImage(img, cx, cy, cw, ch)
+      roundedClipPath(ctx, CX, CY, CW, CH, CR)
+      ctx.clip()
+      drawCover(ctx, img, CX, CY, CW, CH)
       ctx.restore()
-    } catch {}
+    } catch {
+      // fallback: placeholder already drawn above
+    }
   }
 
-  // Type pill
-  ctx.fillStyle = typeColor
-  ctx.globalAlpha = 0.9
-  const pillW = 180, pillH = 48
-  ctx.beginPath()
-  ctx.roundRect((1080 - pillW) / 2, 980, pillW, pillH, 24)
-  ctx.fill()
-  ctx.globalAlpha = 1
-  ctx.fillStyle = '#0C1118'
-  ctx.font = 'bold 26px sans-serif'
+  // Type badge
+  ctx.font = 'bold 26px system-ui, sans-serif'
   ctx.textAlign = 'center'
-  const typeLabel: Record<MediaType, string> = { movie: 'FILME', series: 'SÉRIE', game: 'JOGO', book: 'LIVRO' }
-  ctx.fillText(typeLabel[item.type], 540, 1012)
+  ctx.textBaseline = 'middle'
+  const badgeText = TYPE_LABEL_STORY[item.type]
+  const badgeW = ctx.measureText(badgeText).width + 52
+  const badgeH = 52, badgeX = (W - badgeW) / 2
+  const badgeY = CY + CH + 44
+  roundedClipPath(ctx, badgeX, badgeY, badgeW, badgeH, 26)
+  ctx.fillStyle = typeColor
+  ctx.fill()
+  ctx.fillStyle = '#0C1118'
+  ctx.fillText(badgeText, W / 2, badgeY + badgeH / 2)
 
   // Title
+  let curY = badgeY + badgeH + 50
+  const titleLen = item.title.length
+  const titleSz  = titleLen > 35 ? 56 : titleLen > 22 ? 66 : 78
+  ctx.font = `bold ${titleSz}px Georgia, serif`
+  ctx.textBaseline = 'top'
   ctx.fillStyle = '#EDF2F8'
-  ctx.font = 'bold 72px serif'
-  ctx.textAlign = 'center'
-  const words = item.title.split(' ')
-  let line = '', y = 1100
-  for (const word of words) {
-    const test = line ? `${line} ${word}` : word
-    if (ctx.measureText(test).width > 900 && line) {
-      ctx.fillText(line, 540, y); y += 82; line = word
-    } else { line = test }
+  const titleLines = wrapText(ctx, item.title, 940, 3)
+  const lineH = titleSz * 1.18
+  for (const l of titleLines) {
+    ctx.fillText(l, W / 2, curY)
+    curY += lineH
   }
-  ctx.fillText(line, 540, y)
 
-  // Subtitle (author/year)
-  y += 56
-  ctx.fillStyle = '#94A8C0'
-  ctx.font = '36px sans-serif'
-  const sub = [item.author, item.year ? String(item.year) : null].filter(Boolean).join(' · ')
-  if (sub) ctx.fillText(sub, 540, y)
+  // Author / year
+  curY += 20
+  const meta = [
+    item.author ?? (item.creators ? item.creators.split(',')[0].trim() : null),
+    item.year ? String(item.year) : null,
+  ].filter(Boolean).join(' · ')
 
-  // Rating stars — sempre visível
-  y += 64
-  const filled = Math.min(5, Math.max(0, Math.round(item.rating)))
-  ctx.fillStyle = '#E8A030'
-  ctx.font = '52px sans-serif'
-  ctx.fillText('★'.repeat(filled) + '☆'.repeat(5 - filled), 540, y)
+  if (meta) {
+    ctx.font = '34px system-ui, sans-serif'
+    ctx.fillStyle = '#5A7090'
+    ctx.fillText(meta, W / 2, curY)
+    curY += 52
+  }
+
+  // Stars
+  curY += 20
+  drawRatingStars(ctx, W / 2, curY, item.rating, 56)
+  curY += 56 + 16
+
+  // Rating label
+  ctx.font = '28px system-ui, sans-serif'
+  ctx.fillStyle = '#3A4E68'
+  const ratingLabel = item.rating > 0 ? `${item.rating} / 5` : 'Sem avaliação'
+  ctx.fillText(ratingLabel, W / 2, curY)
+
+  // Bottom vignette
+  const vignette = ctx.createLinearGradient(0, H - 300, 0, H)
+  vignette.addColorStop(0, 'transparent')
+  vignette.addColorStop(1, '#060C12')
+  ctx.fillStyle = vignette
+  ctx.fillRect(0, H - 300, W, 300)
 
   // Shelf branding
-  ctx.fillStyle = '#E8A030'
-  ctx.font = 'bold 40px serif'
   ctx.textAlign = 'center'
-  ctx.fillText('Shelf', 540, 1820)
+  ctx.textBaseline = 'bottom'
+  ctx.fillStyle = '#E8A030'
+  ctx.font = 'bold 48px Georgia, serif'
+  ctx.fillText('Shelf', W / 2, H - 72)
   ctx.fillStyle = '#3A4E68'
-  ctx.font = '24px sans-serif'
-  ctx.fillText('sua coleção pessoal', 540, 1858)
+  ctx.font = '26px system-ui, sans-serif'
+  ctx.fillText('sua coleção pessoal', W / 2, H - 30)
 
   canvas.toBlob(blob => {
     if (!blob) return
