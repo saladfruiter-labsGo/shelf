@@ -3,47 +3,47 @@
 @tailwind utilities;
 
 :root {
-  --bg:           #F6F3EE;
-  --surface:      #EDEAE3;
-  --card:         #E3DED5;
-  --card-hover:   #D8D2C7;
-  --border:       #C8C2B5;
-  --border-strong:#A09890;
-  --text-primary: #1A1612;
-  --text-secondary:#4A4540;
-  --text-muted:   #7A736A;
-  --accent:       #C8841A;
-  --accent-bg:    #C8841A22;
-  --movies:       #B83030;
-  --movies-bg:    #B8303022;
-  --games:        #148A50;
-  --games-bg:     #148A5022;
-  --series:       #6B40C8;
-  --series-bg:    #6B40C822;
-  --books:        #965C08;
-  --books-bg:     #965C0822;
+  --bg:           #F5F3EE;
+  --surface:      #EEEBE4;
+  --card:         #E4E0D7;
+  --card-hover:   #D8D3C8;
+  --border:       #CBCABC;
+  --border-strong:#A8A19A;
+  --text-primary: #1A1714;
+  --text-secondary:#5C574F;
+  --text-muted:   #9B9388;
+  --accent:       #C8681A;
+  --accent-bg:    #C8681A1C;
+  --movies:       #C23030;
+  --movies-bg:    #C2303018;
+  --games:        #13784A;
+  --games-bg:     #13784A18;
+  --series:       #5E3EC0;
+  --series-bg:    #5E3EC018;
+  --books:        #8B4E10;
+  --books-bg:     #8B4E1018;
 }
 
 .dark {
-  --bg:           #0C1118;
-  --surface:      #141C28;
-  --card:         #1C2838;
-  --card-hover:   #233044;
-  --border:       #283548;
-  --border-strong:#3A4E68;
-  --text-primary: #EDF2F8;
-  --text-secondary:#94A8C0;
-  --text-muted:   #5A7090;
-  --accent:       #E8A030;
-  --accent-bg:    #E8A03022;
+  --bg:           #111009;
+  --surface:      #1A1814;
+  --card:         #242018;
+  --card-hover:   #2E2A22;
+  --border:       #383228;
+  --border-strong:#524B40;
+  --text-primary: #EDEAE3;
+  --text-secondary:#A09890;
+  --text-muted:   #68605A;
+  --accent:       #D87220;
+  --accent-bg:    #D872201E;
   --movies:       #D94444;
-  --movies-bg:    #D9444422;
+  --movies-bg:    #D9444420;
   --games:        #20C97A;
-  --games-bg:     #20C97A22;
+  --games-bg:     #20C97A20;
   --series:       #8A5FE8;
-  --series-bg:    #8A5FE822;
+  --series-bg:    #8A5FE820;
   --books:        #C47A0A;
-  --books-bg:     #C47A0A22;
+  --books-bg:     #C47A0A20;
 }
 
 * {
@@ -53,7 +53,8 @@
 }
 
 html {
-  font-family: 'DM Sans', system-ui, sans-serif;
+  font-family: 'Barlow', system-ui, -apple-system, sans-serif;
+  font-size: 16px;
   background-color: var(--bg);
   color: var(--text-primary);
   -webkit-font-smoothing: antialiased;
@@ -66,8 +67,8 @@ body {
 }
 
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 
 ::-webkit-scrollbar-track {
@@ -79,10 +80,63 @@ body {
   border-radius: 3px;
 }
 
+/* font-display: tight tracking to give editorial weight to big headings */
 .font-display {
-  font-family: 'Playfair Display', Georgia, serif;
+  letter-spacing: -0.015em;
 }
 
+/* ─── Scroll reveal ─── */
+.reveal-item {
+  opacity: 0;
+  transform: translateY(28px);
+  transition: opacity 0.5s ease, transform 0.5s ease;
+}
+
+.reveal-item.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal-item {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}
+
+/* ─── Wavy underline on card title hover ─── */
+.card-title-wrap {
+  position: relative;
+  display: block;
+  overflow: visible;
+}
+
+.card-title-wrap::after {
+  content: '';
+  position: absolute;
+  bottom: -4px;
+  left: 0;
+  width: 100%;
+  height: 6px;
+  background-color: var(--accent);
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M 0 3 Q 2.5 0 5 3 Q 7.5 6 10 3' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round'/%3E%3C/svg%3E");
+  -webkit-mask-repeat: repeat-x;
+  -webkit-mask-size: 10px 6px;
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M 0 3 Q 2.5 0 5 3 Q 7.5 6 10 3' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round'/%3E%3C/svg%3E");
+  mask-repeat: repeat-x;
+  mask-size: 10px 6px;
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 0.42s cubic-bezier(0.34, 1.2, 0.64, 1);
+  pointer-events: none;
+}
+
+.group:hover .card-title-wrap::after {
+  transform: scaleX(1);
+}
+
+/* ─── Animations ─── */
 @keyframes fade-in {
   from { opacity: 0; transform: translateY(6px); }
   to   { opacity: 1; transform: translateY(0); }
