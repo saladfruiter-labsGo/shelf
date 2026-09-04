@@ -34,9 +34,9 @@ export const api = {
     recent:   (): Promise<Record<MediaType, MediaItem[]>> => request('/media/recent'),
     upcoming: (): Promise<{ wishlist: MediaItem[]; hype: MediaItem[] }> => request('/media/upcoming'),
     get:      (id: number): Promise<MediaItem>            => request(`/media/${id}`),
-    add: (data: Omit<MediaItem, 'id' | 'rating' | 'hype' | 'added_at' | 'updated_at'> & { rating?: number }): Promise<MediaItem> =>
+    add: (data: Omit<MediaItem, 'id' | 'hype' | 'added_at' | 'updated_at'> & { rating?: number }): Promise<MediaItem> =>
       request('/media', { method: 'POST', body: JSON.stringify(data) }),
-    update: (id: number, data: Partial<Pick<MediaItem, 'rating' | 'status' | 'notes' | 'runtime' | 'synopsis' | 'creators' | 'author' | 'release_date' | 'hype'>>): Promise<MediaItem> =>
+    update: (id: number, data: Partial<Pick<MediaItem, 'rating' | 'status' | 'notes' | 'runtime' | 'synopsis' | 'creators' | 'author' | 'release_date' | 'hype' | 'completed_at'>>): Promise<MediaItem> =>
       request(`/media/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     remove: (id: number): Promise<{ ok: boolean }> =>
       request(`/media/${id}`, { method: 'DELETE' }),

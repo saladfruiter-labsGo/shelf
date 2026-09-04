@@ -66,11 +66,12 @@ db.exec(`
 // Migrations for existing databases
 const cols = (db.prepare("PRAGMA table_info(media_items)").all() as { name: string }[]).map(c => c.name)
 const newCols: [string, string][] = [
-  ['synopsis',     'TEXT'],
-  ['creators',     'TEXT'],
-  ['author',       'TEXT'],
-  ['release_date', 'TEXT'],
-  ['hype',         'INTEGER DEFAULT 0'],
+  ['synopsis',      'TEXT'],
+  ['creators',      'TEXT'],
+  ['author',        'TEXT'],
+  ['release_date',  'TEXT'],
+  ['hype',          'INTEGER DEFAULT 0'],
+  ['completed_at',  'TEXT'],
 ]
 for (const [col, def] of newCols) {
   if (!cols.includes(col)) db.exec(`ALTER TABLE media_items ADD COLUMN ${col} ${def}`)
