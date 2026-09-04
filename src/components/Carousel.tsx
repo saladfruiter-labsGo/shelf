@@ -35,7 +35,7 @@ export function Carousel({ type, items }: Props) {
   return (
     <section className="mb-10">
       <div className="flex items-center justify-between mb-4">
-        <h2 className={`font-display text-xl font-semibold flex items-center gap-2 ${typeColor[type]}`}>
+        <h2 className={`font-display font-bold text-lg flex items-center gap-2 ${typeColor[type]}`}>
           <span>{typeIcon[type]}</span>
           {TYPE_LABEL[type]}s
         </h2>

@@ -40,46 +40,48 @@ export function Layout() {
   return (
     <div className="flex min-h-screen bg-bg">
       {/* Sidebar */}
-      <aside className="w-56 flex-shrink-0 border-r border-border bg-surface hidden md:flex flex-col">
-        <div className="px-6 py-5 border-b border-border">
-          <h1 className="font-display text-2xl font-bold text-primary">Shelf</h1>
-          <p className="text-xs text-muted mt-0.5">Sua coleção pessoal</p>
+      <aside className="w-52 flex-shrink-0 border-r border-border bg-bg hidden md:flex flex-col">
+        <div className="px-5 py-5 border-b border-border">
+          <h1 className="font-black text-xl tracking-[0.14em] uppercase text-primary">Shelf</h1>
+          <p className="text-[0.56rem] font-semibold tracking-[0.2em] uppercase text-muted mt-1">Coleção pessoal</p>
         </div>
 
         <button
           onClick={openSearch}
-          className="mx-3 mt-3 flex items-center gap-2 px-3 py-2 rounded-md bg-card border border-border text-muted text-sm hover:border-border-strong hover:text-primary transition-colors"
+          className="mx-3 mt-3 flex items-center gap-2 px-3 py-2 rounded-md bg-surface border border-border text-muted text-sm hover:border-border-strong hover:text-primary transition-colors"
         >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
-          <span className="flex-1 text-left">Buscar...</span>
-          <kbd className="text-xs bg-surface px-1.5 py-0.5 rounded border border-border">⌘K</kbd>
+          <span className="flex-1 text-left text-sm">Buscar...</span>
+          <kbd className="text-[10px] bg-bg px-1.5 py-0.5 rounded border border-border font-medium">⌘K</kbd>
         </button>
 
-        <nav className="flex-1 py-4 overflow-y-auto">
+        <nav className="flex-1 py-4 px-2 overflow-y-auto">
           {NAV.map(item => (
             <NavLink
               key={item.to}
               to={item.to}
               end={item.to === '/'}
               className={({ isActive }) =>
-                `flex items-center gap-3 mx-3 px-3 py-2 rounded-md text-sm font-medium mb-1 transition-colors ${
-                  isActive ? 'bg-accent-bg text-accent' : 'text-muted hover:text-primary hover:bg-card'
+                `flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium mb-0.5 transition-colors ${
+                  isActive
+                    ? 'bg-accent-bg text-accent'
+                    : 'text-muted hover:text-primary hover:bg-surface'
                 }`
               }
             >
-              <span className="text-base leading-none">{item.icon}</span>
+              <span className="text-base leading-none w-4 text-center">{item.icon}</span>
               {item.label}
             </NavLink>
           ))}
         </nav>
 
         <div className="px-4 py-3 border-t border-border flex items-center justify-between">
-          <p className="text-xs text-muted">v0.1.0</p>
+          <p className="text-[10px] font-semibold tracking-widest text-muted uppercase">v0.1.0</p>
           <button
             onClick={toggle}
-            className="flex items-center gap-1.5 text-xs text-muted hover:text-primary transition-colors px-2 py-1 rounded bg-card border border-border"
+            className="flex items-center gap-1.5 text-xs font-medium text-muted hover:text-primary transition-colors px-2 py-1 rounded-md bg-surface border border-border"
             title={dark ? 'Tema claro' : 'Tema escuro'}
           >
             {dark ? <SunIcon /> : <MoonIcon />}
@@ -89,8 +91,8 @@ export function Layout() {
       </aside>
 
       {/* Mobile header */}
-      <div className="md:hidden fixed top-0 inset-x-0 z-40 bg-surface border-b border-border flex items-center justify-between px-4 h-14">
-        <h1 className="font-display text-xl font-bold text-primary">Shelf</h1>
+      <div className="md:hidden fixed top-0 inset-x-0 z-40 bg-bg border-b border-border flex items-center justify-between px-4 h-14">
+        <h1 className="font-black text-lg tracking-[0.14em] uppercase text-primary">Shelf</h1>
         <div className="flex items-center gap-3">
           <button onClick={toggle} className="text-muted hover:text-primary">
             {dark ? <SunIcon /> : <MoonIcon />}
@@ -109,14 +111,14 @@ export function Layout() {
       </main>
 
       {/* Mobile bottom nav */}
-      <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-surface border-t border-border flex">
+      <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-bg border-t border-border flex">
         {NAV.slice(0, 4).map(item => (
           <NavLink
             key={item.to}
             to={item.to}
             end={item.to === '/'}
             className={({ isActive }) =>
-              `flex-1 flex flex-col items-center py-2 text-xs font-medium transition-colors ${
+              `flex-1 flex flex-col items-center py-2 text-xs font-semibold transition-colors ${
                 isActive ? 'text-accent' : 'text-muted'
               }`
             }

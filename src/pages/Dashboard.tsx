@@ -24,7 +24,7 @@ function UpcomingCarousel({
     if (!emptyMsg) return null
     return (
       <section className="mb-10">
-        <h2 className="font-display text-xl font-semibold text-primary flex items-center gap-2 mb-4">
+        <h2 className="font-display font-bold text-lg text-primary flex items-center gap-2 mb-4">
           <span>{icon}</span>{title}
         </h2>
         <p className="text-sm text-muted">{emptyMsg}</p>
@@ -35,7 +35,7 @@ function UpcomingCarousel({
   return (
     <section className="mb-10">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="font-display text-xl font-semibold text-primary flex items-center gap-2">
+        <h2 className="font-display font-bold text-lg text-primary flex items-center gap-2">
           <span>{icon}</span>{title}
         </h2>
         <div className="flex gap-2">
@@ -81,7 +81,7 @@ export function Dashboard() {
   return (
     <div className="px-6 py-8 max-w-7xl">
       <div className="mb-8">
-        <h1 className="font-display text-3xl font-bold text-primary mb-1">Dashboard</h1>
+        <h1 className="font-display font-black uppercase text-4xl leading-none text-primary mb-1">Dashboard</h1>
         <p className="text-muted text-sm">
           {totalItems > 0 ? `${totalItems} itens recentes` : 'Adicione itens com ⌘K'}
         </p>
