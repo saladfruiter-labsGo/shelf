@@ -58,7 +58,7 @@ app.get('/:id', (c) => {
 app.post('/', async (c) => {
   const body = await c.req.json()
   const { external_id, type, title, cover_url, year, genre, runtime, status = 'wishlist',
-          notes, synopsis, creators, author, release_date, completed_at } = body
+          rating = 0, notes, synopsis, creators, author, release_date, completed_at } = body
 
   if (!external_id || !type || !title) {
     return c.json({ error: 'external_id, type and title are required' }, 400)
@@ -67,11 +67,11 @@ app.post('/', async (c) => {
   try {
     const res = db.prepare(`
       INSERT INTO media_items
-        (external_id, type, title, cover_url, year, genre, runtime, status, notes,
+        (external_id, type, title, cover_url, year, genre, runtime, status, rating, notes,
          synopsis, creators, author, release_date, completed_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(external_id, type, title, cover_url ?? null, year ?? null, genre ?? null,
-           runtime ?? null, status, notes ?? null,
+           runtime ?? null, status, rating ?? 0, notes ?? null,
            synopsis ?? null, creators ?? null, author ?? null, release_date ?? null,
            completed_at ?? null)
 
