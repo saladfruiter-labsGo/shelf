@@ -7,6 +7,8 @@ export default {
       colors: {
         bg:             'var(--bg)',
         surface:        'var(--surface)',
+        s2:             'var(--card)',
+        s3:             'var(--card-hover)',
         card:           'var(--card)',
         'card-hover':   'var(--card-hover)',
         border:         'var(--border)',
@@ -14,8 +16,11 @@ export default {
         primary:        'var(--text-primary)',
         secondary:      'var(--text-secondary)',
         muted:          'var(--text-muted)',
+        dim:            'var(--dim)',
         accent:         'var(--accent)',
         'accent-bg':    'var(--accent-bg)',
+        v:              'var(--v)',
+        'v-dim':        'var(--v-dim)',
         movies:         'var(--movies)',
         'movies-bg':    'var(--movies-bg)',
         games:          'var(--games)',
@@ -26,9 +31,9 @@ export default {
         'books-bg':     'var(--books-bg)',
       },
       fontFamily: {
-        display: ['"Barlow"', 'system-ui', 'sans-serif'],
-        body:    ['"Barlow"', 'system-ui', 'sans-serif'],
-        mono:    ['"JetBrains Mono"', 'monospace'],
+        display: ['"Syne"', 'system-ui', 'sans-serif'],
+        body:    ['"DM Sans"', 'system-ui', 'sans-serif'],
+        mono:    ['"DM Mono"', 'monospace'],
       },
       borderRadius: {
         sm: '4px',

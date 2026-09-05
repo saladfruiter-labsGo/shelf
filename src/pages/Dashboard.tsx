@@ -1,142 +1,188 @@
-import { useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { Link } from 'react-router-dom'
 import { api } from '../lib/api'
-import { Carousel } from '../components/Carousel'
 import { MediaCard } from '../components/MediaCard'
 import type { MediaItem, MediaType } from '../types'
-import { daysUntil, formatDate } from '../lib/utils'
 
-// ─── Generic mixed-type horizontal carousel ──────────────────────────
-function UpcomingCarousel({
-  title, icon, items, emptyMsg,
-}: {
-  title: string
-  icon: string
-  items: MediaItem[]
-  emptyMsg?: string
-}) {
-  const ref = useRef<HTMLDivElement>(null)
-  const scroll = (dir: 'left' | 'right') =>
-    ref.current?.scrollBy({ left: dir === 'left' ? -320 : 320, behavior: 'smooth' })
+const CATEGORIES = [
+  { key: 'game',   label: 'Jogos',   emoji: '🎮', path: '/library/games',  color: '#2DFF8A' },
+  { key: 'book',   label: 'Livros',  emoji: '📚', path: '/library/books',  color: '#C47A3A' },
+  { key: 'movie',  label: 'Filmes',  emoji: '🎬', path: '/library/films',  color: '#E63560' },
+  { key: 'series', label: 'Séries',  emoji: '📺', path: '/library/series', color: '#E63560' },
+  { key: 'music',  label: 'Músicas', emoji: '🎵', path: '/library/music',  color: '#8B5CF6' },
+] as const
 
-  if (items.length === 0) {
-    if (!emptyMsg) return null
-    return (
-      <section className="mb-10">
-        <h2 className="font-display font-bold text-lg text-primary flex items-center gap-2 mb-4">
-          <span>{icon}</span>{title}
-        </h2>
-        <p className="text-sm text-muted">{emptyMsg}</p>
-      </section>
-    )
-  }
-
-  return (
-    <section className="mb-10">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="font-display font-bold text-lg text-primary flex items-center gap-2">
-          <span>{icon}</span>{title}
-        </h2>
-        <div className="flex gap-2">
-          <button onClick={() => scroll('left')}
-            className="w-8 h-8 rounded-full bg-surface border border-border flex items-center justify-center text-muted hover:text-primary hover:border-border-strong transition-colors">‹</button>
-          <button onClick={() => scroll('right')}
-            className="w-8 h-8 rounded-full bg-surface border border-border flex items-center justify-center text-muted hover:text-primary hover:border-border-strong transition-colors">›</button>
-        </div>
-      </div>
-      <div ref={ref} className="flex gap-4 overflow-x-auto pb-2" style={{ scrollbarWidth: 'none' }}>
-        {items.map(item => {
-          const days = item.release_date ? daysUntil(item.release_date) : null
-          return (
-            <div key={item.id} className="flex-shrink-0 relative" style={{ width: 160 }}>
-              <MediaCard item={item} />
-              {/* Release badge */}
-              {(item.hype === 1 || days !== null) && (
-                <div className="mt-1">
-                  {item.hype === 1 && <span className="text-[10px] text-accent">🔥 Hype</span>}
-                  {days !== null && (
-                    <p className="text-[10px] text-muted">
-                      {days <= 0 ? '🎉 Lançou!' : days === 1 ? '🕐 Amanhã' : `📅 ${days}d`}
-                    </p>
-                  )}
-                </div>
-              )}
-            </div>
-          )
-        })}
-      </div>
-    </section>
-  )
-}
-
-// ─── Page ────────────────────────────────────────────────────────────
 export function Dashboard() {
-  const { data: recent, isLoading } = useQuery({ queryKey: ['recent'],   queryFn: api.media.recent })
-  const { data: upcoming }          = useQuery({ queryKey: ['upcoming'], queryFn: api.media.upcoming })
+  const navigate = useNavigate()
+  const currentYear = new Date().getFullYear()
 
-  const types: MediaType[] = ['movie', 'series', 'game', 'book']
-  const totalItems = recent ? types.reduce((s, t) => s + (recent[t]?.length ?? 0), 0) : 0
+  const { data: allItems = [] } = useQuery({
+    queryKey: ['media-all'],
+    queryFn: () => api.media.list({ limit: 1000 }),
+  })
+
+  const { data: recent } = useQuery({
+    queryKey: ['recent'],
+    queryFn: api.media.recent,
+  })
+
+  const yearItems = allItems.filter(item => {
+    const y = new Date(item.added_at).getFullYear()
+    return y === currentYear
+  })
+
+  const total   = yearItems.length
+  const done    = yearItems.filter(i => i.status === 'completed').length
+  const inProg  = yearItems.filter(i => i.status === 'in_progress').length
+
+  const countByType = (type: string) =>
+    allItems.filter(i => i.type === type).length
+
+  const recentItems: MediaItem[] = (() => {
+    if (!recent) return []
+    const types: MediaType[] = ['movie', 'series', 'game', 'book']
+    return types.flatMap(t => recent[t] ?? []).slice(0, 4)
+  })()
 
   return (
-    <div className="px-6 py-8 max-w-7xl">
-      <div className="mb-8">
-        <h1 className="font-display font-black uppercase text-4xl leading-none text-primary mb-1">Dashboard</h1>
-        <p className="text-muted text-sm">
-          {totalItems > 0 ? `${totalItems} itens recentes` : 'Adicione itens com ⌘K'}
+    <div style={{ background: 'var(--bg)', position: 'relative', overflow: 'hidden', minHeight: '100vh' }}>
+      {/* Glow decorations */}
+      <div style={{
+        position: 'absolute', width: 600, height: 600, borderRadius: '50%',
+        background: 'radial-gradient(circle,rgba(170,255,46,.06) 0%,transparent 70%)',
+        top: -100, right: -100, pointerEvents: 'none',
+      }} />
+      <div style={{
+        position: 'absolute', width: 400, height: 400, borderRadius: '50%',
+        background: 'radial-gradient(circle,rgba(123,63,255,.07) 0%,transparent 70%)',
+        bottom: 200, left: -50, pointerEvents: 'none',
+      }} />
+
+      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '80px 64px 64px', position: 'relative' }}>
+        {/* Eyebrow */}
+        <p style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '2.5px', color: 'var(--dim)', marginBottom: 24 }}>
+          Coleção pessoal
         </p>
-      </div>
 
-      {/* Upcoming — Hype (release date próxima) */}
-      <UpcomingCarousel
-        icon="🔥"
-        title="Hype & Lançamentos"
-        items={upcoming?.hype ?? []}
-        emptyMsg={undefined}
-      />
+        {/* Headline */}
+        <h1 style={{ fontFamily: 'Syne, sans-serif', fontSize: 'clamp(48px,6vw,88px)', fontWeight: 800, lineHeight: 1.02, letterSpacing: '-2.5px', color: 'var(--text-primary)', marginBottom: 48 }}>
+          Tudo que você{' '}
+          <em style={{ fontStyle: 'normal', color: 'var(--accent)' }}>assistiu, leu,<br />jogou e ouviu.</em>
+        </h1>
 
-      {/* Upcoming — Wishlist */}
-      <UpcomingCarousel
-        icon="📌"
-        title="Wishlist"
-        items={upcoming?.wishlist ?? []}
-        emptyMsg={undefined}
-      />
-
-      {/* Recent carousels by type */}
-      {isLoading ? (
-        <div className="space-y-10">
-          {types.map(t => <CarouselSkeleton key={t} />)}
-        </div>
-      ) : recent ? (
-        <div>
-          {types.map(t => (
-            <Carousel key={t} type={t} items={(recent[t] ?? []) as MediaItem[]} />
-          ))}
-          {totalItems === 0 && !upcoming?.hype?.length && !upcoming?.wishlist?.length && (
-            <div className="text-center py-24 text-muted">
-              <p className="text-5xl mb-4">📚</p>
-              <p className="text-lg font-medium text-secondary mb-2">Sua prateleira está vazia</p>
-              <p className="text-sm">Pressione <kbd className="bg-card border border-border px-1.5 py-0.5 rounded text-primary text-xs">⌘K</kbd> para adicionar algo</p>
+        {/* Year pill */}
+        <div style={{
+          display: 'inline-flex', alignItems: 'center',
+          background: 'var(--surface)', border: '1px solid var(--border-strong)',
+          borderRadius: 9999, padding: '16px 0 16px 32px',
+          marginBottom: 80, overflow: 'hidden',
+        }}>
+          <span style={{ fontFamily: 'DM Mono, monospace', fontSize: 10, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '2px', marginRight: 24 }}>
+            {currentYear}
+          </span>
+          {[
+            { num: total,  lbl: 'Total' },
+            { num: done,   lbl: 'Concluídos' },
+            { num: inProg, lbl: 'Em andamento' },
+          ].map(s => (
+            <div key={s.lbl} style={{ display: 'flex', flexDirection: 'column', gap: 2, borderLeft: '1px solid var(--border)', padding: '0 32px' }}>
+              <span style={{ fontFamily: 'Syne, sans-serif', fontSize: 22, fontWeight: 700, color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
+                {s.num}
+              </span>
+              <span style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                {s.lbl}
+              </span>
             </div>
-          )}
+          ))}
         </div>
-      ) : null}
-    </div>
-  )
-}
 
-function CarouselSkeleton() {
-  return (
-    <div className="mb-10">
-      <div className="h-6 bg-card rounded w-32 mb-4 animate-pulse" />
-      <div className="flex gap-4">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <div key={i} className="flex-shrink-0 w-40">
-            <div className="w-full aspect-[2/3] bg-card rounded-md mb-2 animate-pulse" />
-            <div className="h-3 bg-card rounded w-3/4 animate-pulse" />
+        {/* Recent activity */}
+        {recentItems.length > 0 && (
+          <section style={{ marginBottom: 64 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+              <p style={{ fontFamily: 'Syne, sans-serif', fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '2.5px', color: 'var(--text-muted)' }}>
+                Recentes
+              </p>
+              <button
+                onClick={() => navigate('/library')}
+                style={{ fontSize: 13, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', transition: 'color .2s' }}
+                onMouseEnter={e => (e.currentTarget.style.color = 'var(--accent)')}
+                onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-muted)')}
+              >
+                Ver tudo →
+              </button>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16 }}>
+              {recentItems.map(item => (
+                <div key={item.id} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: 24, cursor: 'pointer', transition: 'border-color .2s, background .2s' }}
+                  onMouseEnter={e => {
+                    ;(e.currentTarget as HTMLDivElement).style.borderColor = 'var(--border-strong)'
+                    ;(e.currentTarget as HTMLDivElement).style.background = 'var(--card)'
+                  }}
+                  onMouseLeave={e => {
+                    ;(e.currentTarget as HTMLDivElement).style.borderColor = 'var(--border)'
+                    ;(e.currentTarget as HTMLDivElement).style.background = 'var(--surface)'
+                  }}
+                  onClick={() => navigate(`/media/${item.id}`)}
+                >
+                  <span style={{ fontSize: 32, display: 'block', marginBottom: 16 }}>
+                    {item.type === 'game' ? '🎮' : item.type === 'book' ? '📚' : item.type === 'movie' ? '🎬' : '📺'}
+                  </span>
+                  <p style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '1.5px', color: 'var(--dim)', marginBottom: 8 }}>
+                    {item.type === 'game' ? 'Jogo' : item.type === 'book' ? 'Livro' : item.type === 'movie' ? 'Filme' : 'Série'}
+                  </p>
+                  <p style={{ fontFamily: 'Syne, sans-serif', fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8, lineHeight: 1.3 }}>
+                    {item.title}
+                  </p>
+                  <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                    {item.year ?? '—'} · {item.genre ?? '—'}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Category strip */}
+        <section>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+            <p style={{ fontFamily: 'Syne, sans-serif', fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '2.5px', color: 'var(--text-muted)' }}>
+              Categorias
+            </p>
           </div>
-        ))}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 16 }}>
+            {CATEGORIES.map(cat => (
+              <button
+                key={cat.key}
+                onClick={() => navigate(cat.path)}
+                style={{
+                  background: 'var(--surface)', border: '1px solid var(--border)',
+                  borderRadius: 16, padding: '32px 16px',
+                  cursor: 'pointer', transition: 'all .28s',
+                  textAlign: 'center', display: 'block', width: '100%',
+                }}
+                onMouseEnter={e => {
+                  const el = e.currentTarget
+                  el.style.borderColor = 'var(--accent)'
+                  el.style.background = 'var(--card)'
+                  el.style.transform = 'translateY(-4px)'
+                }}
+                onMouseLeave={e => {
+                  const el = e.currentTarget
+                  el.style.borderColor = 'var(--border)'
+                  el.style.background = 'var(--surface)'
+                  el.style.transform = 'translateY(0)'
+                }}
+              >
+                <span style={{ fontSize: 40, display: 'block', marginBottom: 16 }}>{cat.emoji}</span>
+                <p style={{ fontFamily: 'Syne, sans-serif', fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>{cat.label}</p>
+                <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                  {cat.key === 'music' ? '—' : countByType(cat.key)} itens
+                </p>
+              </button>
+            ))}
+          </div>
+        </section>
       </div>
     </div>
   )
