@@ -172,6 +172,18 @@ body {
 .icon-btn { transition: background .2s, border-color .2s, color .2s; }
 .icon-btn:hover { border-color: var(--border-strong); color: var(--text-primary); }
 
+/* Home scroll hint chevron */
+@keyframes chevron-bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(4px); } }
+.scroll-hint-chevron { animation: chevron-bounce 1.6s ease-in-out infinite; }
+
+/* Auto-carousel poster hovers */
+.poster-frame:hover {
+  border-color: var(--border-strong) !important;
+  transform: translateY(-6px);
+  box-shadow: var(--shadow-lg);
+}
+.group:hover .poster-overlay { opacity: 1 !important; }
+
 /* Title hover underline for media cards */
 .card-title-wrap {
   display: inline;
