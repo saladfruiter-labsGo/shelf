@@ -47,10 +47,10 @@ export function LibrarySeries() {
       </div>
 
       {/* Grid — 3 columns banner cards */}
-      <div style={{ maxWidth: 1280, margin: '0 auto', padding: '0 64px 80px', display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 24 }}>
+      <div style={{ maxWidth: 1280, margin: '0 auto', padding: '0 64px 80px', display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16 }}>
         {isLoading
-          ? Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} style={{ background: 'var(--card)', borderRadius: 16, overflow: 'hidden', height: 260 }} />
+          ? Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} style={{ background: 'var(--card)', borderRadius: 16, overflow: 'hidden', aspectRatio: '2/3.6' }} />
             ))
           : items.map(item => (
               <div
@@ -62,9 +62,9 @@ export function LibrarySeries() {
                   cursor: 'pointer', border: '1px solid var(--border)',
                 }}
               >
-                {/* Banner */}
+                {/* Poster — full 2:3, like the Home page */}
                 <div style={{
-                  width: '100%', aspectRatio: '16/9',
+                  width: '100%', aspectRatio: '2/3',
                   background: item.cover_url ? 'transparent' : 'var(--card-hover)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   fontSize: 64, overflow: 'hidden',
@@ -75,11 +75,11 @@ export function LibrarySeries() {
                   }
                 </div>
                 {/* Body */}
-                <div style={{ padding: 24 }}>
-                  <p style={{ fontFamily: 'Space Grotesk, monospace', fontSize: 10, textTransform: 'uppercase', letterSpacing: '1.5px', color: 'var(--text-muted)', marginBottom: 8 }}>
+                <div style={{ padding: 16 }}>
+                  <p style={{ fontFamily: 'Space Grotesk, monospace', fontSize: 10, textTransform: 'uppercase', letterSpacing: '1.5px', color: 'var(--text-muted)', marginBottom: 6 }}>
                     {item.genre ?? 'Série'} · {item.year ?? '—'}
                   </p>
-                  <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 12 }}>
+                  <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 10 }}>
                     {item.title}
                   </p>
                   {/* Progress bar — percentual real de episódios vistos */}
