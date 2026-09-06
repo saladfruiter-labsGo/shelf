@@ -1,6 +1,8 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../lib/api'
+import { SeriesModal } from '../components/SeriesModal'
 
 const STATUS_LABEL: Record<string, string> = {
   completed:   'Finalizada',
@@ -11,6 +13,7 @@ const STATUS_LABEL: Record<string, string> = {
 
 export function LibrarySeries() {
   const navigate = useNavigate()
+  const [openId, setOpenId] = useState<number | null>(null)
 
   const { data: items = [], isLoading } = useQuery({
     queryKey: ['media', 'series'],
@@ -52,7 +55,7 @@ export function LibrarySeries() {
           : items.map(item => (
               <div
                 key={item.id}
-                onClick={() => navigate(`/media/${item.id}`)}
+                onClick={() => setOpenId(item.id)}
                 className="media-lift"
                 style={{
                   background: 'var(--card)', borderRadius: 16, overflow: 'hidden',
@@ -79,20 +82,28 @@ export function LibrarySeries() {
                   <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 12 }}>
                     {item.title}
                   </p>
-                  {/* Progress bar */}
-                  <div style={{ height: 3, background: 'var(--border)', borderRadius: 2, marginBottom: 8, overflow: 'hidden' }}>
-                    <div style={{
-                      height: '100%', borderRadius: 2, background: 'var(--series)',
-                      width: item.status === 'completed' ? '100%' : item.status === 'in_progress' ? '50%' : '0%',
-                      transition: 'width .5s ease',
-                    }} />
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{STATUS_LABEL[item.status] ?? item.status}</span>
-                    {item.rating > 0 && (
-                      <span style={{ fontFamily: 'Space Grotesk, monospace', fontSize: 11, color: 'var(--series)' }}>★ {item.rating}</span>
-                    )}
-                  </div>
+                  {/* Progress bar — percentual real de episódios vistos */}
+                  {(() => {
+                    const pct = Math.round((item.progress ?? (item.status === 'completed' ? 1 : 0)) * 100)
+                    return (
+                      <>
+                        <div style={{ height: 3, background: 'var(--border)', borderRadius: 2, marginBottom: 8, overflow: 'hidden' }}>
+                          <div style={{
+                            height: '100%', borderRadius: 2, background: 'var(--series)',
+                            width: `${pct}%`, transition: 'width .5s ease',
+                          }} />
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                            {item.status === 'completed' ? STATUS_LABEL.completed : `${pct}% assistido`}
+                          </span>
+                          {item.rating > 0 && (
+                            <span style={{ fontFamily: 'Space Grotesk, monospace', fontSize: 11, color: 'var(--series)' }}>★ {item.rating}</span>
+                          )}
+                        </div>
+                      </>
+                    )
+                  })()}
                 </div>
               </div>
             ))
@@ -105,6 +116,8 @@ export function LibrarySeries() {
           <p style={{ color: 'var(--text-muted)' }}>Nenhuma série na biblioteca ainda</p>
         </div>
       )}
+
+      {openId != null && <SeriesModal id={openId} onClose={() => setOpenId(null)} />}
     </div>
   )
 }

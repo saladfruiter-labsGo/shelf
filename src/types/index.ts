@@ -21,6 +21,33 @@ export interface MediaItem {
   completed_at: string | null
   added_at:     string
   updated_at:   string
+  progress?:    number   // 0..1 — só séries (fração de episódios vistos)
+}
+
+/* ─── Séries: temporadas e episódios ─── */
+
+export interface SeriesEpisode {
+  episode_number: number
+  title:          string | null
+  watched:        boolean
+  watched_at:     string | null
+}
+
+export interface SeriesSeason {
+  season_number: number
+  title:         string | null
+  status:        string
+  episode_count: number
+  watched_count: number
+  episodes:      SeriesEpisode[]
+}
+
+export interface SeriesView {
+  media_item_id: number
+  total:         number
+  watched:       number
+  percent:       number   // 0..1
+  seasons:       SeriesSeason[]
 }
 
 export interface SearchResult {
