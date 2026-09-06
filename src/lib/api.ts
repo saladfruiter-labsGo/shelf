@@ -2,6 +2,7 @@ import type {
   Details, List, ListCheck, ListDetail,
   MediaItem, MediaStatus, MediaType,
   SearchResult, WrapData,
+  IntegrationStatus, NowPlaying, ActivityEvent, MusicStats,
 } from '../types'
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -68,5 +69,25 @@ export const api = {
     get:    (): Promise<Record<string, string>> => request('/settings'),
     update: (data: Record<string, string>): Promise<Record<string, string>> =>
       request('/settings', { method: 'PATCH', body: JSON.stringify(data) }),
+  },
+
+  integrations: {
+    status:     (): Promise<IntegrationStatus> => request('/integrations'),
+    update:     (data: Record<string, unknown>): Promise<{ ok: boolean }> =>
+      request('/integrations', { method: 'PATCH', body: JSON.stringify(data) }),
+    nowPlaying: (): Promise<NowPlaying> => request('/integrations/now-playing'),
+    activity:   (params?: { limit?: number; source?: 'plex' | 'lastfm' }): Promise<ActivityEvent[]> => {
+      const qs = new URLSearchParams()
+      if (params?.limit)  qs.set('limit', String(params.limit))
+      if (params?.source) qs.set('source', params.source)
+      return request(`/integrations/activity?${qs}`)
+    },
+    musicStats: (): Promise<MusicStats> => request('/integrations/music/stats'),
+    lastfmSync: (): Promise<{ ok: boolean }> =>
+      request('/integrations/lastfm/sync', { method: 'POST' }),
+    telegramTest: (): Promise<{ ok: boolean; error?: string }> =>
+      request('/integrations/telegram/test', { method: 'POST' }),
+    telegramDetectChat: (): Promise<{ chats: { chat_id: string; thread_id: string; name: string }[] }> =>
+      request('/integrations/telegram/detect-chat'),
   },
 }

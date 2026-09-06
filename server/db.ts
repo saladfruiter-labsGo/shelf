@@ -79,3 +79,46 @@ for (const [col, def] of newCols) {
 
 // Indexes that depend on migrated columns must be created after the ALTERs above
 db.exec(`CREATE INDEX IF NOT EXISTS idx_media_release ON media_items(release_date)`)
+
+// ─── Integrations: real-time activity log + music enrichment cache ───
+db.exec(`
+  CREATE TABLE IF NOT EXISTS activity_events (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    source       TEXT    NOT NULL,              -- 'plex' | 'lastfm'
+    event_type   TEXT    NOT NULL,              -- 'scrobble' | 'rate' | 'listen' | 'play' | 'stop' ...
+    media_type   TEXT    NOT NULL,              -- 'movie' | 'series' | 'music'
+    external_ref TEXT,                          -- plex guid / 'artist|track'
+    title        TEXT    NOT NULL,
+    subtitle     TEXT,                           -- série / artista
+    cover_url    TEXT,
+    rating       REAL,                           -- só Plex (media.rate), 0–5
+    duration_ms  INTEGER,                        -- música: duração da faixa
+    genre        TEXT,
+    occurred_at  TEXT    NOT NULL,               -- ISO 8601 (UTC)
+    raw          TEXT,                           -- payload original (json)
+    created_at   TEXT    NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(source, external_ref, occurred_at)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_activity_occurred ON activity_events(occurred_at);
+  CREATE INDEX IF NOT EXISTS idx_activity_source   ON activity_events(source);
+  CREATE INDEX IF NOT EXISTS idx_activity_mtype    ON activity_events(media_type);
+
+  CREATE TABLE IF NOT EXISTS music_tracks (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    artist       TEXT    NOT NULL,
+    track        TEXT    NOT NULL,
+    album        TEXT,
+    duration_ms  INTEGER,                        -- via track.getInfo (cache)
+    genre        TEXT,                            -- top tag do artista (cache)
+    mbid         TEXT,
+    cover_url    TEXT,
+    play_count   INTEGER NOT NULL DEFAULT 0,
+    first_played TEXT,
+    last_played  TEXT,
+    enriched     INTEGER NOT NULL DEFAULT 0,      -- 1 = já buscou duração/gênero
+    UNIQUE(artist, track)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_music_last ON music_tracks(last_played);
+`)

@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useHotkey } from '../hooks/useHotkey'
 import { useTheme } from '../hooks/useTheme'
 import { SearchModal } from './SearchModal'
+import { NowPlayingBar } from './NowPlayingBar'
 import { api } from '../lib/api'
 import type { MediaItem } from '../types'
 
@@ -309,8 +310,11 @@ export function Layout() {
         </div>
       </nav>
 
+      {/* Barra "assistindo/ouvindo agora" (sob a navbar) */}
+      <NowPlayingBar />
+
       {/* Main content */}
-      <main style={{ paddingTop: 'var(--nav-h)', minHeight: '100vh' }}>
+      <main style={{ paddingTop: 'calc(var(--nav-h) + var(--npbar-h, 0px))', minHeight: '100vh', transition: 'padding-top .2s' }}>
         <Outlet />
       </main>
 
