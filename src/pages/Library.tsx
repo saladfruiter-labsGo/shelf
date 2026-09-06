@@ -9,7 +9,7 @@ const CATS = [
   { key: 'book'  as MediaType, label: 'Livros',  emoji: '📚', path: '/library/books'  },
   { key: 'movie' as MediaType, label: 'Filmes',  emoji: '🎬', path: '/library/films'  },
   { key: 'series' as MediaType, label: 'Séries', emoji: '📺', path: '/library/series' },
-  { key: null,                  label: 'Músicas', emoji: '🎵', path: '/library/music'  },
+  { key: 'music' as MediaType,  label: 'Músicas', emoji: '🎵', path: '/library/music'  },
 ]
 
 export function Library() {
@@ -20,8 +20,8 @@ export function Library() {
     queryFn: () => api.media.list({ limit: 500 }),
   })
 
-  const countByType = (key: MediaType | null) =>
-    key ? allItems.filter(i => i.type === key).length : 0
+  const countByType = (key: MediaType) =>
+    allItems.filter(i => i.type === key).length
 
   return (
     <div style={{ background: 'var(--bg)', minHeight: '100vh' }}>
@@ -55,7 +55,7 @@ export function Library() {
               <span style={{ fontSize: 40, display: 'block', marginBottom: 16 }}>{cat.emoji}</span>
               <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>{cat.label}</p>
               <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                {cat.key === null ? '—' : countByType(cat.key)} itens
+                {countByType(cat.key)} itens
               </p>
             </button>
           ))}

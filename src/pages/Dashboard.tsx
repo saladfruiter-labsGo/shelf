@@ -157,7 +157,7 @@ export function Dashboard() {
                 <span style={{ fontSize: 40, display: 'block', marginBottom: 16 }}>{cat.emoji}</span>
                 <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>{cat.label}</p>
                 <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                  {cat.key === 'music' ? '—' : countByType(cat.key)} itens
+                  {countByType(cat.key)} itens
                 </p>
               </button>
             ))}

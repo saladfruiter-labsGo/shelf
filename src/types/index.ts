@@ -1,4 +1,4 @@
-export type MediaType   = 'movie' | 'series' | 'game' | 'book'
+export type MediaType   = 'movie' | 'series' | 'game' | 'book' | 'music'
 export type MediaStatus = 'wishlist' | 'in_progress' | 'completed' | 'dropped'
 
 export interface MediaItem {

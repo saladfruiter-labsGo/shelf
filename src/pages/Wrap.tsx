@@ -10,6 +10,7 @@ const TYPE_COLOR_HEX: Record<MediaType, string> = {
   series: '#8A5FE8',
   game:   '#20C97A',
   book:   '#C47A0A',
+  music:  '#8B5CF6',
 }
 
 const TYPE_EMOJI: Record<MediaType, string> = {
@@ -17,6 +18,7 @@ const TYPE_EMOJI: Record<MediaType, string> = {
   series: '📺',
   game:   '🎮',
   book:   '📚',
+  music:  '🎵',
 }
 
 export function Wrap() {

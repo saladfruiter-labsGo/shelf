@@ -14,10 +14,11 @@ const TYPE_HEX: Record<MediaType, string> = {
   series: '#8A5FE8',
   game:   '#20C97A',
   book:   '#C47A0A',
+  music:  '#8B5CF6',
 }
 
 const TYPE_LABEL_STORY: Record<MediaType, string> = {
-  movie: 'FILME', series: 'SÉRIE', game: 'JOGO', book: 'LIVRO',
+  movie: 'FILME', series: 'SÉRIE', game: 'JOGO', book: 'LIVRO', music: 'MÚSICA',
 }
 
 // ─── Canvas helpers ──────────────────────────────────────────────────
@@ -336,7 +337,7 @@ export function MediaDetail() {
       qc.invalidateQueries({ queryKey: ['media', id] })
       return d
     },
-    enabled: !!item && !item.synopsis,
+    enabled: !!item && !item.synopsis && item.type !== 'music',
     staleTime: Infinity,
   })
 
@@ -392,7 +393,7 @@ export function MediaDetail() {
             {item.cover_url
               ? <img src={item.cover_url} alt={item.title} className="w-full h-full object-cover" />
               : <div className="w-full h-full flex items-center justify-center text-muted text-4xl">
-                  {item.type === 'movie' ? '🎬' : item.type === 'series' ? '📺' : item.type === 'game' ? '🎮' : '📚'}
+                  {item.type === 'movie' ? '🎬' : item.type === 'series' ? '📺' : item.type === 'game' ? '🎮' : item.type === 'music' ? '🎵' : '📚'}
                 </div>
             }
           </div>
