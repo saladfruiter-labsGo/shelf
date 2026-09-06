@@ -31,7 +31,7 @@ export function Library() {
         <p style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '2.5px', color: 'var(--dim)', marginBottom: 16 }}>
           Coleção pessoal
         </p>
-        <h1 style={{ fontFamily: 'Syne, sans-serif', fontSize: 'clamp(40px,5vw,72px)', fontWeight: 800, letterSpacing: '-2px', lineHeight: 1, color: 'var(--text-primary)', marginBottom: 16 }}>
+        <h1 style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: 'clamp(40px,5vw,72px)', fontWeight: 800, letterSpacing: '-2px', lineHeight: 1, color: 'var(--text-primary)', marginBottom: 16 }}>
           A sua biblioteca
         </h1>
         <p style={{ fontSize: 16, color: 'var(--text-muted)', marginBottom: 64 }}>
@@ -44,27 +44,16 @@ export function Library() {
             <button
               key={cat.label}
               onClick={() => navigate(cat.path)}
+              className="hover-lift"
               style={{
                 background: 'var(--surface)', border: '1px solid var(--border)',
                 borderRadius: 16, padding: '32px 16px',
-                cursor: 'pointer', transition: 'all .28s',
+                cursor: 'pointer',
                 textAlign: 'center', display: 'block', width: '100%',
-              }}
-              onMouseEnter={e => {
-                const el = e.currentTarget
-                el.style.borderColor = 'var(--accent)'
-                el.style.background = 'var(--card)'
-                el.style.transform = 'translateY(-4px)'
-              }}
-              onMouseLeave={e => {
-                const el = e.currentTarget
-                el.style.borderColor = 'var(--border)'
-                el.style.background = 'var(--surface)'
-                el.style.transform = 'translateY(0)'
               }}
             >
               <span style={{ fontSize: 40, display: 'block', marginBottom: 16 }}>{cat.emoji}</span>
-              <p style={{ fontFamily: 'Syne, sans-serif', fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>{cat.label}</p>
+              <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>{cat.label}</p>
               <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                 {cat.key === null ? '—' : countByType(cat.key)} itens
               </p>
@@ -75,10 +64,10 @@ export function Library() {
         {/* All items */}
         <div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
-            <p style={{ fontFamily: 'Syne, sans-serif', fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '2.5px', color: 'var(--text-muted)' }}>
+            <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '2.5px', color: 'var(--text-muted)' }}>
               Todos os itens
             </p>
-            <span style={{ fontFamily: 'DM Mono, monospace', fontSize: 12, color: 'var(--dim)' }}>
+            <span style={{ fontFamily: 'Space Grotesk, monospace', fontSize: 12, color: 'var(--dim)' }}>
               {allItems.length}
             </span>
           </div>
@@ -100,7 +89,7 @@ export function Library() {
             </div>
           ) : (
             <div style={{ textAlign: 'center', padding: '80px 0' }}>
-              <p style={{ fontFamily: 'Syne, sans-serif', fontSize: '3rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--border)', marginBottom: 12 }}>Vazio</p>
+              <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '3rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--border)', marginBottom: 12 }}>Vazio</p>
               <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>Pressione ⌘K para adicionar algo</p>
             </div>
           )}

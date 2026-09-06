@@ -29,11 +29,14 @@ export default {
         'series-bg':    'var(--series-bg)',
         books:          'var(--books)',
         'books-bg':     'var(--books-bg)',
+        music:          'var(--music)',
+        'music-bg':     'var(--music-bg)',
       },
       fontFamily: {
-        display: ['"Syne"', 'system-ui', 'sans-serif'],
-        body:    ['"DM Sans"', 'system-ui', 'sans-serif'],
-        mono:    ['"DM Mono"', 'monospace'],
+        /* Single family — Space Grotesk covers display, body & tabular numerals */
+        display: ['"Space Grotesk"', 'system-ui', 'sans-serif'],
+        body:    ['"Space Grotesk"', 'system-ui', 'sans-serif'],
+        mono:    ['"Space Grotesk"', 'ui-monospace', 'monospace'],
       },
       borderRadius: {
         sm: '4px',
