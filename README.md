@@ -7,8 +7,12 @@ Um app de biblioteca pessoal para rastrear **filmes, séries, games e livros** e
 ## ✨ Funcionalidades
 
 - **Busca unificada** — uma busca única consulta filmes e séries (TMDB), games (RAWG) e livros (Google Books) em paralelo.
-- **Biblioteca** — adicione itens e acompanhe o status: `wishlist`, `in_progress`, `completed`, `dropped`, além de nota (estrelas) e notas próprias.
+- **Biblioteca** — adicione itens e acompanhe o status: `wishlist`, `in_progress`, `completed`, `dropped`, além de nota (estrelas, com meio-ponto) e notas próprias. Também navegável por categoria (`/library/games`, `/library/books`, `/library/films`, `/library/series`, `/library/music`).
+- **Diário** — histórico cronológico de tudo que foi concluído, com data, categoria e nota.
+- **Listas** — crie listas personalizadas para organizar a coleção (ex.: "Favoritos", "Maratona de fim de ano") e adicione/remova itens nelas.
 - **Dashboard** — itens recentes por categoria.
+- **Detalhes enriquecidos** — sinopse, diretor/desenvolvedor/autor buscados sob demanda na fonte externa (TMDB, RAWG, Google Books) e cacheados no banco.
+- **Tema claro/escuro** — alternável, com preferência salva no navegador.
 - **Wrap** — relatório anual ou mensal gerado como imagem (canvas 1080×1920, formato de story) com suas estatísticas do período: totais por tipo, nota média, top itens e linha do tempo de atividade.
 - **Configurações** — as chaves de API (TMDB, RAWG, Google Books) ficam salvas no próprio banco, sem depender só do ambiente.
 - **Armazenamento local** — dados em SQLite (WAL), auto-criado em `data/shelf.db`.
@@ -28,15 +32,15 @@ Um app de biblioteca pessoal para rastrear **filmes, séries, games e livros** e
 ```
 shelf/
 ├─ src/                    # Frontend (Vite + React)
-│  ├─ pages/               # Dashboard, Library, MediaDetail, Settings, Wrap
-│  ├─ components/          # Carousel, MediaCard, SearchModal, StarRating, ...
-│  ├─ hooks/               # useHotkey
+│  ├─ pages/               # Dashboard, Library (+ por categoria), Diary, Lists, ListDetail, MediaDetail, Settings, Wrap
+│  ├─ components/          # Carousel, CategoryTag, Layout, MediaCard, SearchModal, StarRating, ...
+│  ├─ hooks/               # useHotkey, useTheme
 │  ├─ lib/                 # api client, utils
 │  └─ types/
 ├─ server/                 # Backend (Hono)
 │  ├─ index.ts             # app, rotas, serve do build estático
 │  ├─ db.ts                # conexão + schema SQLite
-│  └─ routes/              # search, media, wrap, settings
+│  └─ routes/              # search, media, details, wrap, settings, lists
 ├─ Dockerfile
 ├─ docker-compose.yml
 └─ .env.example
@@ -91,8 +95,17 @@ Saúde: `GET /api/health` → `{ "ok": true }`
 | `GET /api/media` | Lista itens da biblioteca (filtros `type`, `status`, `limit`) |
 | `GET /api/media/recent` | Itens recentes por tipo |
 | `GET /api/media/:id` | Detalhe de um item |
+| `GET /api/details/:type/:external_id` | Sinopse/criador/autor do item na fonte externa (cacheado no banco após a 1ª busca) |
 | `GET /api/wrap?period=&year=&month=` | Estatísticas para o Wrap (`annual`/`monthly`) |
 | `GET/PATCH /api/settings` | Lê/atualiza as chaves de API |
+| `GET /api/lists` | Lista todas as listas (com contagem de itens) |
+| `GET /api/lists/check/:mediaItemId` | Verifica em quais listas um item já está |
+| `GET /api/lists/:id` | Detalhe de uma lista com seus itens |
+| `POST /api/lists` | Cria uma lista |
+| `PATCH /api/lists/:id` | Atualiza nome/descrição de uma lista |
+| `DELETE /api/lists/:id` | Remove uma lista |
+| `POST /api/lists/:id/items` | Adiciona um item à lista |
+| `DELETE /api/lists/:id/items/:mediaItemId` | Remove um item da lista |
 
 ## 📄 Licença
 
