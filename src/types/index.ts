@@ -59,6 +59,72 @@ export interface ListCheck {
   contains: 0 | 1
 }
 
+/* ─── Integrações (Plex + Last.fm) ─── */
+
+export type ActivityMediaType = 'movie' | 'series' | 'music'
+
+export interface IntegrationStatus {
+  plex: {
+    enabled:        boolean
+    url:            string
+    token_set:      boolean
+    token_masked:   string
+    user:           string
+    webhook_secret: string
+  }
+  lastfm: {
+    enabled:        boolean
+    api_key_set:    boolean
+    api_key_masked: string
+    user:           string
+  }
+  telegram: {
+    enabled:          boolean
+    bot_token_set:    boolean
+    bot_token_masked: string
+    chat_id:          string
+    thread_id:        string
+  }
+}
+
+export interface NowPlayingItem {
+  media_type:  ActivityMediaType
+  title:       string
+  subtitle:    string | null
+  cover_url:   string | null
+  state:       'playing' | 'paused'
+  position_ms: number | null
+  duration_ms: number | null
+  updated_at:  number
+}
+
+export interface NowPlaying {
+  plex:  NowPlayingItem | null
+  music: NowPlayingItem | null
+}
+
+export interface ActivityEvent {
+  id:           number
+  source:       'plex' | 'lastfm'
+  event_type:   string
+  media_type:   ActivityMediaType
+  external_ref: string | null
+  title:        string
+  subtitle:     string | null
+  cover_url:    string | null
+  rating:       number | null
+  duration_ms:  number | null
+  genre:        string | null
+  occurred_at:  string
+}
+
+export interface MusicStats {
+  plays:       number
+  hours:       number
+  top_genres:  { genre: string; n: number }[]
+  top_artists: { artist: string; n: number }[]
+}
+
 export interface WrapData {
   period:               'monthly' | 'annual'
   year:                 number

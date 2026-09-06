@@ -15,6 +15,7 @@ Um app de biblioteca pessoal para rastrear **filmes, séries, games e livros** e
 - **Tema claro/escuro** — alternável, com preferência salva no navegador.
 - **Wrap** — relatório anual ou mensal gerado como imagem (canvas 1080×1920, formato de story) com suas estatísticas do período: totais por tipo, nota média, top itens e linha do tempo de atividade.
 - **Configurações** — as chaves de API (TMDB, RAWG, Google Books) ficam salvas no próprio banco, sem depender só do ambiente.
+- **Integrações** — monitoramento automático via **Plex** (webhook: registra o que foi assistido até o fim e a nota dada) e **YouTube Music via Last.fm** (registra músicas ouvidas, com horas e gêneros). Uma barra "assistindo agora" sob a navbar mostra a reprodução do Plex em tempo real, com progresso. Notificações via **Telegram** avisam sobre atividades da biblioteca (adicionado, concluído, abandonado, nota) — apenas filmes, séries, games e livros.
 - **Armazenamento local** — dados em SQLite (WAL), auto-criado em `data/shelf.db`.
 
 ## 🧱 Stack
@@ -98,6 +99,14 @@ Saúde: `GET /api/health` → `{ "ok": true }`
 | `GET /api/details/:type/:external_id` | Sinopse/criador/autor do item na fonte externa (cacheado no banco após a 1ª busca) |
 | `GET /api/wrap?period=&year=&month=` | Estatísticas para o Wrap (`annual`/`monthly`) |
 | `GET/PATCH /api/settings` | Lê/atualiza as chaves de API |
+| `GET/PATCH /api/integrations` | Status e configuração de Plex/Last.fm |
+| `POST /api/integrations/plex/webhook?token=` | Recebe webhooks do Plex (`media.scrobble`, `media.rate`) |
+| `GET /api/integrations/now-playing` | Mídia em reprodução agora (Plex com progresso; música sem posição) |
+| `GET /api/integrations/activity` | Feed de atividade em tempo real |
+| `GET /api/integrations/music/stats` | Reproduções, horas ouvidas e gêneros (Last.fm) |
+| `POST /api/integrations/lastfm/sync` | Sincroniza o histórico do Last.fm sob demanda |
+| `POST /api/integrations/telegram/test` | Envia mensagem de teste no Telegram |
+| `GET /api/integrations/telegram/detect-chat` | Descobre o `chat_id` de quem falou com o bot |
 | `GET /api/lists` | Lista todas as listas (com contagem de itens) |
 | `GET /api/lists/check/:mediaItemId` | Verifica em quais listas um item já está |
 | `GET /api/lists/:id` | Detalhe de uma lista com seus itens |

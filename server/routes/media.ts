@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
 import { db } from '../db.js'
+import { notifyLibraryActivity } from '../notify.js'
 
 const app = new Hono()
 
@@ -75,7 +76,9 @@ app.post('/', async (c) => {
            synopsis ?? null, creators ?? null, author ?? null, release_date ?? null,
            completed_at ?? null)
 
-    return c.json(db.prepare('SELECT * FROM media_items WHERE id = ?').get(res.lastInsertRowid), 201)
+    const created = db.prepare('SELECT * FROM media_items WHERE id = ?').get(res.lastInsertRowid) as any
+    notifyLibraryActivity({ event: 'added', type: created.type, title: created.title, rating: created.rating })
+    return c.json(created, 201)
   } catch (e: any) {
     if (e.message?.includes('UNIQUE')) return c.json({ error: 'Already in library' }, 409)
     throw e
@@ -89,12 +92,25 @@ app.patch('/:id', async (c) => {
   const fields  = Object.keys(body).filter(k => allowed.includes(k))
   if (fields.length === 0) return c.json({ error: 'No valid fields' }, 400)
 
+  const before = db.prepare('SELECT status, rating FROM media_items WHERE id = ?').get(id) as { status: string; rating: number } | undefined
+
   const set    = fields.map(f => `${f} = ?`).join(', ')
   const values = fields.map(f => body[f])
   db.prepare(`UPDATE media_items SET ${set}, updated_at = datetime('now') WHERE id = ?`).run(...values, id)
 
-  const item = db.prepare('SELECT * FROM media_items WHERE id = ?').get(id)
+  const item = db.prepare('SELECT * FROM media_items WHERE id = ?').get(id) as any
   if (!item) return c.json({ error: 'Not found' }, 404)
+
+  // Notifica mudança de status (concluído, abandonado, ...) e/ou nova nota
+  if (before) {
+    if (fields.includes('status') && before.status !== item.status) {
+      notifyLibraryActivity({ event: item.status, type: item.type, title: item.title, rating: item.rating })
+    }
+    if (fields.includes('rating') && before.rating !== item.rating && item.rating > 0) {
+      notifyLibraryActivity({ event: 'rated', type: item.type, title: item.title, rating: item.rating })
+    }
+  }
+
   return c.json(item)
 })
 
