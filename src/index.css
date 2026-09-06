@@ -177,6 +177,10 @@ body {
 .hero-poster:hover { transform: scale(1.03); }
 @media (max-width: 760px) { .hero-poster { display: none; } }
 
+/* Home back-to-top */
+.back-to-top { transition: opacity .3s, transform .3s, background .2s; }
+.back-to-top:hover { background: var(--accent) !important; color: #000 !important; }
+
 /* Home scroll hint chevron */
 @keyframes chevron-bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(4px); } }
 .scroll-hint-chevron { animation: chevron-bounce 1.6s ease-in-out infinite; }

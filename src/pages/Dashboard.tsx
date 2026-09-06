@@ -3,15 +3,35 @@ import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../lib/api'
 import { AutoCarousel } from '../components/AutoCarousel'
+import { HeroCarousel } from '../components/HeroCarousel'
 import { CATEGORIES } from '../lib/categories'
-import { STATUS_LABEL } from '../lib/utils'
 import type { MediaItem, MediaType } from '../types'
+
+const byCompleted = (a: MediaItem, b: MediaItem) =>
+  new Date(b.completed_at ?? b.updated_at).getTime() - new Date(a.completed_at ?? a.updated_at).getTime()
 
 const byRecent = (a: MediaItem, b: MediaItem) =>
   new Date(b.added_at).getTime() - new Date(a.added_at).getTime()
 
 /** Smooth ease-in-out used for the block-to-block transition. */
 const BLOCK_EASE = 'transform .9s cubic-bezier(.65, 0, .35, 1)'
+
+/**
+ * Ambient background art for a category block: a heavily-blurred version of the
+ * category's newest cover plus a soft glow in the category's colour, faded back
+ * into the app background at the top and bottom edges.
+ */
+function BlockBg({ colorVar, art }: { colorVar: string; art?: string }) {
+  return (
+    <>
+      {art && (
+        <div aria-hidden style={{ position: 'absolute', inset: 0, backgroundImage: `url(${art})`, backgroundSize: 'cover', backgroundPosition: 'center', filter: 'blur(80px) saturate(1.5) brightness(.7)', opacity: 0.3, transform: 'scale(1.3)' }} />
+      )}
+      <div aria-hidden style={{ position: 'absolute', top: '-25%', right: '-5%', width: '65%', height: '150%', background: `radial-gradient(circle at 65% 45%, var(${colorVar}) 0%, transparent 60%)`, opacity: 0.12, pointerEvents: 'none' }} />
+      <div aria-hidden style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, var(--bg) 0%, transparent 22%, transparent 78%, var(--bg) 100%)' }} />
+    </>
+  )
+}
 
 export function Dashboard() {
   const navigate = useNavigate()
@@ -34,9 +54,14 @@ export function Dashboard() {
   const completedCount = (type: MediaType) =>
     allItems.reduce((n, i) => n + (i.type === type && i.status === 'completed' ? 1 : 0), 0)
 
-  const heroItem = useMemo(() => {
-    const sorted = [...allItems].sort(byRecent)
-    return sorted.find(i => i.cover_url) ?? sorted[0] ?? null
+  /** Hero cycles through the diary (completed items, newest-first); featured
+   *  slides need cover art and exclude music, but the diary order is kept. */
+  const heroSlides = useMemo(() => {
+    const diary = allItems
+      .filter(i => i.status === 'completed' && i.cover_url && i.type !== 'music')
+      .sort(byCompleted)
+    if (diary.length) return diary
+    return [...allItems].filter(i => i.type !== 'music').sort(byRecent).slice(0, 1)
   }, [allItems])
 
   /** Categories that actually have something to show, in canonical order. */
@@ -134,86 +159,15 @@ export function Dashboard() {
           transition: BLOCK_EASE,
         }}
       >
-        {/* ── Hero: full-screen art of the most recent media ── */}
+        {/* ── Hero: diary carousel (completed items, newest-first) ── */}
         <section style={{ height: '100%', position: 'relative', overflow: 'hidden' }}>
-          {heroItem?.cover_url && (
-            <div
-              aria-hidden
-              style={{
-                position: 'absolute', inset: 0,
-                backgroundImage: `url(${heroItem.cover_url})`,
-                backgroundSize: 'cover',
-                backgroundPosition: 'center',
-                filter: 'blur(24px) brightness(.5)',
-                transform: 'scale(1.15)',
-              }}
-            />
-          )}
-          {/* legibility scrims */}
-          <div aria-hidden style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, var(--bg) 1%, rgba(0,0,0,.15) 40%, rgba(0,0,0,.35) 100%)' }} />
-          <div aria-hidden style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to right, rgba(0,0,0,.75) 0%, rgba(0,0,0,.35) 45%, transparent 70%)' }} />
-
-          <div style={{ position: 'relative', height: '100%', maxWidth: 1200, margin: '0 auto', padding: '0 64px', display: 'flex', alignItems: 'center', gap: 56 }}>
-            {/* text column */}
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <p style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '2.5px', color: '#fff', opacity: .8, marginBottom: 20 }}>
-                Adicionado recentemente
-              </p>
-              <h1 style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: 'clamp(44px,6vw,84px)', fontWeight: 800, lineHeight: 1.02, letterSpacing: '-2.5px', color: '#fff', maxWidth: 760, marginBottom: 24, textShadow: '0 2px 30px rgba(0,0,0,.5)' }}>
-                {heroItem?.title}
-              </h1>
-              {heroItem && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 40, color: 'rgba(255,255,255,.85)', fontSize: 14 }}>
-                  <span className={`cat-badge cat-${heroItem.type}`}>{CATEGORIES.find(c => c.key === heroItem.type)?.label}</span>
-                  <span>{heroItem.year ?? '—'}</span>
-                  <span style={{ opacity: .5 }}>·</span>
-                  <span>{STATUS_LABEL[heroItem.status]}</span>
-                </div>
-              )}
-              <div style={{ display: 'flex', gap: 12 }}>
-                {heroItem && (
-                  <button
-                    onClick={() => navigate(`/media/${heroItem.id}`)}
-                    className="btn-accent"
-                    style={{ padding: '12px 28px', background: 'var(--accent)', border: 'none', borderRadius: 9999, color: '#000', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
-                  >
-                    Ver detalhes →
-                  </button>
-                )}
-                <button
-                  onClick={() => navigate('/library')}
-                  style={{ padding: '12px 28px', background: 'rgba(255,255,255,.12)', border: '1px solid rgba(255,255,255,.28)', borderRadius: 9999, color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer', backdropFilter: 'blur(8px)' }}
-                >
-                  Ver biblioteca
-                </button>
-              </div>
-            </div>
-
-            {/* sharp poster — keeps the hero crisp for any category */}
-            {heroItem?.cover_url && (
-              <div
-                onClick={() => navigate(`/media/${heroItem.id}`)}
-                className="hero-poster"
-                style={{
-                  flex: '0 0 auto', width: 'clamp(200px, 22vw, 320px)', aspectRatio: '2 / 3',
-                  borderRadius: 16, overflow: 'hidden', cursor: 'pointer',
-                  boxShadow: '0 30px 70px rgba(0,0,0,.6)', border: '1px solid rgba(255,255,255,.14)',
-                }}
-              >
-                <img
-                  src={heroItem.cover_url}
-                  alt={heroItem.title}
-                  style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center', display: 'block' }}
-                />
-              </div>
-            )}
-          </div>
+          <HeroCarousel items={heroSlides} />
 
           {/* scroll hint */}
           {sectionCount > 1 && (
             <button
               onClick={() => go(1)}
-              style={{ position: 'absolute', bottom: 28, left: '50%', transform: 'translateX(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,.75)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, fontSize: 11, letterSpacing: '1.5px', textTransform: 'uppercase' }}
+              style={{ position: 'absolute', bottom: 28, left: '50%', transform: 'translateX(-50%)', zIndex: 4, background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,.75)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, fontSize: 11, letterSpacing: '1.5px', textTransform: 'uppercase' }}
             >
               Role para explorar
               <span className="scroll-hint-chevron" style={{ fontSize: 20, lineHeight: 1 }}>⌄</span>
@@ -224,39 +178,13 @@ export function Dashboard() {
         {/* ── One block per category: recent covers in an auto-carousel ── */}
         {activeCats.map(cat => {
           const items = recentByType[cat.key]
-          const artCover = items.find(i => i.cover_url)?.cover_url
+          const artCover = items.find(i => i.cover_url)?.cover_url ?? undefined
           return (
             <section
               key={cat.key}
               style={{ height: '100%', position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}
             >
-              {/* ambient art — blurred cover of the category's newest item */}
-              {artCover && (
-                <div
-                  aria-hidden
-                  style={{
-                    position: 'absolute', inset: 0,
-                    backgroundImage: `url(${artCover})`,
-                    backgroundSize: 'cover', backgroundPosition: 'center',
-                    filter: 'blur(80px) saturate(1.5) brightness(.7)',
-                    opacity: 0.3, transform: 'scale(1.3)',
-                  }}
-                />
-              )}
-              {/* category-color glow */}
-              <div
-                aria-hidden
-                style={{
-                  position: 'absolute', top: '-25%', right: '-5%', width: '65%', height: '150%',
-                  background: `radial-gradient(circle at 65% 45%, var(${cat.colorVar}) 0%, transparent 60%)`,
-                  opacity: 0.12, pointerEvents: 'none',
-                }}
-              />
-              {/* fade edges back to the app background */}
-              <div
-                aria-hidden
-                style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, var(--bg) 0%, transparent 22%, transparent 78%, var(--bg) 100%)' }}
-              />
+              <BlockBg colorVar={cat.colorVar} art={artCover} />
 
               <div style={{ position: 'relative', maxWidth: 1400, width: '100%', margin: '0 auto', padding: '0 64px' }}>
                 <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 28, gap: 16 }}>
@@ -305,6 +233,29 @@ export function Dashboard() {
             />
           ))}
         </div>
+      )}
+
+      {/* ── Back to top ── */}
+      {sectionCount > 1 && (
+        <button
+          onClick={() => goTo(0)}
+          aria-label="Voltar ao topo"
+          className="back-to-top"
+          style={{
+            position: 'absolute', bottom: 28, right: 28, zIndex: 6,
+            display: 'flex', alignItems: 'center', gap: 8,
+            padding: '10px 18px 10px 14px', borderRadius: 9999,
+            background: 'var(--surface)', border: '1px solid var(--border-strong)',
+            color: 'var(--text-primary)', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+            boxShadow: 'var(--shadow-lg)',
+            opacity: index > 0 ? 1 : 0,
+            transform: index > 0 ? 'translateY(0)' : 'translateY(12px)',
+            pointerEvents: index > 0 ? 'auto' : 'none',
+          }}
+        >
+          <span style={{ fontSize: 16, lineHeight: 1 }}>↑</span>
+          Topo
+        </button>
       )}
     </div>
   )
