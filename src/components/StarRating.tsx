@@ -15,6 +15,8 @@ export function StarRating({ value, onChange, readonly = false, size = 'md' }: P
 
   const px = size === 'sm' ? 16 : size === 'lg' ? 28 : 22
   const display = hover ?? value
+  // Perfect score → golden stars.
+  const fullColor = display >= 5 ? 'var(--gold)' : 'var(--accent)'
 
   return (
     <div
@@ -61,7 +63,7 @@ export function StarRating({ value, onChange, readonly = false, size = 'md' }: P
               {(filled || half) && (
                 <path
                   d={PATH}
-                  fill={half ? `url(#${uid}-h${star})` : 'var(--accent)'}
+                  fill={half ? `url(#${uid}-h${star})` : fullColor}
                 />
               )}
             </svg>

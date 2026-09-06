@@ -16,6 +16,7 @@
   --dim:          #38384E;
   --accent:       #AAFF2E;
   --accent-bg:    rgba(170,255,46,.12);
+  --gold:         #FFC83D;
   --v:            #7B3FFF;
   --v-dim:        rgba(123,63,255,.15);
   /* category — five distinct hues */
@@ -52,6 +53,7 @@ html:not(.dark) {
   --dim:          #B0B0C0;
   --accent:       #4D8800;
   --accent-bg:    rgba(77,136,0,.1);
+  --gold:         #D69E00;
   --v:            #5B29CC;
   --v-dim:        rgba(91,41,204,.1);
   --movies:       #C23030;
@@ -171,6 +173,27 @@ body {
 .menu-item:hover { background: var(--card-hover); color: var(--text-primary); }
 .icon-btn { transition: background .2s, border-color .2s, color .2s; }
 .icon-btn:hover { border-color: var(--border-strong); color: var(--text-primary); }
+
+/* Home hero poster */
+.hero-poster { transition: transform .3s var(--ease); }
+.hero-poster:hover { transform: scale(1.03); }
+@media (max-width: 760px) { .hero-poster { display: none; } }
+
+/* Home back-to-top */
+.back-to-top { transition: opacity .3s, transform .3s, background .2s; }
+.back-to-top:hover { background: var(--accent) !important; color: #000 !important; }
+
+/* Home scroll hint chevron */
+@keyframes chevron-bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(4px); } }
+.scroll-hint-chevron { animation: chevron-bounce 1.6s ease-in-out infinite; }
+
+/* Auto-carousel poster hovers */
+.poster-frame:hover {
+  border-color: var(--border-strong) !important;
+  transform: translateY(-6px);
+  box-shadow: var(--shadow-lg);
+}
+.group:hover .poster-title-reveal { opacity: 1 !important; transform: none !important; }
 
 /* Title hover underline for media cards */
 .card-title-wrap {

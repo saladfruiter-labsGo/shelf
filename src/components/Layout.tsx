@@ -6,6 +6,7 @@ import { useTheme } from '../hooks/useTheme'
 import { SearchModal } from './SearchModal'
 import { NowPlayingBar } from './NowPlayingBar'
 import { api } from '../lib/api'
+import { CATEGORIES } from '../lib/categories'
 import type { MediaItem } from '../types'
 
 const NAV = [
@@ -15,6 +16,82 @@ const NAV = [
   { to: '/lists',   label: 'Listas',      end: false },
   { to: '/wrap',    label: 'Wrap',        end: false },
 ]
+
+const navLinkStyle = (isActive: boolean) => ({
+  padding: '8px 16px',
+  fontSize: 14,
+  fontWeight: 500,
+  color: isActive ? 'var(--accent)' : 'var(--text-muted)',
+  cursor: 'pointer',
+  borderRadius: 9999,
+  background: isActive ? 'var(--card)' : 'transparent',
+  transition: 'color .28s, background .28s',
+  textDecoration: 'none',
+  whiteSpace: 'nowrap' as const,
+})
+
+/* ─── Biblioteca nav item: click → /library, hover → categorias ─── */
+function LibraryNavItem() {
+  const [open, setOpen] = useState(false)
+  const closeTimer = useRef<number>()
+
+  const enter = () => { window.clearTimeout(closeTimer.current); setOpen(true) }
+  const leave = () => { closeTimer.current = window.setTimeout(() => setOpen(false), 120) }
+
+  return (
+    <div style={{ position: 'relative' }} onMouseEnter={enter} onMouseLeave={leave}>
+      <NavLink
+        to="/library"
+        style={({ isActive }) => ({ ...navLinkStyle(isActive), display: 'inline-flex', alignItems: 'center', gap: 6 })}
+        className={({ isActive }) => isActive ? '' : 'hover-nav-link'}
+      >
+        Biblioteca
+        <span
+          aria-hidden
+          style={{
+            fontSize: 9,
+            display: 'inline-block',
+            transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
+            transition: 'transform .2s',
+          }}
+        >
+          ▾
+        </span>
+      </NavLink>
+
+      {/* Dropdown de categorias */}
+      <div
+        style={{
+          position: 'absolute', top: 'calc(100% + 8px)', left: 0,
+          minWidth: 200, background: 'var(--card)',
+          border: '1px solid var(--border-strong)', borderRadius: 12,
+          padding: 8, boxShadow: '0 16px 48px rgba(0,0,0,.45)',
+          opacity: open ? 1 : 0, pointerEvents: open ? 'all' : 'none',
+          transform: open ? 'translateY(0)' : 'translateY(-6px)',
+          transition: 'opacity .2s, transform .2s',
+          zIndex: 120,
+        }}
+      >
+        {CATEGORIES.map(cat => (
+          <NavLink
+            key={cat.key}
+            to={cat.path}
+            onClick={() => setOpen(false)}
+            className="menu-item"
+            style={{
+              display: 'flex', alignItems: 'center', gap: 12, width: '100%',
+              padding: '10px 14px', borderRadius: 8, cursor: 'pointer',
+              fontSize: 14, color: 'var(--text-muted)', textDecoration: 'none',
+            }}
+          >
+            <span style={{ fontSize: 18, lineHeight: 1 }}>{cat.emoji}</span>
+            {cat.label}
+          </NavLink>
+        ))}
+      </div>
+    </div>
+  )
+}
 
 function SunIcon() {
   return (
@@ -191,25 +268,19 @@ export function Layout() {
         {/* Nav links */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 1 }}>
           {NAV.map(item => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.end}
-              style={({ isActive }) => ({
-                padding: '8px 16px',
-                fontSize: 14, fontWeight: 500,
-                color: isActive ? 'var(--accent)' : 'var(--text-muted)',
-                cursor: 'pointer',
-                borderRadius: 9999,
-                background: isActive ? 'var(--card)' : 'transparent',
-                transition: 'color .28s, background .28s',
-                textDecoration: 'none',
-                whiteSpace: 'nowrap',
-              })}
-              className={({ isActive }) => isActive ? '' : 'hover-nav-link'}
-            >
-              {item.label}
-            </NavLink>
+            item.to === '/library' ? (
+              <LibraryNavItem key={item.to} />
+            ) : (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.end}
+                style={({ isActive }) => navLinkStyle(isActive)}
+                className={({ isActive }) => isActive ? '' : 'hover-nav-link'}
+              >
+                {item.label}
+              </NavLink>
+            )
           ))}
         </div>
 
