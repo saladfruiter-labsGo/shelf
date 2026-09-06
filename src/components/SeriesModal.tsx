@@ -35,6 +35,15 @@ export function SeriesModal({ id, onClose }: { id: number; onClose: () => void }
     },
   })
 
+  const remove = useMutation({
+    mutationFn: () => api.media.remove(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['media'] })
+      qc.invalidateQueries({ queryKey: ['recent'] })
+      onClose()
+    },
+  })
+
   // Fecha no Esc e trava o scroll do body
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
@@ -119,6 +128,23 @@ export function SeriesModal({ id, onClose }: { id: number; onClose: () => void }
           {/* Temporadas e episódios */}
           <p style={{ fontFamily: FONT, fontSize: 11, letterSpacing: '2px', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 4 }}>Temporadas</p>
           <SeriesSeasons mediaId={id} />
+
+          {/* Remover da biblioteca */}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 24, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
+            <button
+              onClick={() => { if (confirm(`Remover "${item?.title ?? 'esta série'}"?`)) remove.mutate() }}
+              disabled={remove.isPending}
+              style={{
+                fontFamily: FONT, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                background: 'none', border: 'none', color: 'var(--text-muted)',
+                transition: 'color .15s', opacity: remove.isPending ? 0.6 : 1,
+              }}
+              onMouseEnter={e => { e.currentTarget.style.color = '#f87171' }}
+              onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)' }}
+            >
+              Remover da biblioteca
+            </button>
+          </div>
         </div>
       </div>
     </div>
