@@ -16,6 +16,7 @@
   --dim:          #38384E;
   --accent:       #AAFF2E;
   --accent-bg:    rgba(170,255,46,.12);
+  --gold:         #FFC83D;
   --v:            #7B3FFF;
   --v-dim:        rgba(123,63,255,.15);
   /* category — five distinct hues */
@@ -52,6 +53,7 @@ html:not(.dark) {
   --dim:          #B0B0C0;
   --accent:       #4D8800;
   --accent-bg:    rgba(77,136,0,.1);
+  --gold:         #D69E00;
   --v:            #5B29CC;
   --v-dim:        rgba(91,41,204,.1);
   --movies:       #C23030;
@@ -191,7 +193,7 @@ body {
   transform: translateY(-6px);
   box-shadow: var(--shadow-lg);
 }
-.group:hover .poster-overlay { opacity: 1 !important; }
+.group:hover .poster-title-reveal { opacity: 1 !important; transform: none !important; }
 
 /* Title hover underline for media cards */
 .card-title-wrap {

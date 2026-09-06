@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { CATEGORIES } from '../lib/categories'
-import { formatDate } from '../lib/utils'
+import { fmtRating, formatDate } from '../lib/utils'
+import { StarRating } from './StarRating'
 import type { MediaItem } from '../types'
 
 interface Props {
@@ -67,7 +68,11 @@ export function HeroCarousel({ items }: Props) {
                   <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 40, color: 'rgba(255,255,255,.85)', fontSize: 14 }}>
                     <span className={`cat-badge cat-${item.type}`}>{cat?.label}</span>
                     <span>{item.year ?? '—'}</span>
-                    {item.rating > 0 && (<><span style={{ opacity: .5 }}>·</span><span>★ {item.rating}</span></>)}
+                    <span style={{ opacity: .5 }}>·</span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 8, filter: 'drop-shadow(0 1px 2px rgba(0,0,0,.6))' }}>
+                      <StarRating value={item.rating} readonly size="sm" />
+                      <span style={{ fontWeight: 700, color: item.rating >= 5 ? 'var(--gold)' : '#fff' }}>{fmtRating(item.rating)}</span>
+                    </span>
                   </div>
                   <div style={{ display: 'flex', gap: 12 }}>
                     <button

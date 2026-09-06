@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { Link } from 'react-router-dom'
 import type { MediaItem } from '../types'
-import { STATUS_LABEL } from '../lib/utils'
+import { fmtRating } from '../lib/utils'
+import { StarRating } from './StarRating'
 
 interface Props {
   items: MediaItem[]
@@ -54,23 +55,29 @@ function Poster({ item }: { item: MediaItem }) {
           </div>
         )}
 
-        {/* bottom gradient + title on hover */}
+        {/* bottom gradient: title reveals on hover, rating is always visible */}
         <div
-          className="poster-overlay"
           style={{
             position: 'absolute', inset: 0,
             display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
-            padding: 16,
-            background: 'linear-gradient(to top, rgba(0,0,0,.85) 0%, rgba(0,0,0,.15) 45%, transparent 70%)',
-            opacity: 0, transition: 'opacity .25s',
+            padding: 14,
+            background: 'linear-gradient(to top, rgba(0,0,0,.9) 0%, rgba(0,0,0,.35) 30%, transparent 58%)',
+            pointerEvents: 'none',
           }}
         >
-          <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: 16, fontWeight: 700, color: '#fff', lineHeight: 1.25, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+          <p
+            className="poster-title-reveal"
+            style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: 15, fontWeight: 700, color: '#fff', lineHeight: 1.25, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', opacity: 0, transform: 'translateY(6px)', transition: 'opacity .25s, transform .25s' }}
+          >
             {item.title}
           </p>
-          <span style={{ fontSize: 12, color: 'rgba(255,255,255,.7)', marginTop: 4 }}>
-            {item.year ?? '—'} · {STATUS_LABEL[item.status]}
-          </span>
+          {/* rating — always shown: stars + number */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 8 }}>
+            <StarRating value={item.rating} readonly size="sm" />
+            <span style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: 13, fontWeight: 700, color: item.rating >= 5 ? 'var(--gold)' : '#fff' }}>
+              {fmtRating(item.rating)}
+            </span>
+          </div>
         </div>
       </div>
     </Link>

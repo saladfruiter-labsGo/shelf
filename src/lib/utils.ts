@@ -23,6 +23,11 @@ export const STATUS_LABEL = {
   dropped:     'Abandonado',
 } as const
 
+/** "5" for whole ratings, "4.5" for half steps. */
+export function fmtRating(r: number): string {
+  return r % 1 === 0 ? String(r) : r.toFixed(1)
+}
+
 export function formatRuntime(minutes: number): string {
   if (minutes < 60) return `${minutes}min`
   const h = Math.floor(minutes / 60)
