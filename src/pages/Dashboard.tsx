@@ -10,19 +10,8 @@ import type { MediaItem, MediaType } from '../types'
 const byRecent = (a: MediaItem, b: MediaItem) =>
   new Date(b.added_at).getTime() - new Date(a.added_at).getTime()
 
-/** Tracks the user's reduced-motion preference, reactively. */
-function usePrefersReducedMotion() {
-  const [reduce, setReduce] = useState(
-    () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches,
-  )
-  useEffect(() => {
-    const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
-    const on = () => setReduce(mq.matches)
-    mq.addEventListener('change', on)
-    return () => mq.removeEventListener('change', on)
-  }, [])
-  return reduce
-}
+/** Smooth ease-in-out used for the block-to-block transition. */
+const BLOCK_EASE = 'transform .9s cubic-bezier(.65, 0, .35, 1)'
 
 export function Dashboard() {
   const navigate = useNavigate()
@@ -56,8 +45,6 @@ export function Dashboard() {
   /* ─── sections: hero + one block per active category ─── */
   const sectionCount = 1 + activeCats.length
 
-  const reduce = usePrefersReducedMotion()
-
   const [index, setIndex] = useState(0)
   const indexRef = useRef(0)
   const animatingRef = useRef(false)
@@ -69,9 +56,9 @@ export function Dashboard() {
     if (next === indexRef.current) return
     indexRef.current = next
     setIndex(next)
-    // Block re-triggers until the (possibly instant) transition settles.
+    // Block re-triggers until the smooth transition settles.
     animatingRef.current = true
-    window.setTimeout(() => { animatingRef.current = false }, reduce ? 140 : 820)
+    window.setTimeout(() => { animatingRef.current = false }, 900)
   }
   const go = (dir: 1 | -1) => goTo(indexRef.current + dir)
 
@@ -120,7 +107,7 @@ export function Dashboard() {
       el.removeEventListener('touchend', onTouchEnd)
       window.removeEventListener('keydown', onKey)
     }
-  }, [sectionCount, reduce])
+  }, [sectionCount])
 
   /* ─── empty state ─── */
   if (allItems.length === 0) {
@@ -144,7 +131,7 @@ export function Dashboard() {
         style={{
           height: '100%',
           transform: `translateY(-${index * 100}%)`,
-          transition: reduce ? 'none' : 'transform .82s cubic-bezier(.16,1,.3,1)',
+          transition: BLOCK_EASE,
         }}
       >
         {/* ── Hero: full-screen art of the most recent media ── */}
@@ -157,47 +144,69 @@ export function Dashboard() {
                 backgroundImage: `url(${heroItem.cover_url})`,
                 backgroundSize: 'cover',
                 backgroundPosition: 'center',
-                filter: 'blur(2px)',
-                transform: 'scale(1.06)',
+                filter: 'blur(24px) brightness(.5)',
+                transform: 'scale(1.15)',
               }}
             />
           )}
           {/* legibility scrims */}
-          <div aria-hidden style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, var(--bg) 2%, rgba(0,0,0,.25) 45%, rgba(0,0,0,.55) 100%)' }} />
-          <div aria-hidden style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to right, rgba(0,0,0,.7) 0%, transparent 55%)' }} />
+          <div aria-hidden style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, var(--bg) 1%, rgba(0,0,0,.15) 40%, rgba(0,0,0,.35) 100%)' }} />
+          <div aria-hidden style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to right, rgba(0,0,0,.75) 0%, rgba(0,0,0,.35) 45%, transparent 70%)' }} />
 
-          <div style={{ position: 'relative', height: '100%', maxWidth: 1200, margin: '0 auto', padding: '0 64px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-            <p style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '2.5px', color: '#fff', opacity: .8, marginBottom: 20 }}>
-              Adicionado recentemente
-            </p>
-            <h1 style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: 'clamp(44px,6vw,84px)', fontWeight: 800, lineHeight: 1.02, letterSpacing: '-2.5px', color: '#fff', maxWidth: 760, marginBottom: 24, textShadow: '0 2px 30px rgba(0,0,0,.5)' }}>
-              {heroItem?.title}
-            </h1>
-            {heroItem && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 40, color: 'rgba(255,255,255,.85)', fontSize: 14 }}>
-                <span className={`cat-badge cat-${heroItem.type}`}>{CATEGORIES.find(c => c.key === heroItem.type)?.label}</span>
-                <span>{heroItem.year ?? '—'}</span>
-                <span style={{ opacity: .5 }}>·</span>
-                <span>{STATUS_LABEL[heroItem.status]}</span>
+          <div style={{ position: 'relative', height: '100%', maxWidth: 1200, margin: '0 auto', padding: '0 64px', display: 'flex', alignItems: 'center', gap: 56 }}>
+            {/* text column */}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '2.5px', color: '#fff', opacity: .8, marginBottom: 20 }}>
+                Adicionado recentemente
+              </p>
+              <h1 style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: 'clamp(44px,6vw,84px)', fontWeight: 800, lineHeight: 1.02, letterSpacing: '-2.5px', color: '#fff', maxWidth: 760, marginBottom: 24, textShadow: '0 2px 30px rgba(0,0,0,.5)' }}>
+                {heroItem?.title}
+              </h1>
+              {heroItem && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 40, color: 'rgba(255,255,255,.85)', fontSize: 14 }}>
+                  <span className={`cat-badge cat-${heroItem.type}`}>{CATEGORIES.find(c => c.key === heroItem.type)?.label}</span>
+                  <span>{heroItem.year ?? '—'}</span>
+                  <span style={{ opacity: .5 }}>·</span>
+                  <span>{STATUS_LABEL[heroItem.status]}</span>
+                </div>
+              )}
+              <div style={{ display: 'flex', gap: 12 }}>
+                {heroItem && (
+                  <button
+                    onClick={() => navigate(`/media/${heroItem.id}`)}
+                    className="btn-accent"
+                    style={{ padding: '12px 28px', background: 'var(--accent)', border: 'none', borderRadius: 9999, color: '#000', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
+                  >
+                    Ver detalhes →
+                  </button>
+                )}
+                <button
+                  onClick={() => navigate('/library')}
+                  style={{ padding: '12px 28px', background: 'rgba(255,255,255,.12)', border: '1px solid rgba(255,255,255,.28)', borderRadius: 9999, color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer', backdropFilter: 'blur(8px)' }}
+                >
+                  Ver biblioteca
+                </button>
+              </div>
+            </div>
+
+            {/* sharp poster — keeps the hero crisp for any category */}
+            {heroItem?.cover_url && (
+              <div
+                onClick={() => navigate(`/media/${heroItem.id}`)}
+                className="hero-poster"
+                style={{
+                  flex: '0 0 auto', width: 'clamp(200px, 22vw, 320px)', aspectRatio: '2 / 3',
+                  borderRadius: 16, overflow: 'hidden', cursor: 'pointer',
+                  boxShadow: '0 30px 70px rgba(0,0,0,.6)', border: '1px solid rgba(255,255,255,.14)',
+                }}
+              >
+                <img
+                  src={heroItem.cover_url}
+                  alt={heroItem.title}
+                  style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center', display: 'block' }}
+                />
               </div>
             )}
-            <div style={{ display: 'flex', gap: 12 }}>
-              {heroItem && (
-                <button
-                  onClick={() => navigate(`/media/${heroItem.id}`)}
-                  className="btn-accent"
-                  style={{ padding: '12px 28px', background: 'var(--accent)', border: 'none', borderRadius: 9999, color: '#000', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
-                >
-                  Ver detalhes →
-                </button>
-              )}
-              <button
-                onClick={() => navigate('/library')}
-                style={{ padding: '12px 28px', background: 'rgba(255,255,255,.12)', border: '1px solid rgba(255,255,255,.28)', borderRadius: 9999, color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer', backdropFilter: 'blur(8px)' }}
-              >
-                Ver biblioteca
-              </button>
-            </div>
           </div>
 
           {/* scroll hint */}
@@ -215,12 +224,41 @@ export function Dashboard() {
         {/* ── One block per category: recent covers in an auto-carousel ── */}
         {activeCats.map(cat => {
           const items = recentByType[cat.key]
+          const artCover = items.find(i => i.cover_url)?.cover_url
           return (
             <section
               key={cat.key}
-              style={{ height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}
+              style={{ height: '100%', position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}
             >
-              <div style={{ maxWidth: 1400, width: '100%', margin: '0 auto', padding: '0 64px' }}>
+              {/* ambient art — blurred cover of the category's newest item */}
+              {artCover && (
+                <div
+                  aria-hidden
+                  style={{
+                    position: 'absolute', inset: 0,
+                    backgroundImage: `url(${artCover})`,
+                    backgroundSize: 'cover', backgroundPosition: 'center',
+                    filter: 'blur(80px) saturate(1.5) brightness(.7)',
+                    opacity: 0.3, transform: 'scale(1.3)',
+                  }}
+                />
+              )}
+              {/* category-color glow */}
+              <div
+                aria-hidden
+                style={{
+                  position: 'absolute', top: '-25%', right: '-5%', width: '65%', height: '150%',
+                  background: `radial-gradient(circle at 65% 45%, var(${cat.colorVar}) 0%, transparent 60%)`,
+                  opacity: 0.12, pointerEvents: 'none',
+                }}
+              />
+              {/* fade edges back to the app background */}
+              <div
+                aria-hidden
+                style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, var(--bg) 0%, transparent 22%, transparent 78%, var(--bg) 100%)' }}
+              />
+
+              <div style={{ position: 'relative', maxWidth: 1400, width: '100%', margin: '0 auto', padding: '0 64px' }}>
                 <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 28, gap: 16 }}>
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: 16, flexWrap: 'wrap' }}>
                     <h2 style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: 'clamp(28px,3.4vw,44px)', fontWeight: 800, letterSpacing: '-1.5px', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 14 }}>
@@ -243,7 +281,7 @@ export function Dashboard() {
                   </button>
                 </div>
 
-                <AutoCarousel items={items} cardWidth={200} />
+                <AutoCarousel items={items} />
               </div>
             </section>
           )

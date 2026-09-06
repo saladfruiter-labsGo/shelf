@@ -172,6 +172,11 @@ body {
 .icon-btn { transition: background .2s, border-color .2s, color .2s; }
 .icon-btn:hover { border-color: var(--border-strong); color: var(--text-primary); }
 
+/* Home hero poster */
+.hero-poster { transition: transform .3s var(--ease); }
+.hero-poster:hover { transform: scale(1.03); }
+@media (max-width: 760px) { .hero-poster { display: none; } }
+
 /* Home scroll hint chevron */
 @keyframes chevron-bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(4px); } }
 .scroll-hint-chevron { animation: chevron-bounce 1.6s ease-in-out infinite; }

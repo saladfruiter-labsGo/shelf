@@ -1,18 +1,19 @@
 import { useEffect, useRef, useState } from 'react'
+import type { CSSProperties } from 'react'
 import { Link } from 'react-router-dom'
 import type { MediaItem } from '../types'
 import { STATUS_LABEL } from '../lib/utils'
 
 interface Props {
   items: MediaItem[]
-  /** Poster width in px — every card follows the same standard. */
-  cardWidth?: number
-  /** Auto-scroll speed in px per frame (~60fps). Keep it low. */
+  /** Poster height as a CSS length — width follows the 2:3 ratio. */
+  posterHeight?: string
+  /** Auto-scroll speed in px per frame (~60fps). */
   speed?: number
 }
 
 /** A single uniform poster: cover always fills the frame (object-cover). */
-function Poster({ item, width }: { item: MediaItem; width: number }) {
+function Poster({ item }: { item: MediaItem }) {
   const [broken, setBroken] = useState(false)
   const showImg = item.cover_url && !broken
 
@@ -20,21 +21,21 @@ function Poster({ item, width }: { item: MediaItem; width: number }) {
     <Link
       to={`/media/${item.id}`}
       className="group"
-      style={{ width, flex: `0 0 ${width}px`, textDecoration: 'none' }}
       draggable={false}
+      style={{ flex: '0 0 auto', width: 'calc(var(--ph) * 2 / 3)', textDecoration: 'none' }}
     >
       <div
+        className="poster-frame"
         style={{
           position: 'relative',
           width: '100%',
-          aspectRatio: '2 / 3',
-          borderRadius: 12,
+          height: 'var(--ph)',
+          borderRadius: 16,
           overflow: 'hidden',
           background: 'var(--card)',
           border: '1px solid var(--border)',
           transition: 'border-color .25s, transform .35s var(--spring), box-shadow .35s',
         }}
-        className="poster-frame"
       >
         {showImg ? (
           <img
@@ -43,36 +44,11 @@ function Poster({ item, width }: { item: MediaItem; width: number }) {
             loading="lazy"
             draggable={false}
             onError={() => setBroken(true)}
-            style={{
-              width: '100%',
-              height: '100%',
-              objectFit: 'cover',
-              objectPosition: 'center',
-              display: 'block',
-            }}
+            style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center', display: 'block' }}
           />
         ) : (
-          <div
-            style={{
-              width: '100%',
-              height: '100%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              background: 'var(--card)',
-            }}
-          >
-            <span
-              style={{
-                fontFamily: 'Space Grotesk, sans-serif',
-                fontSize: '4.5rem',
-                fontWeight: 900,
-                lineHeight: 1,
-                color: 'var(--dim)',
-                textTransform: 'uppercase',
-                userSelect: 'none',
-              }}
-            >
+          <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--card)' }}>
+            <span style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '6rem', fontWeight: 900, lineHeight: 1, color: 'var(--dim)', textTransform: 'uppercase', userSelect: 'none' }}>
               {item.title[0]}
             </span>
           </div>
@@ -82,33 +58,17 @@ function Poster({ item, width }: { item: MediaItem; width: number }) {
         <div
           className="poster-overlay"
           style={{
-            position: 'absolute',
-            inset: 0,
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'flex-end',
-            padding: 12,
-            background: 'linear-gradient(to top, rgba(0,0,0,.82) 0%, rgba(0,0,0,.15) 45%, transparent 70%)',
-            opacity: 0,
-            transition: 'opacity .25s',
+            position: 'absolute', inset: 0,
+            display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
+            padding: 16,
+            background: 'linear-gradient(to top, rgba(0,0,0,.85) 0%, rgba(0,0,0,.15) 45%, transparent 70%)',
+            opacity: 0, transition: 'opacity .25s',
           }}
         >
-          <p
-            style={{
-              fontFamily: 'Space Grotesk, sans-serif',
-              fontSize: 13,
-              fontWeight: 700,
-              color: '#fff',
-              lineHeight: 1.25,
-              display: '-webkit-box',
-              WebkitLineClamp: 2,
-              WebkitBoxOrient: 'vertical',
-              overflow: 'hidden',
-            }}
-          >
+          <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: 16, fontWeight: 700, color: '#fff', lineHeight: 1.25, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
             {item.title}
           </p>
-          <span style={{ fontSize: 10, color: 'rgba(255,255,255,.7)', marginTop: 4 }}>
+          <span style={{ fontSize: 12, color: 'rgba(255,255,255,.7)', marginTop: 4 }}>
             {item.year ?? '—'} · {STATUS_LABEL[item.status]}
           </span>
         </div>
@@ -119,16 +79,17 @@ function Poster({ item, width }: { item: MediaItem; width: number }) {
 
 /**
  * Horizontal carousel that scrolls on its own at a low speed and loops
- * seamlessly. Pauses while hovered so the user can read/click a poster.
+ * seamlessly, driven by a transform (reliable sub-pixel motion). Pauses on
+ * hover so the user can read/click a poster.
  */
-export function AutoCarousel({ items, cardWidth = 190, speed = 0.35 }: Props) {
-  const scrollRef = useRef<HTMLDivElement>(null)
+export function AutoCarousel({ items, posterHeight = 'clamp(300px, 56vh, 580px)', speed = 0.8 }: Props) {
+  const trackRef = useRef<HTMLDivElement>(null)
   const pausedRef = useRef(false)
+  const offsetRef = useRef(0)
   const rafRef = useRef<number>()
 
-  // A single item has nothing to scroll — show it as-is. With ≥2 items we
-  // repeat the list to fill the row, then duplicate the whole block once more
-  // so we can loop back seamlessly at the halfway point.
+  // A single item has nothing to loop. With ≥2 items we repeat the list to
+  // fill the row, then duplicate the whole block so we can wrap seamlessly.
   const looping = items.length >= 2
   const filled: MediaItem[] = (() => {
     if (items.length === 0) return []
@@ -139,51 +100,42 @@ export function AutoCarousel({ items, cardWidth = 190, speed = 0.35 }: Props) {
   })()
 
   useEffect(() => {
-    const el = scrollRef.current
-    if (!el) return
+    const track = trackRef.current
+    if (!track || !looping) return
 
-    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    if (reduce || !looping) return
+    offsetRef.current = 0
+    track.style.transform = 'translateX(0px)'
 
     let last = performance.now()
     const tick = (now: number) => {
       const dt = now - last
       last = now
       if (!pausedRef.current) {
-        el.scrollLeft += speed * (dt / 16.67)
-        const half = el.scrollWidth / 2
-        if (half > 0 && el.scrollLeft >= half) el.scrollLeft -= half
+        offsetRef.current += speed * (dt / 16.67)
+        const half = track.scrollWidth / 2
+        if (half > 0 && offsetRef.current >= half) offsetRef.current -= half
+        track.style.transform = `translateX(${-offsetRef.current}px)`
       }
       rafRef.current = requestAnimationFrame(tick)
     }
     rafRef.current = requestAnimationFrame(tick)
-    return () => {
-      if (rafRef.current) cancelAnimationFrame(rafRef.current)
-    }
-  }, [speed, items.length])
+    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current) }
+  }, [speed, items, looping])
 
   if (items.length === 0) return null
 
   return (
     <div
-      ref={scrollRef}
       className="scrollbar-hide"
+      style={{ ['--ph' as string]: posterHeight, overflow: 'hidden', width: '100%' } as CSSProperties}
       onMouseEnter={() => { pausedRef.current = true }}
       onMouseLeave={() => { pausedRef.current = false }}
-      style={{
-        display: 'flex',
-        gap: 20,
-        overflowX: 'auto',
-        overflowY: 'hidden',
-        paddingBottom: 4,
-        scrollbarWidth: 'none',
-        msOverflowStyle: 'none',
-        WebkitOverflowScrolling: 'touch',
-      }}
     >
-      {filled.map((item, i) => (
-        <Poster key={`${item.id}-${i}`} item={item} width={cardWidth} />
-      ))}
+      <div ref={trackRef} style={{ display: 'flex', gap: 24, width: 'max-content', willChange: 'transform' }}>
+        {filled.map((item, i) => (
+          <Poster key={`${item.id}-${i}`} item={item} />
+        ))}
+      </div>
     </div>
   )
 }
