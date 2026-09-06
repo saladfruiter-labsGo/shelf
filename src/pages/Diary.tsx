@@ -11,10 +11,10 @@ const TYPE_EMOJI: Record<string, string> = {
 }
 
 const CAT_STYLE: Record<string, { bg: string; color: string; label: string }> = {
-  game:   { bg: 'rgba(45,255,138,.08)',  color: '#2DFF8A', label: 'Jogo'   },
-  book:   { bg: 'rgba(196,122,58,.08)',  color: '#C47A3A', label: 'Livro'  },
-  movie:  { bg: 'rgba(230,53,96,.08)',   color: '#E63560', label: 'Filme'  },
-  series: { bg: 'rgba(230,53,96,.08)',   color: '#E63560', label: 'Série'  },
+  game:   { bg: 'var(--games-bg)',  color: 'var(--games)',  label: 'Jogo'   },
+  book:   { bg: 'var(--books-bg)',  color: 'var(--books)',  label: 'Livro'  },
+  movie:  { bg: 'var(--movies-bg)', color: 'var(--movies)', label: 'Filme'  },
+  series: { bg: 'var(--series-bg)', color: 'var(--series)', label: 'Série'  },
 }
 
 function formatDiaryDate(iso: string): string {
@@ -43,7 +43,7 @@ export function Diary() {
         <p style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '2.5px', color: 'var(--dim)', marginBottom: 16 }}>
           Histórico
         </p>
-        <h1 style={{ fontFamily: 'Syne, sans-serif', fontSize: 'clamp(40px,5vw,64px)', fontWeight: 800, letterSpacing: '-2px', lineHeight: 1, color: 'var(--text-primary)' }}>
+        <h1 style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: 'clamp(40px,5vw,64px)', fontWeight: 800, letterSpacing: '-2px', lineHeight: 1, color: 'var(--text-primary)' }}>
           Diário
         </h1>
         <p style={{ marginTop: 16, fontSize: 15, color: 'var(--text-muted)' }}>
@@ -68,6 +68,7 @@ export function Diary() {
               <div
                 key={item.id}
                 onClick={() => navigate(`/media/${item.id}`)}
+                className="row-fade"
                 style={{
                   display: 'grid',
                   gridTemplateColumns: '112px 36px 1fr auto',
@@ -75,19 +76,16 @@ export function Diary() {
                   padding: '20px 0',
                   borderBottom: '1px solid var(--border)',
                   cursor: 'pointer',
-                  transition: 'opacity .2s',
                 }}
-                onMouseEnter={e => ((e.currentTarget as HTMLDivElement).style.opacity = '0.75')}
-                onMouseLeave={e => ((e.currentTarget as HTMLDivElement).style.opacity = '1')}
               >
-                <span style={{ fontFamily: 'DM Mono, monospace', fontSize: 12, color: 'var(--text-muted)' }}>
+                <span style={{ fontFamily: 'Space Grotesk, monospace', fontSize: 12, color: 'var(--text-muted)' }}>
                   {formatDiaryDate(dateStr)}
                 </span>
                 <span style={{ fontSize: 22, textAlign: 'center' }}>
                   {TYPE_EMOJI[item.type] ?? '📌'}
                 </span>
                 <div>
-                  <p style={{ fontFamily: 'Syne, sans-serif', fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.3 }}>
+                  <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.3 }}>
                     {item.title}
                   </p>
                   <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 3 }}>
@@ -103,7 +101,7 @@ export function Diary() {
           })
         ) : (
           <div style={{ textAlign: 'center', padding: '80px 0' }}>
-            <p style={{ fontFamily: 'Syne, sans-serif', fontSize: '3rem', fontWeight: 800, color: 'var(--border)', marginBottom: 12 }}>Vazio</p>
+            <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '3rem', fontWeight: 800, color: 'var(--border)', marginBottom: 12 }}>Vazio</p>
             <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>Nenhum item concluído ainda</p>
           </div>
         )}

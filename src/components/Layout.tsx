@@ -44,7 +44,7 @@ function ProfileOverlay({ open, onClose }: { open: boolean; onClose: () => void 
   const overlayRef = useRef<HTMLDivElement>(null)
 
   const { data: allItems = [] } = useQuery({
-    queryKey: ['media-all-profile'],
+    queryKey: ['media-all'],
     queryFn: () => api.media.list({ limit: 1000 }),
     enabled: open,
   })
@@ -99,7 +99,7 @@ function ProfileOverlay({ open, onClose }: { open: boolean; onClose: () => void 
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 40 }}>
           <div>
             <p style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '2px', color: 'var(--text-muted)', marginBottom: 4 }}>Perfil</p>
-            <p style={{ fontFamily: 'Syne, sans-serif', fontSize: 24, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.5px' }}>Sua prateleira</p>
+            <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: 24, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.5px' }}>Sua prateleira</p>
           </div>
           <button
             onClick={onClose}
@@ -125,10 +125,10 @@ function ProfileOverlay({ open, onClose }: { open: boolean; onClose: () => void 
                 opacity: s.total === 0 ? 0.35 : 1,
               }}
             >
-              <span style={{ fontFamily: 'DM Mono, monospace', fontSize: 13, fontWeight: 500, color: s.year === currentYear ? 'var(--accent)' : 'var(--text-muted)' }}>{s.year}</span>
-              <span style={{ fontFamily: 'Syne, sans-serif', fontSize: 22, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{s.total}</span>
-              <span style={{ fontFamily: 'DM Mono, monospace', fontSize: 15, color: 'var(--accent)', fontVariantNumeric: 'tabular-nums' }}>{s.done}</span>
-              <span style={{ fontFamily: 'DM Mono, monospace', fontSize: 15, color: 'var(--v)', fontVariantNumeric: 'tabular-nums' }}>{s.prog}</span>
+              <span style={{ fontFamily: 'Space Grotesk, monospace', fontSize: 13, fontWeight: 500, color: s.year === currentYear ? 'var(--accent)' : 'var(--text-muted)' }}>{s.year}</span>
+              <span style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: 22, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{s.total}</span>
+              <span style={{ fontFamily: 'Space Grotesk, monospace', fontSize: 15, color: 'var(--accent)', fontVariantNumeric: 'tabular-nums' }}>{s.done}</span>
+              <span style={{ fontFamily: 'Space Grotesk, monospace', fontSize: 15, color: 'var(--v)', fontVariantNumeric: 'tabular-nums' }}>{s.prog}</span>
             </div>
           ))}
         </div>
@@ -179,7 +179,7 @@ export function Layout() {
         <button
           onClick={() => navigate('/')}
           style={{
-            fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 20,
+            fontFamily: 'Space Grotesk, sans-serif', fontWeight: 800, fontSize: 20,
             color: 'var(--text-primary)', marginRight: 48, cursor: 'pointer',
             letterSpacing: '-0.5px', background: 'none', border: 'none', padding: 0,
           }}
@@ -218,16 +218,14 @@ export function Layout() {
           <button
             onClick={openSearch}
             title="Adicionar mídia (⌘K)"
+            className="btn-accent"
             style={{
               display: 'flex', alignItems: 'center', gap: 6,
               padding: '7px 16px',
               background: 'var(--accent)', border: 'none',
               borderRadius: 9999, cursor: 'pointer',
               color: '#000', fontSize: 13, fontWeight: 600,
-              transition: 'opacity .2s',
             }}
-            onMouseEnter={e => ((e.currentTarget as HTMLButtonElement).style.opacity = '0.85')}
-            onMouseLeave={e => ((e.currentTarget as HTMLButtonElement).style.opacity = '1')}
           >
             <span style={{ fontSize: 18, lineHeight: 1 }}>+</span>
             <span>Adicionar</span>
@@ -236,28 +234,29 @@ export function Layout() {
           {/* Search */}
           <button
             onClick={openSearch}
+            className="icon-btn"
             style={{
               display: 'flex', alignItems: 'center', gap: 8,
               padding: '7px 14px',
               background: 'var(--card)', border: '1px solid var(--border-strong)',
               borderRadius: 9999, cursor: 'pointer',
               color: 'var(--text-muted)', fontSize: 13,
-              transition: 'border-color .2s, color .2s',
             }}
           >
             <SearchIcon />
-            <span style={{ fontFamily: 'DM Mono, monospace', fontSize: 11, color: 'var(--dim)' }}>⌘K</span>
+            <span style={{ fontFamily: 'Space Grotesk, monospace', fontSize: 11, color: 'var(--dim)' }}>⌘K</span>
           </button>
 
           {/* Theme toggle */}
           <button
             onClick={toggle}
             title={dark ? 'Tema claro' : 'Tema escuro'}
+            className="icon-btn"
             style={{
               width: 36, height: 36, borderRadius: '50%',
               background: 'transparent', border: '1px solid var(--border-strong)',
               cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: 'var(--text-muted)', transition: 'background .2s, color .2s',
+              color: 'var(--text-muted)',
             }}
           >
             {dark ? <SunIcon /> : <MoonIcon />}
@@ -294,19 +293,12 @@ export function Layout() {
                 <button
                   key={item.label}
                   onClick={item.action}
+                  className="menu-item"
                   style={{
                     display: 'flex', width: '100%', padding: '10px 16px',
                     borderRadius: 8, cursor: 'pointer', fontSize: 14,
                     color: 'var(--text-muted)', background: 'none', border: 'none',
-                    transition: 'background .2s, color .2s', textAlign: 'left',
-                  }}
-                  onMouseEnter={e => {
-                    ;(e.currentTarget as HTMLButtonElement).style.background = 'var(--card-hover)'
-                    ;(e.currentTarget as HTMLButtonElement).style.color = 'var(--text-primary)'
-                  }}
-                  onMouseLeave={e => {
-                    ;(e.currentTarget as HTMLButtonElement).style.background = 'none'
-                    ;(e.currentTarget as HTMLButtonElement).style.color = 'var(--text-muted)'
+                    textAlign: 'left',
                   }}
                 >
                   {item.label}

@@ -8,7 +8,7 @@ const CATEGORIES = [
   { key: 'game',   label: 'Jogos',   emoji: '🎮', path: '/library/games',  color: '#2DFF8A' },
   { key: 'book',   label: 'Livros',  emoji: '📚', path: '/library/books',  color: '#C47A3A' },
   { key: 'movie',  label: 'Filmes',  emoji: '🎬', path: '/library/films',  color: '#E63560' },
-  { key: 'series', label: 'Séries',  emoji: '📺', path: '/library/series', color: '#E63560' },
+  { key: 'series', label: 'Séries',  emoji: '📺', path: '/library/series', color: '#3DA8F5' },
   { key: 'music',  label: 'Músicas', emoji: '🎵', path: '/library/music',  color: '#8B5CF6' },
 ] as const
 
@@ -65,7 +65,7 @@ export function Dashboard() {
         </p>
 
         {/* Headline */}
-        <h1 style={{ fontFamily: 'Syne, sans-serif', fontSize: 'clamp(48px,6vw,88px)', fontWeight: 800, lineHeight: 1.02, letterSpacing: '-2.5px', color: 'var(--text-primary)', marginBottom: 48 }}>
+        <h1 style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: 'clamp(48px,6vw,88px)', fontWeight: 800, lineHeight: 1.02, letterSpacing: '-2.5px', color: 'var(--text-primary)', marginBottom: 48 }}>
           Tudo que você{' '}
           <em style={{ fontStyle: 'normal', color: 'var(--accent)' }}>assistiu, leu,<br />jogou e ouviu.</em>
         </h1>
@@ -77,7 +77,7 @@ export function Dashboard() {
           borderRadius: 9999, padding: '16px 0 16px 32px',
           marginBottom: 80, overflow: 'hidden',
         }}>
-          <span style={{ fontFamily: 'DM Mono, monospace', fontSize: 10, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '2px', marginRight: 24 }}>
+          <span style={{ fontFamily: 'Space Grotesk, monospace', fontSize: 10, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '2px', marginRight: 24 }}>
             {currentYear}
           </span>
           {[
@@ -86,7 +86,7 @@ export function Dashboard() {
             { num: inProg, lbl: 'Em andamento' },
           ].map(s => (
             <div key={s.lbl} style={{ display: 'flex', flexDirection: 'column', gap: 2, borderLeft: '1px solid var(--border)', padding: '0 32px' }}>
-              <span style={{ fontFamily: 'Syne, sans-serif', fontSize: 22, fontWeight: 700, color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
+              <span style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: 22, fontWeight: 700, color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
                 {s.num}
               </span>
               <span style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px' }}>
@@ -100,29 +100,20 @@ export function Dashboard() {
         {recentItems.length > 0 && (
           <section style={{ marginBottom: 64 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
-              <p style={{ fontFamily: 'Syne, sans-serif', fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '2.5px', color: 'var(--text-muted)' }}>
+              <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '2.5px', color: 'var(--text-muted)' }}>
                 Recentes
               </p>
               <button
                 onClick={() => navigate('/library')}
-                style={{ fontSize: 13, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', transition: 'color .2s' }}
-                onMouseEnter={e => (e.currentTarget.style.color = 'var(--accent)')}
-                onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-muted)')}
+                className="link-accent"
+                style={{ fontSize: 13, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer' }}
               >
                 Ver tudo →
               </button>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16 }}>
               {recentItems.map(item => (
-                <div key={item.id} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: 24, cursor: 'pointer', transition: 'border-color .2s, background .2s' }}
-                  onMouseEnter={e => {
-                    ;(e.currentTarget as HTMLDivElement).style.borderColor = 'var(--border-strong)'
-                    ;(e.currentTarget as HTMLDivElement).style.background = 'var(--card)'
-                  }}
-                  onMouseLeave={e => {
-                    ;(e.currentTarget as HTMLDivElement).style.borderColor = 'var(--border)'
-                    ;(e.currentTarget as HTMLDivElement).style.background = 'var(--surface)'
-                  }}
+                <div key={item.id} className="hover-surface" style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: 24, cursor: 'pointer' }}
                   onClick={() => navigate(`/media/${item.id}`)}
                 >
                   <span style={{ fontSize: 32, display: 'block', marginBottom: 16 }}>
@@ -131,7 +122,7 @@ export function Dashboard() {
                   <p style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '1.5px', color: 'var(--dim)', marginBottom: 8 }}>
                     {item.type === 'game' ? 'Jogo' : item.type === 'book' ? 'Livro' : item.type === 'movie' ? 'Filme' : 'Série'}
                   </p>
-                  <p style={{ fontFamily: 'Syne, sans-serif', fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8, lineHeight: 1.3 }}>
+                  <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8, lineHeight: 1.3 }}>
                     {item.title}
                   </p>
                   <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>
@@ -146,7 +137,7 @@ export function Dashboard() {
         {/* Category strip */}
         <section>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
-            <p style={{ fontFamily: 'Syne, sans-serif', fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '2.5px', color: 'var(--text-muted)' }}>
+            <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '2.5px', color: 'var(--text-muted)' }}>
               Categorias
             </p>
           </div>
@@ -155,27 +146,16 @@ export function Dashboard() {
               <button
                 key={cat.key}
                 onClick={() => navigate(cat.path)}
+                className="hover-lift"
                 style={{
                   background: 'var(--surface)', border: '1px solid var(--border)',
                   borderRadius: 16, padding: '32px 16px',
-                  cursor: 'pointer', transition: 'all .28s',
+                  cursor: 'pointer',
                   textAlign: 'center', display: 'block', width: '100%',
-                }}
-                onMouseEnter={e => {
-                  const el = e.currentTarget
-                  el.style.borderColor = 'var(--accent)'
-                  el.style.background = 'var(--card)'
-                  el.style.transform = 'translateY(-4px)'
-                }}
-                onMouseLeave={e => {
-                  const el = e.currentTarget
-                  el.style.borderColor = 'var(--border)'
-                  el.style.background = 'var(--surface)'
-                  el.style.transform = 'translateY(0)'
                 }}
               >
                 <span style={{ fontSize: 40, display: 'block', marginBottom: 16 }}>{cat.emoji}</span>
-                <p style={{ fontFamily: 'Syne, sans-serif', fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>{cat.label}</p>
+                <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>{cat.label}</p>
                 <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                   {cat.key === 'music' ? '—' : countByType(cat.key)} itens
                 </p>

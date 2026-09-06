@@ -18,21 +18,24 @@
   --accent-bg:    rgba(170,255,46,.12);
   --v:            #7B3FFF;
   --v-dim:        rgba(123,63,255,.15);
-  /* category */
+  /* category — five distinct hues */
   --movies:       #E63560;
   --movies-bg:    rgba(230,53,96,.1);
+  --series:       #3DA8F5;
+  --series-bg:    rgba(61,168,245,.1);
   --games:        #2DFF8A;
   --games-bg:     rgba(45,255,138,.1);
-  --series:       #E63560;
-  --series-bg:    rgba(230,53,96,.1);
   --books:        #C47A3A;
-  --books-bg:     rgba(181,90,40,.1);
+  --books-bg:     rgba(196,122,58,.1);
+  --music:        #8B5CF6;
+  --music-bg:     rgba(139,92,246,.12);
   /* nav */
   --nav-h:        64px;
   --ease:         cubic-bezier(.16,1,.3,1);
   --spring:       cubic-bezier(.34,1.56,.64,1);
   --dur:          .28s;
   --r:            12px;
+  --shadow-lg:    0 24px 48px rgba(0,0,0,.55);
 }
 
 /* ─── Light theme ─── */
@@ -53,12 +56,15 @@ html:not(.dark) {
   --v-dim:        rgba(91,41,204,.1);
   --movies:       #C23030;
   --movies-bg:    rgba(194,48,48,.1);
+  --series:       #1E7FC4;
+  --series-bg:    rgba(30,127,196,.1);
   --games:        #13784A;
   --games-bg:     rgba(19,120,74,.1);
-  --series:       #C23030;
-  --series-bg:    rgba(194,48,48,.1);
   --books:        #8B4E10;
   --books-bg:     rgba(139,78,16,.1);
+  --music:        #6D3FD4;
+  --music-bg:     rgba(109,63,212,.1);
+  --shadow-lg:    0 20px 40px rgba(0,0,0,.14);
 }
 
 * {
@@ -68,11 +74,12 @@ html:not(.dark) {
 }
 
 html {
-  font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
+  font-family: 'Space Grotesk', system-ui, -apple-system, sans-serif;
   font-size: 16px;
   background-color: var(--bg);
   color: var(--text-primary);
   -webkit-font-smoothing: antialiased;
+  font-feature-settings: 'tnum' 1; /* tabular figures — one family covers display, body & numerals */
   scroll-behavior: smooth;
 }
 
@@ -125,13 +132,53 @@ body {
   border-radius: 4px;
   white-space: nowrap;
 }
-.cat-game   { background: rgba(45,255,138,.08);  color: #2DFF8A; }
-.cat-book   { background: rgba(181,42,26,.08);   color: #C47A3A; }
-.cat-movie  { background: rgba(230,53,96,.08);   color: #E63560; }
-.cat-series { background: rgba(230,53,96,.08);   color: #E63560; }
-.cat-music  { background: rgba(139,92,246,.12);  color: #8B5CF6; }
+.cat-game   { background: var(--games-bg);  color: var(--games); }
+.cat-book   { background: var(--books-bg);  color: var(--books); }
+.cat-movie  { background: var(--movies-bg); color: var(--movies); }
+.cat-series { background: var(--series-bg); color: var(--series); }
+.cat-music  { background: var(--music-bg);  color: var(--music); }
 
 /* ─── Nav active glow ─── */
 .nav-link-active {
   color: var(--accent) !important;
 }
+
+/* ─── Utilities ─── */
+.scrollbar-hide { scrollbar-width: none; -ms-overflow-style: none; }
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+
+/* Hover surfaces — CSS-only (no per-render JS handlers) */
+.hover-surface { transition: border-color .2s, background .2s; }
+.hover-surface:hover { border-color: var(--border-strong) !important; background: var(--card) !important; }
+.hover-lift { transition: border-color .28s, background .28s, transform .28s; }
+.hover-lift:hover { border-color: var(--accent) !important; background: var(--card) !important; transform: translateY(-4px); }
+.link-accent { transition: color .2s; }
+.link-accent:hover { color: var(--accent) !important; }
+/* Media card hovers — CSS-only, theme-aware */
+.media-lift { transition: transform var(--dur) var(--spring), box-shadow var(--dur) var(--ease); }
+.media-lift:hover { transform: translateY(-8px); box-shadow: var(--shadow-lg); }
+.media-pop { transition: transform var(--dur) var(--spring); }
+.media-pop:hover { transform: scale(1.03) translateY(-4px); }
+.row-hover { transition: background .2s; }
+.row-hover:hover { background: var(--card) !important; }
+.row-fade { transition: opacity .2s; }
+.row-fade:hover { opacity: .75; }
+.picker-row { transition: background .15s; }
+.picker-row:hover { background: var(--card-hover); }
+.btn-accent { transition: opacity .2s; }
+.btn-accent:hover { opacity: .85; }
+.menu-item { transition: background .2s, color .2s; }
+.menu-item:hover { background: var(--card-hover); color: var(--text-primary); }
+.icon-btn { transition: background .2s, border-color .2s, color .2s; }
+.icon-btn:hover { border-color: var(--border-strong); color: var(--text-primary); }
+
+/* Title hover underline for media cards */
+.card-title-wrap {
+  display: inline;
+  background-image: linear-gradient(var(--accent), var(--accent));
+  background-repeat: no-repeat;
+  background-position: 0 100%;
+  background-size: 0% 1.5px;
+  transition: background-size var(--dur) var(--ease);
+}
+.group:hover .card-title-wrap { background-size: 100% 1.5px; }

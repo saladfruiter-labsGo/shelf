@@ -80,16 +80,14 @@ function AddItemPicker({ listId, listItemIds, onClose }: {
             <button
               key={item.id}
               onClick={() => toggleMutation.mutate({ itemId: item.id, inList })}
+              className={inList ? undefined : 'picker-row'}
               style={{
                 display: 'flex', alignItems: 'center', gap: 10,
                 width: '100%', padding: '10px 14px', textAlign: 'left',
                 background: inList ? 'var(--accent-bg)' : 'none',
                 border: 'none', cursor: 'pointer',
                 borderBottom: '1px solid var(--border)',
-                transition: 'background .15s',
               }}
-              onMouseEnter={e => { if (!inList) (e.currentTarget as HTMLButtonElement).style.background = 'var(--card-hover)' }}
-              onMouseLeave={e => { if (!inList) (e.currentTarget as HTMLButtonElement).style.background = 'none' }}
             >
               <span style={{ fontSize: 18, flexShrink: 0 }}>{TYPE_EMOJI[item.type] ?? '📌'}</span>
               <div style={{ flex: 1, minWidth: 0 }}>
