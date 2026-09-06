@@ -1,7 +1,7 @@
 import type {
   Details, List, ListCheck, ListDetail,
   MediaItem, MediaStatus, MediaType,
-  SearchResult, WrapData,
+  SearchResult, WrapData, SeriesView,
   IntegrationStatus, NowPlaying, ActivityEvent, MusicStats,
 } from '../types'
 
@@ -37,10 +37,19 @@ export const api = {
     get:      (id: number): Promise<MediaItem>            => request(`/media/${id}`),
     add: (data: Omit<MediaItem, 'id' | 'hype' | 'added_at' | 'updated_at'> & { rating?: number }): Promise<MediaItem> =>
       request('/media', { method: 'POST', body: JSON.stringify(data) }),
-    update: (id: number, data: Partial<Pick<MediaItem, 'rating' | 'status' | 'notes' | 'runtime' | 'synopsis' | 'creators' | 'author' | 'release_date' | 'hype' | 'completed_at'>>): Promise<MediaItem> =>
+    update: (id: number, data: Partial<Pick<MediaItem, 'rating' | 'status' | 'runtime' | 'synopsis' | 'creators' | 'author' | 'release_date' | 'hype' | 'completed_at'>>): Promise<MediaItem> =>
       request(`/media/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     remove: (id: number): Promise<{ ok: boolean }> =>
       request(`/media/${id}`, { method: 'DELETE' }),
+  },
+
+  series: {
+    get: (id: number): Promise<SeriesView> => request(`/series/${id}`),
+    enrich: (id: number): Promise<SeriesView> => request(`/series/${id}/enrich`, { method: 'POST' }),
+    toggleEpisode: (id: number, season_number: number, episode_number: number, watched: boolean): Promise<SeriesView> =>
+      request(`/series/${id}/episode`, { method: 'PATCH', body: JSON.stringify({ season_number, episode_number, watched }) }),
+    toggleSeason: (id: number, season_number: number, watched: boolean): Promise<SeriesView> =>
+      request(`/series/${id}/season`, { method: 'PATCH', body: JSON.stringify({ season_number, watched }) }),
   },
 
   lists: {

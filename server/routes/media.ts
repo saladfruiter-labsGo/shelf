@@ -1,8 +1,14 @@
 import { Hono } from 'hono'
 import { db } from '../db.js'
 import { notifyLibraryActivity } from '../notify.js'
+import { getSeriesView } from '../series.js'
 
 const app = new Hono()
+
+/** Anexa `progress` (0..1) aos itens do tipo série. */
+function withSeriesProgress<T extends { id: number; type: string }>(rows: T[]): (T & { progress?: number })[] {
+  return rows.map(r => (r.type === 'series' ? { ...r, progress: getSeriesView(r.id).percent } : r))
+}
 
 app.get('/', (c) => {
   const type   = c.req.query('type')
@@ -16,14 +22,15 @@ app.get('/', (c) => {
   sql += ' ORDER BY added_at DESC LIMIT ?'
   params.push(limit)
 
-  return c.json(db.prepare(sql).all(...params))
+  return c.json(withSeriesProgress(db.prepare(sql).all(...params) as any[]))
 })
 
 app.get('/recent', (c) => {
   const perType = parseInt(c.req.query('per_type') ?? '12')
   const result: Record<string, unknown[]> = {}
   for (const t of ['movie', 'series', 'game', 'book']) {
-    result[t] = db.prepare('SELECT * FROM media_items WHERE type = ? ORDER BY added_at DESC LIMIT ?').all(t, perType)
+    const rows = db.prepare('SELECT * FROM media_items WHERE type = ? ORDER BY added_at DESC LIMIT ?').all(t, perType) as any[]
+    result[t] = t === 'series' ? withSeriesProgress(rows) : rows
   }
   return c.json(result)
 })
@@ -51,9 +58,9 @@ app.get('/upcoming', (c) => {
 })
 
 app.get('/:id', (c) => {
-  const item = db.prepare('SELECT * FROM media_items WHERE id = ?').get(c.req.param('id'))
+  const item = db.prepare('SELECT * FROM media_items WHERE id = ?').get(c.req.param('id')) as any
   if (!item) return c.json({ error: 'Not found' }, 404)
-  return c.json(item)
+  return c.json(item.type === 'series' ? withSeriesProgress([item])[0] : item)
 })
 
 app.post('/', async (c) => {

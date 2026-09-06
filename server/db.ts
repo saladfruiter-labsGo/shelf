@@ -72,6 +72,7 @@ const newCols: [string, string][] = [
   ['release_date',  'TEXT'],
   ['hype',          'INTEGER DEFAULT 0'],
   ['completed_at',  'TEXT'],
+  ['tmdb_id',       'TEXT'],    // id TMDB resolvido (séries importadas do Plex têm guid como external_id)
 ]
 for (const [col, def] of newCols) {
   if (!cols.includes(col)) db.exec(`ALTER TABLE media_items ADD COLUMN ${col} ${def}`)
@@ -121,4 +122,32 @@ db.exec(`
   );
 
   CREATE INDEX IF NOT EXISTS idx_music_last ON music_tracks(last_played);
+`)
+
+// ─── Séries: temporadas + episódios ───
+db.exec(`
+  CREATE TABLE IF NOT EXISTS series_seasons (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    media_item_id  INTEGER NOT NULL REFERENCES media_items(id) ON DELETE CASCADE,
+    season_number  INTEGER NOT NULL,
+    title          TEXT,
+    episode_count  INTEGER NOT NULL DEFAULT 0,       -- total conhecido (TMDB)
+    status         TEXT    NOT NULL DEFAULT 'in_progress',
+    completed_at   TEXT,
+    UNIQUE(media_item_id, season_number)
+  );
+
+  CREATE TABLE IF NOT EXISTS series_episodes (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    media_item_id  INTEGER NOT NULL REFERENCES media_items(id) ON DELETE CASCADE,
+    season_number  INTEGER NOT NULL,
+    episode_number INTEGER NOT NULL,
+    title          TEXT,
+    watched        INTEGER NOT NULL DEFAULT 0,
+    watched_at     TEXT,
+    UNIQUE(media_item_id, season_number, episode_number)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_seasons_media  ON series_seasons(media_item_id);
+  CREATE INDEX IF NOT EXISTS idx_episodes_media ON series_episodes(media_item_id);
 `)
