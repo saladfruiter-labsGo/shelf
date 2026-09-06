@@ -57,11 +57,13 @@ const insertActivity = db.prepare(`
 `)
 
 const upsertMediaItem = db.prepare(`
-  INSERT INTO media_items (external_id, type, title, cover_url, year, status, rating, completed_at)
-  VALUES (@external_id, @type, @title, @cover_url, @year, 'completed', @rating, @completed_at)
+  INSERT INTO media_items (external_id, type, title, cover_url, year, author, status, rating, completed_at)
+  VALUES (@external_id, @type, @title, @cover_url, @year, @author, 'completed', @rating, @completed_at)
   ON CONFLICT(external_id, type) DO UPDATE SET
     status       = 'completed',
     completed_at = COALESCE(media_items.completed_at, excluded.completed_at),
+    author       = COALESCE(media_items.author, excluded.author),
+    cover_url    = COALESCE(media_items.cover_url, excluded.cover_url),
     rating       = CASE WHEN excluded.rating > 0 THEN excluded.rating ELSE media_items.rating END,
     updated_at   = datetime('now')
 `)
@@ -147,6 +149,9 @@ app.post('/plex/webhook', async (c) => {
   const now = new Date().toISOString()
   const rating5 = meta.userRating != null ? Math.round((meta.userRating / 2) * 10) / 10 : null
 
+  // Para música, o artista (subtitle) vai para a coluna author da biblioteca
+  const author = m.media_type === 'music' ? m.subtitle : null
+
   if (event === 'media.scrobble') {
     // Assistido/ouvido até o fim
     insertActivity.run({
@@ -155,11 +160,11 @@ app.post('/plex/webhook', async (c) => {
       cover_url: m.cover_url, rating: null, duration_ms: meta.duration ?? null,
       genre: null, occurred_at: now, raw: JSON.stringify(payload).slice(0, 4000),
     })
-    // Música só registra; filmes/séries entram na biblioteca como concluídos
-    if (m.media_type !== 'music' && m.external_ref) {
+    // Filmes, séries e músicas entram na biblioteca como concluídos
+    if (m.external_ref) {
       upsertMediaItem.run({
         external_id: m.external_ref, type: m.media_type, title: m.title,
-        cover_url: m.cover_url, year: meta.year ?? null, rating: 0, completed_at: now,
+        cover_url: m.cover_url, year: meta.year ?? null, author, rating: 0, completed_at: now,
       })
     }
   } else if (event === 'media.rate' && rating5 != null) {
@@ -169,11 +174,11 @@ app.post('/plex/webhook', async (c) => {
       cover_url: m.cover_url, rating: rating5, duration_ms: null,
       genre: null, occurred_at: now, raw: JSON.stringify(payload).slice(0, 4000),
     })
-    if (m.media_type !== 'music' && m.external_ref) {
+    if (m.external_ref) {
       // cria (se novo) ou só atualiza a nota
       upsertMediaItem.run({
         external_id: m.external_ref, type: m.media_type, title: m.title,
-        cover_url: m.cover_url, year: meta.year ?? null, rating: rating5, completed_at: now,
+        cover_url: m.cover_url, year: meta.year ?? null, author, rating: rating5, completed_at: now,
       })
       setMediaRating.run(rating5, m.external_ref, m.media_type)
     }
@@ -343,6 +348,11 @@ async function pollLastfm() {
         external_ref: `${artist}|${name}`, title: name, subtitle: artist,
         cover_url: cover, rating: null, duration_ms, genre,
         occurred_at: occurred, raw: null,
+      })
+      // Scrobble do Last.fm = faixa ouvida até o fim → entra na biblioteca
+      upsertMediaItem.run({
+        external_id: `${artist}|${name}`, type: 'music', title: name,
+        cover_url: cover, year: null, author: artist, rating: 0, completed_at: occurred,
       })
       if (uts > maxUts) maxUts = uts
     }

@@ -5,6 +5,7 @@ export const TYPE_LABEL: Record<MediaType, string> = {
   series: 'Série',
   game:   'Jogo',
   book:   'Livro',
+  music:  'Música',
 }
 
 export const TYPE_COLOR: Record<MediaType, string> = {
@@ -12,6 +13,7 @@ export const TYPE_COLOR: Record<MediaType, string> = {
   series: 'series',
   game:   'games',
   book:   'books',
+  music:  'music',
 }
 
 export const STATUS_LABEL = {

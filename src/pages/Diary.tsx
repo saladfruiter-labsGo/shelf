@@ -8,6 +8,7 @@ const TYPE_EMOJI: Record<string, string> = {
   book:   '📚',
   movie:  '🎬',
   series: '📺',
+  music:  '🎵',
 }
 
 const CAT_STYLE: Record<string, { bg: string; color: string; label: string }> = {
@@ -15,6 +16,7 @@ const CAT_STYLE: Record<string, { bg: string; color: string; label: string }> = 
   book:   { bg: 'var(--books-bg)',  color: 'var(--books)',  label: 'Livro'  },
   movie:  { bg: 'var(--movies-bg)', color: 'var(--movies)', label: 'Filme'  },
   series: { bg: 'var(--series-bg)', color: 'var(--series)', label: 'Série'  },
+  music:  { bg: 'var(--music-bg)',  color: 'var(--music)',  label: 'Música' },
 }
 
 function formatDiaryDate(iso: string): string {

@@ -6,6 +6,7 @@ const colors: Record<MediaType, string> = {
   series: 'text-series bg-series-bg',
   game:   'text-games  bg-games-bg',
   book:   'text-books  bg-books-bg',
+  music:  'text-music  bg-music-bg',
 }
 
 interface Props {

@@ -14,6 +14,7 @@ const typeIcon: Record<MediaType, string> = {
   series: '📺',
   game:   '🎮',
   book:   '📚',
+  music:  '🎵',
 }
 
 const typeColor: Record<MediaType, string> = {
@@ -21,6 +22,7 @@ const typeColor: Record<MediaType, string> = {
   series: 'text-series',
   game:   'text-games',
   book:   'text-books',
+  music:  'text-music',
 }
 
 export function Carousel({ type, items }: Props) {
