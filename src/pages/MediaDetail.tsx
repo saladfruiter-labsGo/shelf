@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react'
 import { api } from '../lib/api'
 import { CategoryTag } from '../components/CategoryTag'
 import { StarRating } from '../components/StarRating'
+import { SeriesSeasons } from '../components/SeriesSeasons'
 import type { MediaItem, MediaStatus, MediaType } from '../types'
 import { STATUS_LABEL, formatRuntime, formatDate } from '../lib/utils'
 
@@ -324,8 +325,6 @@ export function MediaDetail() {
     enabled: !!id,
   })
 
-  const [notes, setNotes] = useState('')
-  const [editNotes, setEditNotes] = useState(false)
   const [releaseInput, setReleaseInput] = useState('')
   const [editRelease, setEditRelease] = useState(false)
   const [generatingStory, setGeneratingStory] = useState(false)
@@ -501,37 +500,13 @@ export function MediaDetail() {
         )}
       </div>
 
-      {/* Notes */}
-      <div className="mb-6">
-        <p className="text-xs text-muted uppercase tracking-wide mb-2">Notas pessoais</p>
-        {editNotes ? (
-          <div>
-            <textarea
-              className="w-full bg-card border border-border rounded-md p-3 text-sm text-primary placeholder:text-muted outline-none focus:border-accent resize-none"
-              rows={4}
-              value={notes}
-              onChange={e => setNotes(e.target.value)}
-              placeholder="Suas anotações..."
-            />
-            <div className="flex gap-2 mt-2">
-              <button
-                onClick={() => { updateMutation.mutate({ notes }); setEditNotes(false) }}
-                className="px-3 py-1.5 bg-accent text-bg rounded text-xs font-medium"
-              >Salvar</button>
-              <button onClick={() => setEditNotes(false)} className="px-3 py-1.5 bg-card text-muted rounded text-xs">
-                Cancelar
-              </button>
-            </div>
-          </div>
-        ) : (
-          <button
-            onClick={() => { setNotes(item.notes ?? ''); setEditNotes(true) }}
-            className="text-sm text-muted hover:text-primary transition-colors text-left w-full"
-          >
-            {item.notes || <span className="italic">Clique para adicionar notas...</span>}
-          </button>
-        )}
-      </div>
+      {/* Temporadas e episódios (apenas séries) */}
+      {item.type === 'series' && (
+        <div className="mb-6">
+          <p className="text-xs text-muted uppercase tracking-wide mb-2">Temporadas</p>
+          <SeriesSeasons mediaId={item.id} />
+        </div>
+      )}
 
       {/* Actions */}
       <div className="flex flex-wrap items-center gap-3 pt-4 border-t border-border">

@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import { randomUUID } from 'crypto'
 import { db } from '../db.js'
 import { sendTelegram, telegramDetectChats } from '../notify.js'
+import { ensureSeriesStructure, setEpisodeWatched, tmdbIdFromGuid } from '../series.js'
 
 const app = new Hono()
 
@@ -73,12 +74,58 @@ const setMediaRating = db.prepare(`
   WHERE external_id = ? AND type = ?
 `)
 
+/** Cria/atualiza a SÉRIE (não o episódio) sem forçar status 'completed'. */
+const upsertSeriesShow = db.prepare(`
+  INSERT INTO media_items (external_id, type, title, cover_url, year, tmdb_id, status)
+  VALUES (@external_id, 'series', @title, @cover_url, @year, @tmdb_id, 'in_progress')
+  ON CONFLICT(external_id, type) DO UPDATE SET
+    title      = COALESCE(media_items.title, excluded.title),
+    cover_url  = COALESCE(media_items.cover_url, excluded.cover_url),
+    year       = COALESCE(media_items.year, excluded.year),
+    tmdb_id    = COALESCE(media_items.tmdb_id, excluded.tmdb_id),
+    updated_at = datetime('now')
+`)
+const getMediaId = db.prepare(`SELECT id FROM media_items WHERE external_id = ? AND type = ?`)
+
+function slugify(s: string): string {
+  return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+}
+
+/**
+ * Registra um episódio assistido no Plex: encontra/cria a série, garante a
+ * estrutura (temporadas/episódios via TMDB) e marca o episódio como visto.
+ * A conclusão de temporada/série é recalculada em setEpisodeWatched.
+ */
+async function handlePlexEpisode(meta: PlexMeta, occurredAt: string): Promise<void> {
+  const showTitle = meta.grandparentTitle
+  if (!showTitle || meta.parentIndex == null || meta.index == null) return
+
+  const externalId = meta.grandparentGuid
+    ?? (meta.grandparentRatingKey ? `plex:${meta.grandparentRatingKey}` : `plex-show:${slugify(showTitle)}`)
+
+  const thumb = meta.grandparentThumb ?? null
+  const cover_url = thumb ? `/api/integrations/plex/image?path=${encodeURIComponent(thumb)}` : null
+  const tmdb_id = tmdbIdFromGuid(meta.grandparentGuid) ?? null
+
+  upsertSeriesShow.run({ external_id: externalId, title: showTitle, cover_url, year: meta.year ?? null, tmdb_id })
+  const row = getMediaId.get(externalId, 'series') as { id: number } | undefined
+  if (!row) return
+
+  // popula temporadas/episódios na primeira vez (TMDB); tolera ausência de chave
+  await ensureSeriesStructure(row.id, { guid: meta.grandparentGuid })
+
+  setEpisodeWatched(row.id, meta.parentIndex, meta.index, true, meta.title ?? null, occurredAt)
+}
+
 /* ──────────────────────────────────── Plex: webhook ────────────────────────────────── */
 
 interface PlexMeta {
   type?: string
   title?: string
   grandparentTitle?: string
+  grandparentGuid?: string
+  grandparentRatingKey?: string
+  parentTitle?: string
   parentIndex?: number
   index?: number
   year?: number
@@ -160,8 +207,11 @@ app.post('/plex/webhook', async (c) => {
       cover_url: m.cover_url, rating: null, duration_ms: meta.duration ?? null,
       genre: null, occurred_at: now, raw: JSON.stringify(payload).slice(0, 4000),
     })
-    // Filmes, séries e músicas entram na biblioteca como concluídos
-    if (m.external_ref) {
+    if (m.kind === 'episode') {
+      // Episódio de série: marca só o episódio; temporada/série concluem por progresso
+      await handlePlexEpisode(meta, now)
+    } else if (m.external_ref) {
+      // Filmes e músicas entram na biblioteca como concluídos
       upsertMediaItem.run({
         external_id: m.external_ref, type: m.media_type, title: m.title,
         cover_url: m.cover_url, year: meta.year ?? null, author, rating: 0, completed_at: now,
@@ -174,7 +224,12 @@ app.post('/plex/webhook', async (c) => {
       cover_url: m.cover_url, rating: rating5, duration_ms: null,
       genre: null, occurred_at: now, raw: JSON.stringify(payload).slice(0, 4000),
     })
-    if (m.external_ref) {
+    if (m.kind === 'episode') {
+      // Nota de um episódio → aplica à série (se já existir), sem forçar conclusão
+      const externalId = meta.grandparentGuid
+        ?? (meta.grandparentRatingKey ? `plex:${meta.grandparentRatingKey}` : null)
+      if (externalId) setMediaRating.run(rating5, externalId, 'series')
+    } else if (m.external_ref) {
       // cria (se novo) ou só atualiza a nota
       upsertMediaItem.run({
         external_id: m.external_ref, type: m.media_type, title: m.title,
