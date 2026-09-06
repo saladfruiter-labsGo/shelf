@@ -54,10 +54,10 @@ export function LibraryGames() {
       </div>
 
       {/* Grid */}
-      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 64px 80px', display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 16 }}>
+      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 64px 80px', display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16 }}>
         {isLoading
-          ? Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} style={{ background: 'var(--card)', borderRadius: 16, overflow: 'hidden', border: '1px solid var(--border)', height: 220 }} />
+          ? Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} style={{ background: 'var(--card)', borderRadius: 16, overflow: 'hidden', border: '1px solid var(--border)', aspectRatio: '2/3.55' }} />
             ))
           : items.map(item => (
               <div
@@ -69,9 +69,9 @@ export function LibraryGames() {
                   cursor: 'pointer', border: '1px solid var(--border)',
                 }}
               >
-                {/* Cover */}
+                {/* Cover — full 2:3 poster, like the Home page */}
                 <div style={{
-                  width: '100%', aspectRatio: '16/9',
+                  width: '100%', aspectRatio: '2/3',
                   background: item.cover_url ? 'transparent' : 'var(--card-hover)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   fontSize: 64, position: 'relative', overflow: 'hidden',
@@ -82,14 +82,14 @@ export function LibraryGames() {
                   }
                 </div>
                 {/* Body */}
-                <div style={{ padding: 24 }}>
-                  <p style={{ fontFamily: 'Space Grotesk, monospace', fontSize: 10, textTransform: 'uppercase', letterSpacing: '1.5px', color: 'var(--text-muted)', marginBottom: 8 }}>
+                <div style={{ padding: 16 }}>
+                  <p style={{ fontFamily: 'Space Grotesk, monospace', fontSize: 10, textTransform: 'uppercase', letterSpacing: '1.5px', color: 'var(--text-muted)', marginBottom: 6 }}>
                     {item.genre ?? 'Jogo'} · {item.year ?? '—'}
                   </p>
-                  <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8, lineHeight: 1.2 }}>
+                  <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8, lineHeight: 1.2 }}>
                     {item.title}
                   </p>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 16 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 }}>
                     {item.runtime
                       ? <span style={{ fontFamily: 'Space Grotesk, monospace', fontSize: 13, color: 'var(--games)' }}>{item.runtime}h</span>
                       : <span />
