@@ -69,12 +69,12 @@ export function LibraryBooks() {
                 </span>
                 <div>
                   <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>{item.title}</p>
-                  <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: item.status === 'in_progress' && item.progress != null ? 8 : 0 }}>
+                  <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: (item.status === 'in_progress' || item.status === 'completed') ? 8 : 0 }}>
                     {item.author ?? item.creators ?? '—'}
                   </p>
-                  {/* Progresso real de páginas lidas (Kavita) — só enquanto está lendo */}
-                  {item.status === 'in_progress' && item.progress != null && (() => {
-                    const pct = Math.round(item.progress! * 100)
+                  {/* Progresso de páginas lidas (Kavita); concluído sempre mostra 100% */}
+                  {(item.status === 'in_progress' || item.status === 'completed') && (() => {
+                    const pct = Math.round((item.progress ?? (item.status === 'completed' ? 1 : 0)) * 100)
                     return (
                       <div style={{ maxWidth: 220 }}>
                         <div style={{ height: 3, background: 'var(--border)', borderRadius: 2, marginBottom: 6, overflow: 'hidden' }}>
@@ -83,9 +83,14 @@ export function LibraryBooks() {
                             width: `${pct}%`, transition: 'width .5s ease',
                           }} />
                         </div>
-                        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                          {pct}% lido{item.pages_total ? ` · ${item.pages_read ?? 0}/${item.pages_total} páginas` : ''}
-                        </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                            {pct}% lido{item.pages_total ? ` · ${item.pages_read ?? 0}/${item.pages_total} páginas` : ''}
+                          </span>
+                          {item.rating > 0 && (
+                            <span style={{ fontFamily: 'Space Grotesk, monospace', fontSize: 11, color: 'var(--books)' }}>★ {item.rating}</span>
+                          )}
+                        </div>
                       </div>
                     )
                   })()}
