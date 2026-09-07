@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../lib/api'
+import { StarRating } from '../components/StarRating'
 
 const STATUS_LABEL: Record<string, string> = {
   completed:   'Lido',
@@ -76,20 +77,18 @@ export function LibraryBooks() {
                   {(item.status === 'in_progress' || item.status === 'completed') && (() => {
                     const pct = Math.round((item.progress ?? (item.status === 'completed' ? 1 : 0)) * 100)
                     return (
-                      <div style={{ maxWidth: 220 }}>
-                        <div style={{ height: 3, background: 'var(--border)', borderRadius: 2, marginBottom: 6, overflow: 'hidden' }}>
+                      <div>
+                        <div style={{ maxWidth: 220, height: 3, background: 'var(--border)', borderRadius: 2, marginBottom: 6, overflow: 'hidden' }}>
                           <div style={{
                             height: '100%', borderRadius: 2, background: 'var(--books)',
                             width: `${pct}%`, transition: 'width .5s ease',
                           }} />
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
                           <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                             {pct}% lido{item.pages_total ? ` · ${item.pages_read ?? 0}/${item.pages_total} páginas` : ''}
                           </span>
-                          {item.rating > 0 && (
-                            <span style={{ fontFamily: 'Space Grotesk, monospace', fontSize: 11, color: 'var(--books)' }}>★ {item.rating}</span>
-                          )}
+                          {item.rating > 0 && <StarRating value={item.rating} readonly size="sm" />}
                         </div>
                       </div>
                     )
