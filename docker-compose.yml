@@ -1,6 +1,6 @@
 services:
   shelf:
-    build: .
+    image: ghcr.io/saladfruiter-labsgo/shelf:latest
     container_name: shelf
     restart: unless-stopped
     ports:
