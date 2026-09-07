@@ -5,9 +5,17 @@ import { getSeriesView } from '../series.js'
 
 const app = new Hono()
 
-/** Anexa `progress` (0..1) aos itens do tipo série. */
-function withSeriesProgress<T extends { id: number; type: string }>(rows: T[]): (T & { progress?: number })[] {
-  return rows.map(r => (r.type === 'series' ? { ...r, progress: getSeriesView(r.id).percent } : r))
+/** Anexa `progress` (0..1): séries pelo progresso de episódios, livros pelas páginas lidas (Kavita). */
+function withProgress<T extends { id: number; type: string; pages_total?: number | null; pages_read?: number | null }>(
+  rows: T[],
+): (T & { progress?: number })[] {
+  return rows.map(r => {
+    if (r.type === 'series') return { ...r, progress: getSeriesView(r.id).percent }
+    if (r.type === 'book' && r.pages_total) {
+      return { ...r, progress: Math.min(1, (r.pages_read ?? 0) / r.pages_total) }
+    }
+    return r
+  })
 }
 
 app.get('/', (c) => {
@@ -22,7 +30,7 @@ app.get('/', (c) => {
   sql += ' ORDER BY added_at DESC LIMIT ?'
   params.push(limit)
 
-  return c.json(withSeriesProgress(db.prepare(sql).all(...params) as any[]))
+  return c.json(withProgress(db.prepare(sql).all(...params) as any[]))
 })
 
 app.get('/recent', (c) => {
@@ -30,7 +38,7 @@ app.get('/recent', (c) => {
   const result: Record<string, unknown[]> = {}
   for (const t of ['movie', 'series', 'game', 'book']) {
     const rows = db.prepare('SELECT * FROM media_items WHERE type = ? ORDER BY added_at DESC LIMIT ?').all(t, perType) as any[]
-    result[t] = t === 'series' ? withSeriesProgress(rows) : rows
+    result[t] = t === 'series' || t === 'book' ? withProgress(rows) : rows
   }
   return c.json(result)
 })
@@ -60,7 +68,7 @@ app.get('/upcoming', (c) => {
 app.get('/:id', (c) => {
   const item = db.prepare('SELECT * FROM media_items WHERE id = ?').get(c.req.param('id')) as any
   if (!item) return c.json({ error: 'Not found' }, 404)
-  return c.json(item.type === 'series' ? withSeriesProgress([item])[0] : item)
+  return c.json(item.type === 'series' || item.type === 'book' ? withProgress([item])[0] : item)
 })
 
 app.post('/', async (c) => {

@@ -69,7 +69,26 @@ export function LibraryBooks() {
                 </span>
                 <div>
                   <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>{item.title}</p>
-                  <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>{item.author ?? item.creators ?? '—'}</p>
+                  <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: item.status === 'in_progress' && item.progress != null ? 8 : 0 }}>
+                    {item.author ?? item.creators ?? '—'}
+                  </p>
+                  {/* Progresso real de páginas lidas (Kavita) — só enquanto está lendo */}
+                  {item.status === 'in_progress' && item.progress != null && (() => {
+                    const pct = Math.round(item.progress! * 100)
+                    return (
+                      <div style={{ maxWidth: 220 }}>
+                        <div style={{ height: 3, background: 'var(--border)', borderRadius: 2, marginBottom: 6, overflow: 'hidden' }}>
+                          <div style={{
+                            height: '100%', borderRadius: 2, background: 'var(--books)',
+                            width: `${pct}%`, transition: 'width .5s ease',
+                          }} />
+                        </div>
+                        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                          {pct}% lido{item.pages_total ? ` · ${item.pages_read ?? 0}/${item.pages_total} páginas` : ''}
+                        </span>
+                      </div>
+                    )
+                  })()}
                 </div>
                 {item.genre && (
                   <span style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '1px', color: 'var(--books)', padding: '4px 10px', background: 'var(--books-bg)', borderRadius: 4, whiteSpace: 'nowrap' }}>
