@@ -73,8 +73,11 @@ O servidor, em produção, também serve o build estático do frontend (ver `ser
 | `TMDB_API_KEY` | Chave do TMDB (filmes e séries) |
 | `RAWG_API_KEY` | Chave do RAWG (games) |
 | `GOOGLE_BOOKS_KEY` | Chave do Google Books (livros) |
+| `LASTFM_ENABLED` | `1` para ativar o Last.fm (música) |
+| `LASTFM_API_KEY` | Chave de API do Last.fm ([last.fm/api/accounts](https://www.last.fm/api/accounts)) |
+| `LASTFM_USER` | Nome de usuário do Last.fm |
 
-> As chaves também podem ser definidas e editadas pela tela **Settings** — nesse caso elas ficam gravadas no banco.
+> Todas as integrações (chaves de API, Last.fm, Plex, Kavita, …) podem ser definidas por `.env` **ou** pela tela **Settings**. Quando definidas na UI ficam gravadas no banco e **têm prioridade** sobre o `.env`; se estiverem em branco na UI, o valor do ambiente é usado.
 
 ## 🐳 Rodando com Docker
 

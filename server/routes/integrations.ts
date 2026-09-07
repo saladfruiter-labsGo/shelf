@@ -15,8 +15,11 @@ const setSetting = db.prepare(
 const delSetting = db.prepare('DELETE FROM settings WHERE key = ?')
 
 function cfg(key: string): string {
+  // Prioridade: valor salvo na UI (settings) → variável de ambiente (.env) → vazio.
+  // Unifica o acesso às integrações (Last.fm, Plex, Kavita, ...) num só ponto,
+  // igual ao padrão já usado em search.ts/series.ts/details.ts.
   const row = getSetting.get(key) as { value: string } | undefined
-  return row?.value ?? ''
+  return row?.value?.trim() || process.env[key] || ''
 }
 function setCfg(key: string, val: string) {
   if (val) setSetting.run(key, val)
@@ -406,32 +409,41 @@ async function pollLastfm() {
 
     let maxUts = lastUts
     for (const t of scrobbled) {
-      const artist = t.artist?.['#text'] ?? t.artist?.name ?? 'Desconhecido'
-      const name = t.name as string
       const uts = parseInt(t.date.uts)
-      const album = t.album?.['#text'] || null
-      const cover = pickImage(t.image)
-      const occurred = new Date(uts * 1000).toISOString()
-
-      upsertTrack.run({ artist, track: name, album, cover_url: cover, played: occurred })
-      const { duration_ms, genre } = await ensureEnriched(artist, name)
-
-      insertActivity.run({
-        source: 'lastfm', event_type: 'listen', media_type: 'music',
-        external_ref: `${artist}|${name}`, title: name, subtitle: artist,
-        cover_url: cover, rating: null, duration_ms, genre,
-        occurred_at: occurred, raw: null,
-      })
-      // Scrobble do Last.fm = faixa ouvida até o fim → entra na biblioteca
-      upsertMediaItem.run({
-        external_id: `${artist}|${name}`, type: 'music', title: name,
-        cover_url: cover, year: null, author: artist, rating: 0, completed_at: occurred,
-      })
+      // Avança o cursor faixa a faixa (mesmo se a gravação falhar) para que um
+      // único scrobble problemático não trave a importação de todos os seguintes.
       if (uts > maxUts) maxUts = uts
+
+      const name = t.name as string | undefined
+      if (!name) continue // scrobble sem título → nada a registrar
+
+      try {
+        const artist = t.artist?.['#text'] ?? t.artist?.name ?? 'Desconhecido'
+        const album = t.album?.['#text'] || null
+        const cover = pickImage(t.image)
+        const occurred = new Date(uts * 1000).toISOString()
+
+        upsertTrack.run({ artist, track: name, album, cover_url: cover, played: occurred })
+        const { duration_ms, genre } = await ensureEnriched(artist, name)
+
+        insertActivity.run({
+          source: 'lastfm', event_type: 'listen', media_type: 'music',
+          external_ref: `${artist}|${name}`, title: name, subtitle: artist,
+          cover_url: cover, rating: null, duration_ms, genre,
+          occurred_at: occurred, raw: null,
+        })
+        // Scrobble do Last.fm = faixa ouvida até o fim → entra na biblioteca
+        upsertMediaItem.run({
+          external_id: `${artist}|${name}`, type: 'music', title: name,
+          cover_url: cover, year: null, author: artist, rating: 0, completed_at: occurred,
+        })
+      } catch (e) {
+        console.error(`[lastfm] falha ao registrar scrobble "${name}":`, e)
+      }
     }
     if (maxUts > lastUts) setCfg('LASTFM_LAST_UTS', String(maxUts))
-  } catch {
-    /* falha de rede — tenta no próximo ciclo */
+  } catch (e) {
+    console.error('[lastfm] poll falhou:', e)
   }
 }
 
