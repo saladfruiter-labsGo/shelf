@@ -95,7 +95,7 @@ export const api = {
     update:     (data: Record<string, unknown>): Promise<{ ok: boolean }> =>
       request('/integrations', { method: 'PATCH', body: JSON.stringify(data) }),
     nowPlaying: (): Promise<NowPlaying> => request('/integrations/now-playing'),
-    activity:   (params?: { limit?: number; source?: 'plex' | 'lastfm' }): Promise<ActivityEvent[]> => {
+    activity:   (params?: { limit?: number; source?: 'plex' | 'lastfm' | 'kavita' }): Promise<ActivityEvent[]> => {
       const qs = new URLSearchParams()
       if (params?.limit)  qs.set('limit', String(params.limit))
       if (params?.source) qs.set('source', params.source)
@@ -108,5 +108,9 @@ export const api = {
       request('/integrations/telegram/test', { method: 'POST' }),
     telegramDetectChat: (): Promise<{ chats: { chat_id: string; thread_id: string; name: string }[] }> =>
       request('/integrations/telegram/detect-chat'),
+    kavitaSync: (): Promise<{ ok: boolean }> =>
+      request('/integrations/kavita/sync', { method: 'POST' }),
+    kavitaTest: (): Promise<{ ok: boolean; error?: string }> =>
+      request('/integrations/kavita/test', { method: 'POST' }),
   },
 }
