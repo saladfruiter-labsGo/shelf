@@ -220,6 +220,23 @@ export function MediaDetail() {
             </div>
           </div>
 
+          {/* Progresso de leitura (livros, via Kavita) */}
+          {item.type === 'book' && item.progress != null && (
+            <div className="mb-4">
+              <p className="text-xs text-muted uppercase tracking-wide mb-1">Progresso</p>
+              <div className="h-1.5 bg-card rounded-full overflow-hidden mb-1.5 max-w-xs">
+                <div
+                  className="h-full rounded-full transition-all"
+                  style={{ width: `${Math.round(item.progress * 100)}%`, background: 'var(--books)' }}
+                />
+              </div>
+              <p className="text-xs text-muted">
+                {Math.round(item.progress * 100)}% lido
+                {item.pages_total ? ` · ${item.pages_read ?? 0}/${item.pages_total} páginas` : ''}
+              </p>
+            </div>
+          )}
+
           {/* Hype toggle */}
           <div className="mb-4 flex items-center gap-3">
             <button
