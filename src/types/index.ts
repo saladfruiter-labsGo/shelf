@@ -24,6 +24,25 @@ export interface MediaItem {
   progress?:    number   // 0..1 — só séries (fração de episódios vistos)
 }
 
+/* ─── Diário: registros de "visto/concluído" (N por mídia) ─── */
+
+export interface DiaryEntry {
+  id:            number
+  media_item_id: number
+  watched_at:    string
+  rating:        number | null
+  comment:       string | null
+  source:        'manual' | 'plex' | 'backfill' | string
+  created_at:    string
+  // campos da mídia (join)
+  title:         string
+  type:          MediaType
+  cover_url:     string | null
+  year:          number | null
+  genre:         string | null
+  external_id:   string
+}
+
 /* ─── Séries: temporadas e episódios ─── */
 
 export interface SeriesEpisode {

@@ -11,6 +11,8 @@ import settingsRoutes from './routes/settings.js'
 import detailsRoutes  from './routes/details.js'
 import listsRoutes    from './routes/lists.js'
 import seriesRoutes   from './routes/series.js'
+import diaryRoutes    from './routes/diary.js'
+import imgRoutes      from './routes/img.js'
 import integrationsRoutes from './routes/integrations.js'
 
 const app = new Hono()
@@ -25,6 +27,8 @@ app.route('/api/settings', settingsRoutes)
 app.route('/api/details',  detailsRoutes)
 app.route('/api/lists',    listsRoutes)
 app.route('/api/series',   seriesRoutes)
+app.route('/api/diary',    diaryRoutes)
+app.route('/api/img',      imgRoutes)
 app.route('/api/integrations', integrationsRoutes)
 
 app.get('/api/health', (c) => c.json({ ok: true }))

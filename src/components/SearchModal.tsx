@@ -5,7 +5,7 @@ import { api } from '../lib/api'
 import type { MediaStatus, MediaType, SearchResult } from '../types'
 import { CategoryTag } from './CategoryTag'
 import { StarRating } from './StarRating'
-import { TYPE_LABEL, STATUS_LABEL } from '../lib/utils'
+import { TYPE_LABEL, STATUS_LABEL, todayISODate } from '../lib/utils'
 
 interface Props {
   open:    boolean
@@ -44,14 +44,15 @@ function parseInput(raw: string): { tagType: MediaType | null; q: string } {
 interface ConfirmProps {
   result:   SearchResult
   onBack:   () => void
-  onAdd:    (opts: { status: MediaStatus; rating: number; completed_at: string | null }) => void
+  onAdd:    (opts: { status: MediaStatus; rating: number; completed_at: string | null; comment: string | null }) => void
   isPending: boolean
 }
 
 function ConfirmPanel({ result, onBack, onAdd, isPending }: ConfirmProps) {
   const [status, setStatus]       = useState<MediaStatus>('wishlist')
   const [rating, setRating]       = useState(0)
-  const [completedAt, setCompletedAt] = useState('')
+  const [completedAt, setCompletedAt] = useState(todayISODate())
+  const [comment, setComment]     = useState('')
 
   const showDate = status === 'completed'
 
@@ -104,22 +105,40 @@ function ConfirmPanel({ result, onBack, onAdd, isPending }: ConfirmProps) {
         )}
       </div>
 
-      {/* Completion date (only when completed) */}
+      {/* Completion date + comment (only when completed) */}
       {showDate && (
-        <div className="mb-4">
-          <p className="text-xs text-muted uppercase tracking-wide mb-2">Data de conclusão</p>
-          <input
-            type="date"
-            value={completedAt}
-            onChange={e => setCompletedAt(e.target.value)}
-            className="bg-card border border-border rounded-md px-3 py-1.5 text-sm text-primary outline-none focus:border-accent w-full"
-          />
-        </div>
+        <>
+          <div className="mb-4">
+            <p className="text-xs text-muted uppercase tracking-wide mb-2">Data de conclusão</p>
+            <input
+              type="date"
+              value={completedAt}
+              max={todayISODate()}
+              onChange={e => setCompletedAt(e.target.value)}
+              className="bg-card border border-border rounded-md px-3 py-1.5 text-sm text-primary outline-none focus:border-accent w-full"
+            />
+          </div>
+          <div className="mb-4">
+            <p className="text-xs text-muted uppercase tracking-wide mb-2">Comentário <span className="text-dim normal-case">(opcional)</span></p>
+            <textarea
+              value={comment}
+              onChange={e => setComment(e.target.value)}
+              rows={2}
+              placeholder="O que você achou?"
+              className="bg-card border border-border rounded-md px-3 py-1.5 text-sm text-primary placeholder:text-muted outline-none focus:border-accent w-full resize-none"
+            />
+          </div>
+        </>
       )}
 
       {/* Add button */}
       <button
-        onClick={() => onAdd({ status, rating, completed_at: showDate && completedAt ? completedAt : null })}
+        onClick={() => onAdd({
+          status,
+          rating,
+          completed_at: showDate && completedAt ? completedAt : null,
+          comment: showDate && comment.trim() ? comment.trim() : null,
+        })}
         disabled={isPending}
         className="w-full py-2 bg-accent text-bg rounded-lg text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-60"
       >
@@ -168,23 +187,24 @@ export function SearchModal({ open, onClose }: Props) {
     return () => window.removeEventListener('keydown', handleKey)
   }, [handleKey])
 
-  const searchEnabled = !!activeType && debouncedQ.length >= 2
+  const searchEnabled = debouncedQ.length >= 2
 
   const { data, isFetching } = useQuery({
     queryKey: ['search', debouncedQ, activeType],
-    queryFn:  () => api.search(debouncedQ, activeType!),
+    queryFn:  () => api.search(debouncedQ, activeType ?? undefined),
     enabled:  searchEnabled,
     staleTime: 30_000,
   })
 
   const addMutation = useMutation({
-    mutationFn: ({ result, status, rating, completed_at }: {
+    mutationFn: async ({ result, status, rating, completed_at, comment }: {
       result: SearchResult
       status: MediaStatus
       rating: number
       completed_at: string | null
-    }) =>
-      api.media.add({
+      comment: string | null
+    }) => {
+      const item = await api.media.add({
         external_id:  result.external_id,
         type:         result.type,
         title:        result.title,
@@ -200,11 +220,23 @@ export function SearchModal({ open, onClose }: Props) {
         author:       result.author,
         release_date: result.release_date,
         completed_at,
-      }),
+      })
+      // Concluído ao adicionar → cria também um registro no diário.
+      if (status === 'completed') {
+        await api.diary.create({
+          media_item_id: item.id,
+          watched_at: completed_at ?? undefined,
+          rating: rating > 0 ? rating : null,
+          comment,
+        })
+      }
+      return item
+    },
     onSuccess: (item) => {
       qc.invalidateQueries({ queryKey: ['media'] })
       qc.invalidateQueries({ queryKey: ['recent'] })
       qc.invalidateQueries({ queryKey: ['upcoming'] })
+      qc.invalidateQueries({ queryKey: ['diary'] })
       onClose()
       navigate(`/media/${item.id}`)
     },
@@ -235,8 +267,8 @@ export function SearchModal({ open, onClose }: Props) {
             result={confirming}
             onBack={() => setConfirming(null)}
             isPending={addMutation.isPending}
-            onAdd={({ status, rating, completed_at }) =>
-              addMutation.mutate({ result: confirming, status, rating, completed_at })
+            onAdd={({ status, rating, completed_at, comment }) =>
+              addMutation.mutate({ result: confirming, status, rating, completed_at, comment })
             }
           />
         ) : (
@@ -261,7 +293,7 @@ export function SearchModal({ open, onClose }: Props) {
                 placeholder={
                   activeType
                     ? `Buscar ${TYPE_LABEL[activeType].toLowerCase()}s...`
-                    : 'Selecione um tipo abaixo ou use /filmes, /series...'
+                    : 'Buscar em todas as categorias...'
                 }
                 className="flex-1 bg-transparent text-primary placeholder:text-muted outline-none text-base min-w-0"
               />
@@ -290,29 +322,37 @@ export function SearchModal({ open, onClose }: Props) {
 
             {/* Results / hints */}
             <div className="max-h-80 overflow-y-auto">
-              {!activeType ? (
+              {debouncedQ.length < 2 ? (
                 <div className="px-4 py-6">
-                  <p className="text-xs text-muted uppercase tracking-wide mb-3">Buscar por categoria</p>
+                  <p className="text-xs text-muted uppercase tracking-wide mb-3">
+                    {activeType ? 'Categoria selecionada' : 'Filtrar por categoria (opcional)'}
+                  </p>
                   <div className="grid grid-cols-2 gap-2">
-                    {TYPE_FILTERS.map(f => (
-                      <button
-                        key={f.value}
-                        onClick={() => setManualType(f.value)}
-                        className="flex items-center gap-2 px-3 py-2.5 bg-card rounded-lg text-sm text-secondary hover:text-primary hover:bg-card-hover transition-colors text-left"
-                      >
-                        <span className="text-lg">{f.emoji}</span>
-                        <div>
-                          <p className="font-medium">{f.label}</p>
-                          <p className="text-xs text-muted font-mono">{f.tag}</p>
-                        </div>
-                      </button>
-                    ))}
+                    {TYPE_FILTERS.map(f => {
+                      const active = activeType === f.value
+                      return (
+                        <button
+                          key={f.value}
+                          onClick={() => selectManual(f.value)}
+                          className={`flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm transition-colors text-left ${
+                            active
+                              ? 'bg-accent text-bg'
+                              : 'bg-card text-secondary hover:text-primary hover:bg-card-hover'
+                          }`}
+                        >
+                          <span className="text-lg">{f.emoji}</span>
+                          <div>
+                            <p className="font-medium">{f.label}</p>
+                            <p className={`text-xs font-mono ${active ? 'text-bg/70' : 'text-muted'}`}>{f.tag}</p>
+                          </div>
+                        </button>
+                      )
+                    })}
                   </div>
+                  <p className="text-center text-muted text-sm mt-4">
+                    Digite para buscar{activeType ? ` ${TYPE_LABEL[activeType].toLowerCase()}s` : ' em todas as categorias'}...
+                  </p>
                 </div>
-              ) : debouncedQ.length < 2 ? (
-                <p className="text-center text-muted text-sm py-8">
-                  Digite para buscar {TYPE_LABEL[activeType].toLowerCase()}s...
-                </p>
               ) : data?.results && data.results.length > 0 ? (
                 <ul>
                   {data.results.map(result => (

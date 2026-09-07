@@ -151,3 +151,38 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_seasons_media  ON series_seasons(media_item_id);
   CREATE INDEX IF NOT EXISTS idx_episodes_media ON series_episodes(media_item_id);
 `)
+
+// ─── Diário: registros de "visto/concluído" (N por mídia) ───
+// Cada visualização (manual ou via Plex) vira uma entrada própria, com data,
+// nota e comentário. A mesma mídia pode ter vários registros.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS diary_entries (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    media_item_id INTEGER NOT NULL REFERENCES media_items(id) ON DELETE CASCADE,
+    watched_at    TEXT    NOT NULL DEFAULT (datetime('now')),   -- ISO date/datetime
+    rating        REAL,                                          -- nota do registro (opcional)
+    comment       TEXT,                                          -- comentário livre (opcional)
+    source        TEXT    NOT NULL DEFAULT 'manual',             -- 'manual' | 'plex' | 'backfill'
+    created_at    TEXT    NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_diary_media   ON diary_entries(media_item_id);
+  CREATE INDEX IF NOT EXISTS idx_diary_watched ON diary_entries(watched_at);
+`)
+
+// Backfill único: cada item já concluído vira uma entrada no diário, para
+// preservar o histórico que hoje aparece no Diário. Roda só uma vez.
+const backfilled = (db.prepare("SELECT value FROM settings WHERE key = 'DIARY_BACKFILLED'").get() as { value: string } | undefined)?.value
+if (backfilled !== '1') {
+  db.prepare(`
+    INSERT INTO diary_entries (media_item_id, watched_at, rating, comment, source)
+    SELECT id,
+           COALESCE(completed_at, updated_at, added_at),
+           CASE WHEN rating > 0 THEN rating ELSE NULL END,
+           NULL,
+           'backfill'
+    FROM media_items
+    WHERE status = 'completed' OR completed_at IS NOT NULL
+  `).run()
+  db.prepare("INSERT INTO settings (key, value) VALUES ('DIARY_BACKFILLED', '1') ON CONFLICT(key) DO UPDATE SET value = '1'").run()
+}

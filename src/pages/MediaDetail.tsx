@@ -5,251 +5,12 @@ import { api } from '../lib/api'
 import { CategoryTag } from '../components/CategoryTag'
 import { StarRating } from '../components/StarRating'
 import { SeriesSeasons } from '../components/SeriesSeasons'
-import type { MediaItem, MediaStatus, MediaType } from '../types'
+import { DiaryEntryModal, type DiaryEntryValues } from '../components/DiaryEntryModal'
+import { ConfirmDialog } from '../components/ConfirmDialog'
+import type { MediaStatus } from '../types'
 import { STATUS_LABEL, formatRuntime, formatDate } from '../lib/utils'
 
 const STATUSES: MediaStatus[] = ['wishlist', 'in_progress', 'completed', 'dropped']
-
-const TYPE_HEX: Record<MediaType, string> = {
-  movie:  '#D94444',
-  series: '#8A5FE8',
-  game:   '#20C97A',
-  book:   '#C47A0A',
-  music:  '#8B5CF6',
-}
-
-const TYPE_LABEL_STORY: Record<MediaType, string> = {
-  movie: 'FILME', series: 'SÉRIE', game: 'JOGO', book: 'LIVRO', music: 'MÚSICA',
-}
-
-// ─── Canvas helpers ──────────────────────────────────────────────────
-function loadImage(url: string): Promise<HTMLImageElement> {
-  return new Promise((res, rej) => {
-    const img = new Image()
-    img.crossOrigin = 'anonymous'
-    img.onload = () => res(img)
-    img.onerror = rej
-    img.src = url
-  })
-}
-
-function drawCover(
-  ctx: CanvasRenderingContext2D,
-  img: HTMLImageElement,
-  dx: number, dy: number, dw: number, dh: number,
-) {
-  const scaleX = dw / img.naturalWidth
-  const scaleY = dh / img.naturalHeight
-  const scale  = Math.max(scaleX, scaleY)
-  const sw = dw / scale
-  const sh = dh / scale
-  const sx = (img.naturalWidth  - sw) / 2
-  const sy = (img.naturalHeight - sh) / 2
-  ctx.drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh)
-}
-
-function roundedClipPath(
-  ctx: CanvasRenderingContext2D,
-  x: number, y: number, w: number, h: number, r: number,
-) {
-  ctx.beginPath()
-  ctx.moveTo(x + r, y)
-  ctx.lineTo(x + w - r, y)
-  ctx.quadraticCurveTo(x + w, y, x + w, y + r)
-  ctx.lineTo(x + w, y + h - r)
-  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h)
-  ctx.lineTo(x + r, y + h)
-  ctx.quadraticCurveTo(x, y + h, x, y + h - r)
-  ctx.lineTo(x, y + r)
-  ctx.quadraticCurveTo(x, y, x + r, y)
-  ctx.closePath()
-}
-
-function drawStar5pt(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number, color: string) {
-  ctx.fillStyle = color
-  ctx.beginPath()
-  for (let i = 0; i < 10; i++) {
-    const rad = i % 2 === 0 ? r : r * 0.42
-    const angle = (i * Math.PI) / 5 - Math.PI / 2
-    const x = cx + Math.cos(angle) * rad
-    const y = cy + Math.sin(angle) * rad
-    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y)
-  }
-  ctx.closePath()
-  ctx.fill()
-}
-
-function drawRatingStars(ctx: CanvasRenderingContext2D, cx: number, topY: number, rating: number, starSize: number) {
-  const gap  = starSize * 0.25
-  const total = 5 * starSize + 4 * gap
-  let x = cx - total / 2
-
-  for (let i = 1; i <= 5; i++) {
-    const scx = x + starSize / 2
-    const scy = topY + starSize / 2
-
-    drawStar5pt(ctx, scx, scy, starSize / 2, '#283548')
-
-    if (rating >= i) {
-      drawStar5pt(ctx, scx, scy, starSize / 2, '#E8A030')
-    } else if (rating >= i - 0.5) {
-      ctx.save()
-      ctx.beginPath()
-      ctx.rect(x, topY, starSize / 2, starSize)
-      ctx.clip()
-      drawStar5pt(ctx, scx, scy, starSize / 2, '#E8A030')
-      ctx.restore()
-    }
-
-    x += starSize + gap
-  }
-}
-
-function wrapText(ctx: CanvasRenderingContext2D, text: string, maxW: number, maxLines: number): string[] {
-  const words = text.split(' ')
-  const lines: string[] = []
-  let line = ''
-  for (const word of words) {
-    const test = line ? `${line} ${word}` : word
-    if (ctx.measureText(test).width > maxW && line) {
-      lines.push(line)
-      if (lines.length >= maxLines) return lines
-      line = word
-    } else {
-      line = test
-    }
-  }
-  if (line && lines.length < maxLines) lines.push(line)
-  return lines
-}
-
-// ─── Story generator ────────────────────────────────────────────────
-async function generateItemStory(item: MediaItem): Promise<void> {
-  const W = 1080, H = 1920
-  const canvas = document.createElement('canvas')
-  canvas.width  = W
-  canvas.height = H
-  const ctx = canvas.getContext('2d')!
-  const typeColor = TYPE_HEX[item.type]
-
-  // Background
-  ctx.fillStyle = '#0C1118'
-  ctx.fillRect(0, 0, W, H)
-
-  // Radial glow behind cover
-  const glow = ctx.createRadialGradient(W / 2, 520, 0, W / 2, 520, 720)
-  glow.addColorStop(0, typeColor + '35')
-  glow.addColorStop(0.6, typeColor + '10')
-  glow.addColorStop(1, 'transparent')
-  ctx.fillStyle = glow
-  ctx.fillRect(0, 0, W, H)
-
-  // Cover
-  const CW = 460, CH = 690, CX = (W - CW) / 2, CY = 130, CR = 28
-
-  // Shadow layer
-  ctx.save()
-  ctx.shadowColor = typeColor
-  ctx.shadowBlur  = 80
-  ctx.shadowOffsetY = 24
-  roundedClipPath(ctx, CX, CY, CW, CH, CR)
-  ctx.fillStyle = '#1C2838'
-  ctx.fill()
-  ctx.restore()
-
-  // Image with clip
-  if (item.cover_url) {
-    try {
-      const img = await loadImage(item.cover_url)
-      ctx.save()
-      roundedClipPath(ctx, CX, CY, CW, CH, CR)
-      ctx.clip()
-      drawCover(ctx, img, CX, CY, CW, CH)
-      ctx.restore()
-    } catch {
-      // fallback: placeholder already drawn above
-    }
-  }
-
-  // Type badge
-  ctx.font = 'bold 26px system-ui, sans-serif'
-  ctx.textAlign = 'center'
-  ctx.textBaseline = 'middle'
-  const badgeText = TYPE_LABEL_STORY[item.type]
-  const badgeW = ctx.measureText(badgeText).width + 52
-  const badgeH = 52, badgeX = (W - badgeW) / 2
-  const badgeY = CY + CH + 44
-  roundedClipPath(ctx, badgeX, badgeY, badgeW, badgeH, 26)
-  ctx.fillStyle = typeColor
-  ctx.fill()
-  ctx.fillStyle = '#0C1118'
-  ctx.fillText(badgeText, W / 2, badgeY + badgeH / 2)
-
-  // Title
-  let curY = badgeY + badgeH + 50
-  const titleLen = item.title.length
-  const titleSz  = titleLen > 35 ? 56 : titleLen > 22 ? 66 : 78
-  ctx.font = `bold ${titleSz}px Georgia, serif`
-  ctx.textBaseline = 'top'
-  ctx.fillStyle = '#EDF2F8'
-  const titleLines = wrapText(ctx, item.title, 940, 3)
-  const lineH = titleSz * 1.18
-  for (const l of titleLines) {
-    ctx.fillText(l, W / 2, curY)
-    curY += lineH
-  }
-
-  // Author / year
-  curY += 20
-  const meta = [
-    item.author ?? (item.creators ? item.creators.split(',')[0].trim() : null),
-    item.year ? String(item.year) : null,
-  ].filter(Boolean).join(' · ')
-
-  if (meta) {
-    ctx.font = '34px system-ui, sans-serif'
-    ctx.fillStyle = '#5A7090'
-    ctx.fillText(meta, W / 2, curY)
-    curY += 52
-  }
-
-  // Stars
-  curY += 20
-  drawRatingStars(ctx, W / 2, curY, item.rating, 56)
-  curY += 56 + 16
-
-  // Rating label
-  ctx.font = '28px system-ui, sans-serif'
-  ctx.fillStyle = '#3A4E68'
-  const ratingLabel = item.rating > 0 ? `${item.rating} / 5` : 'Sem avaliação'
-  ctx.fillText(ratingLabel, W / 2, curY)
-
-  // Bottom vignette
-  const vignette = ctx.createLinearGradient(0, H - 300, 0, H)
-  vignette.addColorStop(0, 'transparent')
-  vignette.addColorStop(1, '#060C12')
-  ctx.fillStyle = vignette
-  ctx.fillRect(0, H - 300, W, 300)
-
-  // Shelf branding
-  ctx.textAlign = 'center'
-  ctx.textBaseline = 'bottom'
-  ctx.fillStyle = '#E8A030'
-  ctx.font = 'bold 48px Georgia, serif'
-  ctx.fillText('Shelf', W / 2, H - 72)
-  ctx.fillStyle = '#3A4E68'
-  ctx.font = '26px system-ui, sans-serif'
-  ctx.fillText('sua coleção pessoal', W / 2, H - 30)
-
-  canvas.toBlob(blob => {
-    if (!blob) return
-    const a = document.createElement('a')
-    a.href = URL.createObjectURL(blob)
-    a.download = `shelf-story-${item.title.slice(0, 30).replace(/\s+/g, '-').toLowerCase()}.png`
-    a.click()
-    URL.revokeObjectURL(a.href)
-  }, 'image/png')
-}
 
 // ─── Add to list dropdown ───────────────────────────────────────────
 function AddToListDropdown({ itemId }: { itemId: number }) {
@@ -327,7 +88,8 @@ export function MediaDetail() {
 
   const [releaseInput, setReleaseInput] = useState('')
   const [editRelease, setEditRelease] = useState(false)
-  const [generatingStory, setGeneratingStory] = useState(false)
+  const [completionOpen, setCompletionOpen] = useState(false)
+  const [confirmRemove, setConfirmRemove] = useState(false)
 
   const { data: details, isLoading: loadingDetails } = useQuery({
     queryKey: ['details', item?.type, item?.external_id],
@@ -354,14 +116,40 @@ export function MediaDetail() {
     },
   })
 
+  // Registrar conclusão → cria um registro no diário (que também marca a mídia
+  // como concluída, guarda a data e aplica a nota).
+  const completeMutation = useMutation({
+    mutationFn: (values: DiaryEntryValues) =>
+      api.diary.create({
+        media_item_id: parseInt(id!),
+        watched_at: values.watched_at,
+        rating: values.rating > 0 ? values.rating : null,
+        comment: values.comment || null,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['media', id] })
+      qc.invalidateQueries({ queryKey: ['diary'] })
+      qc.invalidateQueries({ queryKey: ['recent'] })
+      setCompletionOpen(false)
+    },
+  })
+
   const deleteMutation = useMutation({
     mutationFn: () => api.media.remove(parseInt(id!)),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['media'] })
       qc.invalidateQueries({ queryKey: ['recent'] })
+      qc.invalidateQueries({ queryKey: ['diary'] })
       navigate(-1)
     },
   })
+
+  // Clicar em "Concluído" abre o modal de conclusão (data + nota + comentário).
+  // Os demais status atualizam direto.
+  const onStatusClick = (s: MediaStatus) => {
+    if (s === 'completed') setCompletionOpen(true)
+    else updateMutation.mutate({ status: s })
+  }
 
   if (isLoading) return (
     <div className="px-6 py-8 animate-pulse">
@@ -421,7 +209,7 @@ export function MediaDetail() {
               {STATUSES.map(s => (
                 <button
                   key={s}
-                  onClick={() => updateMutation.mutate({ status: s })}
+                  onClick={() => onStatusClick(s)}
                   className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
                     item.status === s ? 'bg-accent text-bg' : 'bg-card text-muted hover:text-primary border border-border'
                   }`}
@@ -513,24 +301,37 @@ export function MediaDetail() {
         <AddToListDropdown itemId={item.id} />
 
         <button
-          onClick={async () => {
-            setGeneratingStory(true)
-            try { await generateItemStory(item) } finally { setGeneratingStory(false) }
-          }}
-          disabled={generatingStory}
-          className="flex items-center gap-2 px-4 py-2 bg-surface border border-border rounded-lg text-sm text-secondary hover:border-border-strong hover:text-primary transition-colors disabled:opacity-60"
-        >
-          🎨 {generatingStory ? 'Gerando...' : 'Gerar Story'}
-        </button>
-
-        <button
-          onClick={() => { if (confirm(`Remover "${item.title}"?`)) deleteMutation.mutate() }}
+          onClick={() => setConfirmRemove(true)}
           className="ml-auto text-xs text-muted hover:text-red-400 transition-colors"
           disabled={deleteMutation.isPending}
         >
           Remover da biblioteca
         </button>
       </div>
+
+      {/* Modal de conclusão (registra no diário) */}
+      <DiaryEntryModal
+        open={completionOpen}
+        mode="create"
+        title={item.title}
+        subtitle="Registrar conclusão"
+        initial={{ rating: item.rating }}
+        busy={completeMutation.isPending}
+        onCancel={() => setCompletionOpen(false)}
+        onSubmit={values => completeMutation.mutate(values)}
+      />
+
+      {/* Confirmação de remoção da biblioteca */}
+      <ConfirmDialog
+        open={confirmRemove}
+        title="Remover da biblioteca"
+        message={`Remover "${item.title}" e todos os seus registros do diário? Esta ação não pode ser desfeita.`}
+        confirmLabel="Remover"
+        danger
+        busy={deleteMutation.isPending}
+        onCancel={() => setConfirmRemove(false)}
+        onConfirm={() => deleteMutation.mutate()}
+      />
     </div>
   )
 }
