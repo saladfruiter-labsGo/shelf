@@ -166,11 +166,11 @@ function ProfileOverlay({ open, onClose }: { open: boolean; onClose: () => void 
   const currentYear = new Date().getFullYear()
   const years = Array.from({ length: currentYear - 2021 }, (_, i) => currentYear - i)
 
+  // A prateleira é a biblioteca: wishlist não conta aqui.
+  const shelfItems = allItems.filter(i => i.status !== 'wishlist')
+
   const statsByYear = years.map(year => {
-    const items = allItems.filter(item => {
-      const y = new Date(item.added_at).getFullYear()
-      return y === year
-    })
+    const items = shelfItems.filter(item => new Date(item.added_at).getFullYear() === year)
     const done  = items.filter(i => i.status === 'completed').length
     const prog  = items.filter(i => i.status === 'in_progress').length
     return { year, total: items.length, done, prog }
@@ -240,7 +240,7 @@ function ProfileOverlay({ open, onClose }: { open: boolean; onClose: () => void 
 
         <div style={{ marginTop: 40, padding: '16px', background: 'var(--card)', borderRadius: 8, border: '1px solid var(--border)' }}>
           <p style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>
-            Total na biblioteca: <strong style={{ color: 'var(--text-primary)' }}>{allItems.length} itens</strong>
+            Total na biblioteca: <strong style={{ color: 'var(--text-primary)' }}>{shelfItems.length} itens</strong>
           </p>
         </div>
       </div>

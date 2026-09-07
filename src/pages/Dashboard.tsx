@@ -42,10 +42,15 @@ export function Dashboard() {
   })
 
   /* ─── derive data ─── */
+  // As prateleiras da home são a biblioteca: itens em wishlist ficam só na Wishlist.
   const recentByType = useMemo(() => {
     const map = {} as Record<MediaType, MediaItem[]>
     for (const c of CATEGORIES) map[c.key] = []
-    for (const item of allItems) (map[item.type] ??= []).push(item)
+    for (const item of allItems) {
+      if (item.status === 'wishlist') continue
+      const bucket = map[item.type] ??= []
+      bucket.push(item)
+    }
     for (const k of Object.keys(map) as MediaType[]) map[k].sort(byRecent)
     return map
   }, [allItems])
@@ -61,7 +66,7 @@ export function Dashboard() {
       .filter(i => i.status === 'completed' && i.cover_url && i.type !== 'music')
       .sort(byCompleted)
     if (diary.length) return diary
-    return [...allItems].filter(i => i.type !== 'music').sort(byRecent).slice(0, 1)
+    return [...allItems].filter(i => i.status !== 'wishlist' && i.type !== 'music').sort(byRecent).slice(0, 1)
   }, [allItems])
 
   /** Categories that actually have something to show, in canonical order. */
