@@ -1,7 +1,7 @@
 import type {
   Details, List, ListCheck, ListDetail,
   MediaItem, MediaStatus, MediaType,
-  SearchResult, WrapData, SeriesView,
+  SearchResult, WrapData, SeriesView, DiaryEntry,
   IntegrationStatus, NowPlaying, ActivityEvent, MusicStats,
 } from '../types'
 
@@ -41,6 +41,16 @@ export const api = {
       request(`/media/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     remove: (id: number): Promise<{ ok: boolean }> =>
       request(`/media/${id}`, { method: 'DELETE' }),
+  },
+
+  diary: {
+    list:   (): Promise<DiaryEntry[]> => request('/diary'),
+    create: (data: { media_item_id: number; watched_at?: string; rating?: number | null; comment?: string | null }): Promise<DiaryEntry> =>
+      request('/diary', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: number, data: { watched_at?: string; rating?: number | null; comment?: string | null }): Promise<DiaryEntry> =>
+      request(`/diary/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    remove: (id: number): Promise<{ ok: boolean }> =>
+      request(`/diary/${id}`, { method: 'DELETE' }),
   },
 
   series: {

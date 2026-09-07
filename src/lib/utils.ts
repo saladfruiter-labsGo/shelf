@@ -43,6 +43,21 @@ export function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
+/** Data de hoje no formato YYYY-MM-DD (local), para inputs type="date". */
+export function todayISODate(): string {
+  const d = new Date()
+  const off = d.getTimezoneOffset()
+  return new Date(d.getTime() - off * 60_000).toISOString().slice(0, 10)
+}
+
+/** Converte um ISO (date ou datetime) para YYYY-MM-DD local. */
+export function toISODate(iso: string): string {
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return iso.slice(0, 10)
+  const off = d.getTimezoneOffset()
+  return new Date(d.getTime() - off * 60_000).toISOString().slice(0, 10)
+}
+
 export function daysUntil(dateStr: string): number {
   const ms = new Date(dateStr).getTime() - Date.now()
   return Math.ceil(ms / 86_400_000)

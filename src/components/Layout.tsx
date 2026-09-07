@@ -117,6 +117,14 @@ function SearchIcon() {
   )
 }
 
+function MenuIcon() {
+  return (
+    <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
+      <path d="M4 6h16M4 12h16M4 18h16"/>
+    </svg>
+  )
+}
+
 /* ─── Bottom-nav icons (mobile) ─── */
 const iconProps = { width: 22, height: 22, fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const }
 function HomeIcon()    { return (<svg {...iconProps}><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg>) }
@@ -358,10 +366,10 @@ export function Layout() {
                 width: 40, height: 40, borderRadius: '50%',
                 background: 'var(--card)', border: '1.5px solid var(--border-strong)',
                 cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 18, transition: 'background .2s, border-color .2s',
+                color: 'var(--text-muted)', transition: 'background .2s, border-color .2s',
               }}
             >
-              🎬
+              <MenuIcon />
             </button>
 
             {/* Dropdown */}
@@ -375,21 +383,22 @@ export function Layout() {
               transition: 'opacity .2s, transform .2s',
             }}>
               {[
-                { label: '👤  Perfil', action: () => { setDropOpen(false); setProfileOpen(true) } },
-                { label: '⚙️  Configurações', action: () => { setDropOpen(false); navigate('/settings') } },
+                { icon: '👤', label: 'Perfil', action: () => { setDropOpen(false); setProfileOpen(true) } },
+                { icon: '⚙️', label: 'Configurações', action: () => { setDropOpen(false); navigate('/settings') } },
               ].map(item => (
                 <button
                   key={item.label}
                   onClick={item.action}
                   className="menu-item"
                   style={{
-                    display: 'flex', width: '100%', padding: '10px 16px',
+                    display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '10px 16px',
                     borderRadius: 8, cursor: 'pointer', fontSize: 14,
                     color: 'var(--text-muted)', background: 'none', border: 'none',
-                    textAlign: 'left',
+                    textAlign: 'left', whiteSpace: 'nowrap',
                   }}
                 >
-                  {item.label}
+                  <span style={{ fontSize: 16, lineHeight: 1 }}>{item.icon}</span>
+                  <span>{item.label}</span>
                 </button>
               ))}
             </div>

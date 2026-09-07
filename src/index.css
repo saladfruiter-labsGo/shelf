@@ -36,9 +36,13 @@
   --safe-bottom:  env(safe-area-inset-bottom, 0px);
   /* ─── Responsive layout tokens (overridden per breakpoint below) ─── */
   --page-x:       64px;                /* horizontal page padding */
-  --grid-films:   repeat(5, 1fr);      /* film/music poster grids */
-  --grid-games:   repeat(4, 1fr);      /* game/series poster grids */
-  --grid-lib:     repeat(7, 1fr);      /* dense library poster grids */
+  /* Grade única de pôsteres: mesma largura de capa na biblioteca geral e em
+     todas as categorias (auto-fill mantém a capa do mesmo tamanho e só muda o
+     número de colunas conforme a largura). */
+  --grid-poster:  repeat(auto-fill, minmax(158px, 1fr));
+  --grid-films:   var(--grid-poster);  /* filmes/música */
+  --grid-games:   var(--grid-poster);  /* jogos/séries */
+  --grid-lib:     var(--grid-poster);  /* biblioteca geral */
   --grid-cats:    repeat(5, 1fr);      /* library category cards */
   --ease:         cubic-bezier(.16,1,.3,1);
   --spring:       cubic-bezier(.34,1.56,.64,1);
@@ -225,9 +229,7 @@ body {
 @media (max-width: 1024px) {
   :root {
     --page-x:    32px;
-    --grid-films: repeat(4, 1fr);
-    --grid-games: repeat(3, 1fr);
-    --grid-lib:   repeat(5, 1fr);
+    --grid-poster: repeat(auto-fill, minmax(150px, 1fr));
     --grid-cats:  repeat(5, 1fr);
   }
 }
@@ -237,9 +239,7 @@ body {
   :root {
     --page-x:      16px;
     --bottomnav-h: calc(60px + env(safe-area-inset-bottom, 0px));
-    --grid-films:  repeat(3, 1fr);
-    --grid-games:  repeat(2, 1fr);
-    --grid-lib:    repeat(3, 1fr);
+    --grid-poster: repeat(auto-fill, minmax(118px, 1fr));
     --grid-cats:   repeat(2, 1fr);
   }
   .desktop-only { display: none !important; }
@@ -250,8 +250,7 @@ body {
 @media (max-width: 420px) {
   :root {
     --page-x:     14px;
-    --grid-films: repeat(2, 1fr);
-    --grid-lib:   repeat(3, 1fr);
+    --grid-poster: repeat(auto-fill, minmax(104px, 1fr));
     --grid-cats:  repeat(2, 1fr);
   }
 }

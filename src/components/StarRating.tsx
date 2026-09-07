@@ -1,4 +1,4 @@
-import { useState, useId } from 'react'
+import { useState, useId, useRef } from 'react'
 
 interface Props {
   value: number
@@ -12,6 +12,9 @@ const PATH = 'M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14
 export function StarRating({ value, onChange, readonly = false, size = 'md' }: Props) {
   const [hover, setHover] = useState<number | null>(null)
   const uid = useId()
+  // Track how the last interaction started. Touch pointers can't reliably hit
+  // the left/right half of a small star, so we snap taps to whole stars.
+  const lastPointer = useRef<string>('mouse')
 
   const px = size === 'sm' ? 16 : size === 'lg' ? 28 : 22
   const display = hover ?? value
@@ -47,15 +50,19 @@ export function StarRating({ value, onChange, readonly = false, size = 'md' }: P
             disabled={readonly}
             style={{ width: px, height: px, padding: 0, background: 'none', border: 'none' }}
             className={`flex-shrink-0 transition-transform ${readonly ? 'cursor-default' : 'cursor-pointer hover:scale-110'}`}
-            onMouseMove={e => {
-              if (readonly) return
+            onPointerDown={e => { lastPointer.current = e.pointerType }}
+            onPointerMove={e => {
+              // Only fine pointers (mouse/pen) get half-star hover preview.
+              if (readonly || e.pointerType === 'touch') return
               const rect = e.currentTarget.getBoundingClientRect()
               setHover(e.clientX < rect.left + rect.width / 2 ? star - 0.5 : star)
             }}
             onClick={() => {
               if (readonly || !onChange) return
-              const next = hover ?? star
+              // Touch taps select the whole star; mouse/pen use the hovered half.
+              const next = lastPointer.current === 'touch' ? star : (hover ?? star)
               onChange(next === value ? 0 : next)
+              setHover(null)
             }}
           >
             <svg width={px} height={px} viewBox="0 0 24 24" style={{ display: 'block' }}>

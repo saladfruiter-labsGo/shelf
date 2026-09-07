@@ -87,6 +87,12 @@ const upsertSeriesShow = db.prepare(`
 `)
 const getMediaId = db.prepare(`SELECT id FROM media_items WHERE external_id = ? AND type = ?`)
 
+/** Registra no diário cada vez que um filme é assistido (scrobble) no Plex. */
+const insertDiaryEntry = db.prepare(`
+  INSERT INTO diary_entries (media_item_id, watched_at, rating, comment, source)
+  VALUES (?, ?, NULL, NULL, 'plex')
+`)
+
 function slugify(s: string): string {
   return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
 }
@@ -216,6 +222,13 @@ app.post('/plex/webhook', async (c) => {
         external_id: m.external_ref, type: m.media_type, title: m.title,
         cover_url: m.cover_url, year: meta.year ?? null, author, rating: 0, completed_at: now,
       })
+      // Cada vez que um filme é assistido vira um registro no diário (permite
+      // registrar a mesma mídia várias vezes). Música fica de fora para não
+      // inundar o diário com scrobbles.
+      if (m.kind === 'movie') {
+        const row = getMediaId.get(m.external_ref, 'movie') as { id: number } | undefined
+        if (row) insertDiaryEntry.run(row.id, now)
+      }
     }
   } else if (event === 'media.rate' && rating5 != null) {
     insertActivity.run({
