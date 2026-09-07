@@ -304,19 +304,65 @@ export async function renderStory(template: StoryTemplate, subject: StorySubject
   await RENDERERS[template](ctx, subject)
 }
 
-/** Renderiza fora da tela e dispara o download do PNG. */
-export async function downloadStory(template: StoryTemplate, subject: StorySubject): Promise<void> {
+function storyFileName(template: StoryTemplate, subject: StorySubject): string {
+  return `shelf-${template}-${subject.title.slice(0, 30).replace(/\s+/g, '-').toLowerCase()}.png`
+}
+
+/** Renderiza fora da tela e retorna o PNG como Blob. */
+async function renderToBlob(template: StoryTemplate, subject: StorySubject): Promise<Blob | null> {
   const canvas = document.createElement('canvas')
   await renderStory(template, subject, canvas)
-  await new Promise<void>(resolve => {
-    canvas.toBlob(blob => {
-      if (!blob) return resolve()
-      const a = document.createElement('a')
-      a.href = URL.createObjectURL(blob)
-      a.download = `shelf-${template}-${subject.title.slice(0, 30).replace(/\s+/g, '-').toLowerCase()}.png`
-      a.click()
-      URL.revokeObjectURL(a.href)
-      resolve()
-    }, 'image/png')
-  })
+  return new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'))
+}
+
+function saveBlob(blob: Blob, filename: string) {
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(a.href)
+}
+
+/** Indica se o navegador consegue compartilhar arquivos (Web Share API nível 2). */
+export function canShareStory(): boolean {
+  if (typeof navigator === 'undefined' || !navigator.canShare) return false
+  try {
+    const probe = new File([new Blob([''], { type: 'image/png' })], 'probe.png', { type: 'image/png' })
+    return navigator.canShare({ files: [probe] })
+  } catch {
+    return false
+  }
+}
+
+/** Renderiza fora da tela e dispara o download do PNG. */
+export async function downloadStory(template: StoryTemplate, subject: StorySubject): Promise<void> {
+  const blob = await renderToBlob(template, subject)
+  if (blob) saveBlob(blob, storyFileName(template, subject))
+}
+
+export type ShareResult = 'shared' | 'downloaded' | 'cancelled'
+
+/**
+ * Compartilha o Story pela folha nativa (Instagram, etc.) via Web Share API.
+ * Sem suporte, faz fallback pro download. Se o usuário fechar a folha, não baixa.
+ */
+export async function shareStory(template: StoryTemplate, subject: StorySubject): Promise<ShareResult> {
+  const blob = await renderToBlob(template, subject)
+  if (!blob) return 'cancelled'
+
+  const file = new File([blob], storyFileName(template, subject), { type: 'image/png' })
+
+  if (typeof navigator !== 'undefined' && navigator.canShare?.({ files: [file] })) {
+    try {
+      await navigator.share({ files: [file], title: subject.title })
+      return 'shared'
+    } catch (err) {
+      // Usuário fechou a folha → não força o download.
+      if (err instanceof DOMException && err.name === 'AbortError') return 'cancelled'
+      // Qualquer outra falha cai no fallback abaixo.
+    }
+  }
+
+  saveBlob(blob, file.name)
+  return 'downloaded'
 }
