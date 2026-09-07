@@ -37,7 +37,8 @@ app.get('/recent', (c) => {
   const perType = parseInt(c.req.query('per_type') ?? '12')
   const result: Record<string, unknown[]> = {}
   for (const t of ['movie', 'series', 'game', 'book']) {
-    const rows = db.prepare('SELECT * FROM media_items WHERE type = ? ORDER BY added_at DESC LIMIT ?').all(t, perType) as any[]
+    // Só a biblioteca (consumido): wishlist mora apenas na Wishlist.
+    const rows = db.prepare("SELECT * FROM media_items WHERE type = ? AND status != 'wishlist' ORDER BY added_at DESC LIMIT ?").all(t, perType) as any[]
     result[t] = t === 'series' || t === 'book' ? withProgress(rows) : rows
   }
   return c.json(result)
