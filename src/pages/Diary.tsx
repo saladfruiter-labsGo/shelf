@@ -6,6 +6,7 @@ import type { DiaryEntry } from '../types'
 import { StoryModal } from '../components/StoryModal'
 import { DiaryEntryModal, type DiaryEntryValues } from '../components/DiaryEntryModal'
 import { ConfirmDialog } from '../components/ConfirmDialog'
+import { useIsMobile } from '../hooks/useIsMobile'
 import type { StorySubject } from '../lib/story'
 
 const TYPE_EMOJI: Record<string, string> = {
@@ -34,6 +35,7 @@ function subjectOf(e: DiaryEntry): StorySubject {
 export function Diary() {
   const navigate = useNavigate()
   const qc = useQueryClient()
+  const isMobile = useIsMobile()
 
   const [storyFor, setStoryFor]   = useState<DiaryEntry | null>(null)
   const [editing, setEditing]     = useState<DiaryEntry | null>(null)
@@ -132,7 +134,9 @@ export function Diary() {
                   <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: '.5px', textTransform: 'uppercase', padding: '3px 8px', borderRadius: 4, background: cat.bg, color: cat.color, whiteSpace: 'nowrap' }}>
                     {cat.label}
                   </span>
-                  <button onClick={() => setStoryFor(entry)} title="Gerar Story" className="diary-action">🎨</button>
+                  {isMobile && (
+                    <button onClick={() => setStoryFor(entry)} title="Gerar Story" className="diary-action">🎨</button>
+                  )}
                   <button onClick={() => setEditing(entry)} title="Editar" className="diary-action">✎</button>
                   <button onClick={() => setRemoving(entry)} title="Remover" className="diary-action diary-action-danger">🗑</button>
                 </div>

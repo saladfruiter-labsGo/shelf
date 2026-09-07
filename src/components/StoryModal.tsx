@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
-import { STORY_TEMPLATES, renderStory, downloadStory, type StoryTemplate, type StorySubject } from '../lib/story'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { STORY_TEMPLATES, renderStory, downloadStory, shareStory, canShareStory, type StoryTemplate, type StorySubject } from '../lib/story'
 
 interface Props {
   open:    boolean
@@ -10,7 +10,8 @@ interface Props {
 /** Modal para escolher um modelo de Story, ver preview e baixar. */
 export function StoryModal({ open, subject, onClose }: Props) {
   const canvasRefs = useRef<Record<string, HTMLCanvasElement | null>>({})
-  const [downloading, setDownloading] = useState<StoryTemplate | null>(null)
+  const [busy, setBusy] = useState<StoryTemplate | null>(null)
+  const shareable = useMemo(() => canShareStory(), [])
 
   // Renderiza os previews sempre que abrir (ou mudar o item)
   useEffect(() => {
@@ -36,9 +37,12 @@ export function StoryModal({ open, subject, onClose }: Props) {
 
   if (!open || !subject) return null
 
-  const handleDownload = async (t: StoryTemplate) => {
-    setDownloading(t)
-    try { await downloadStory(t, subject) } finally { setDownloading(null) }
+  const handleAction = async (t: StoryTemplate) => {
+    setBusy(t)
+    try {
+      if (shareable) await shareStory(t, subject)
+      else await downloadStory(t, subject)
+    } finally { setBusy(null) }
   }
 
   return (
@@ -52,14 +56,16 @@ export function StoryModal({ open, subject, onClose }: Props) {
           </div>
           <button onClick={onClose} className="text-muted hover:text-primary text-xl leading-none">×</button>
         </div>
-        <p className="text-sm text-muted mb-5">Escolha um modelo para baixar (1080×1920).</p>
+        <p className="text-sm text-muted mb-5">
+          {shareable ? 'Escolha um modelo e compartilhe' : 'Escolha um modelo para baixar'} (1080×1920).
+        </p>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {STORY_TEMPLATES.map(t => (
             <button
               key={t.id}
-              onClick={() => handleDownload(t.id)}
-              disabled={downloading !== null}
+              onClick={() => handleAction(t.id)}
+              disabled={busy !== null}
               className="group flex flex-col items-stretch text-left rounded-xl border border-border hover:border-accent bg-card overflow-hidden transition-colors disabled:opacity-60"
             >
               <div className="relative aspect-[9/16] bg-black/40">
@@ -70,7 +76,7 @@ export function StoryModal({ open, subject, onClose }: Props) {
                 />
                 <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity">
                   <span className="text-xs font-semibold text-white">
-                    {downloading === t.id ? 'Gerando...' : '↓ Baixar'}
+                    {busy === t.id ? 'Gerando...' : shareable ? '↗ Compartilhar' : '↓ Baixar'}
                   </span>
                 </div>
               </div>
