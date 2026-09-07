@@ -70,7 +70,7 @@ export function Diary() {
 
   return (
     <div style={{ background: 'var(--bg)', minHeight: '100vh' }}>
-      <div style={{ padding: '80px var(--page-x) 48px', maxWidth: 860, margin: '0 auto' }}>
+      <div style={{ padding: '64px var(--page-x) 48px', maxWidth: 1280, margin: '0 auto' }}>
         <p style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '2.5px', color: 'var(--dim)', marginBottom: 16 }}>
           Histórico
         </p>
@@ -82,7 +82,7 @@ export function Diary() {
         </p>
       </div>
 
-      <div style={{ maxWidth: 860, margin: '0 auto', padding: '0 var(--page-x) 80px' }}>
+      <div style={{ maxWidth: 1280, margin: '0 auto', padding: '0 var(--page-x) 80px' }}>
         {isLoading ? (
           Array.from({ length: 6 }).map((_, i) => (
             <div key={i} style={{ height: 72, borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 16 }}>

@@ -29,7 +29,7 @@ export function Library() {
 
   return (
     <div style={{ background: 'var(--bg)', minHeight: '100vh' }}>
-      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '80px var(--page-x)' }}>
+      <div style={{ maxWidth: 1280, margin: '0 auto', padding: '64px var(--page-x) 80px' }}>
 
         {/* Header */}
         <p style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '2.5px', color: 'var(--dim)', marginBottom: 16 }}>

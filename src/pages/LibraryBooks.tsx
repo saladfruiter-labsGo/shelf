@@ -25,7 +25,7 @@ export function LibraryBooks() {
   return (
     <div style={{ background: 'var(--bg)', color: 'var(--text-primary)', minHeight: '100vh' }}>
       {/* Header */}
-      <div style={{ padding: '64px var(--page-x) 48px', maxWidth: 1200, margin: '0 auto', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between' }}>
+      <div style={{ padding: '64px var(--page-x) 48px', maxWidth: 1280, margin: '0 auto', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between' }}>
         <div>
           <button
             onClick={() => navigate('/library')}
@@ -47,7 +47,7 @@ export function LibraryBooks() {
       </div>
 
       {/* List */}
-      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 var(--page-x) 80px' }}>
+      <div style={{ maxWidth: 1280, margin: '0 auto', padding: '0 var(--page-x) 80px' }}>
         {isLoading
           ? Array.from({ length: 5 }).map((_, i) => (
               <div key={i} style={{ height: 72, background: 'var(--card)', borderRadius: 8, margin: '4px -16px', marginBottom: 0, borderBottom: '1px solid var(--border)' }} />
