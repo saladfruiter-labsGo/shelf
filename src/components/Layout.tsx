@@ -10,11 +10,12 @@ import { CATEGORIES } from '../lib/categories'
 import type { MediaItem } from '../types'
 
 const NAV = [
-  { to: '/',        label: 'Home',        end: true  },
-  { to: '/library', label: 'Biblioteca',  end: false },
-  { to: '/diary',   label: 'Diário',      end: false },
-  { to: '/lists',   label: 'Listas',      end: false },
-  { to: '/wrap',    label: 'Wrap',        end: false },
+  { to: '/',         label: 'Home',        end: true  },
+  { to: '/library',  label: 'Biblioteca',  end: false },
+  { to: '/wishlist', label: 'Wishlist',    end: false },
+  { to: '/diary',    label: 'Diário',      end: false },
+  { to: '/lists',    label: 'Listas',      end: false },
+  { to: '/wrap',     label: 'Wrap',        end: false },
 ]
 
 const navLinkStyle = (isActive: boolean) => ({
@@ -130,15 +131,17 @@ const iconProps = { width: 22, height: 22, fill: 'none', viewBox: '0 0 24 24', s
 function HomeIcon()    { return (<svg {...iconProps}><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg>) }
 function LibraryIcon() { return (<svg {...iconProps}><rect x="4" y="3" width="5" height="18" rx="1"/><rect x="11" y="3" width="5" height="18" rx="1"/><path d="M18.5 4.5l2.4 16"/></svg>) }
 function DiaryIcon()   { return (<svg {...iconProps}><path d="M6 3h11a2 2 0 012 2v14a2 2 0 01-2 2H6a1 1 0 01-1-1V4a1 1 0 011-1z"/><path d="M9 3v18"/></svg>) }
+function WishlistIcon() { return (<svg {...iconProps}><path d="M20.8 4.6a5.5 5.5 0 00-7.8 0L12 5.6l-1-1a5.5 5.5 0 00-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 000-7.8z"/></svg>) }
 function ListsIcon()   { return (<svg {...iconProps}><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>) }
 function WrapIcon()    { return (<svg {...iconProps}><path d="M12 3v18"/><path d="M5 8s2-3 7-3 7 3 7 3M5 8v8c0 2 3 3 7 3s7-1 7-3V8"/></svg>) }
 
 const BOTTOM_NAV = [
-  { to: '/',        label: 'Home',   end: true,  Icon: HomeIcon },
-  { to: '/library', label: 'Biblioteca', end: false, Icon: LibraryIcon },
-  { to: '/diary',   label: 'Diário', end: false, Icon: DiaryIcon },
-  { to: '/lists',   label: 'Listas', end: false, Icon: ListsIcon },
-  { to: '/wrap',    label: 'Wrap',   end: false, Icon: WrapIcon },
+  { to: '/',         label: 'Home',   end: true,  Icon: HomeIcon },
+  { to: '/library',  label: 'Biblioteca', end: false, Icon: LibraryIcon },
+  { to: '/wishlist', label: 'Wishlist', end: false, Icon: WishlistIcon },
+  { to: '/diary',    label: 'Diário', end: false, Icon: DiaryIcon },
+  { to: '/lists',    label: 'Listas', end: false, Icon: ListsIcon },
+  { to: '/wrap',     label: 'Wrap',   end: false, Icon: WrapIcon },
 ]
 
 /* ─── Profile Overlay (year-by-year stats) ─── */

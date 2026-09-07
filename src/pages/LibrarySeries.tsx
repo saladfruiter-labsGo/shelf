@@ -15,10 +15,13 @@ export function LibrarySeries() {
   const navigate = useNavigate()
   const [openId, setOpenId] = useState<number | null>(null)
 
-  const { data: items = [], isLoading } = useQuery({
+  const { data: rawItems = [], isLoading } = useQuery({
     queryKey: ['media', 'series'],
     queryFn: () => api.media.list({ type: 'series', limit: 500 }),
   })
+
+  // Itens em wishlist ficam só na Wishlist, fora da biblioteca.
+  const items = rawItems.filter(i => i.status !== 'wishlist')
 
   const done     = items.filter(i => i.status === 'completed').length
 

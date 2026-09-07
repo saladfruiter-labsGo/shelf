@@ -15,10 +15,14 @@ const CATS = [
 export function Library() {
   const navigate = useNavigate()
 
-  const { data: allItems = [], isLoading } = useQuery({
+  const { data: rawItems = [], isLoading } = useQuery({
     queryKey: ['media-all'],
     queryFn: () => api.media.list({ limit: 500 }),
   })
+
+  // A wishlist é separada da coleção: itens ainda não adquiridos/consumidos
+  // vivem só na Wishlist e não contam para a biblioteca.
+  const allItems = rawItems.filter(i => i.status !== 'wishlist')
 
   const countByType = (key: MediaType) =>
     allItems.filter(i => i.type === key).length

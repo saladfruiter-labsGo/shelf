@@ -9,6 +9,7 @@ import { LibraryFilms } from './pages/LibraryFilms'
 import { LibrarySeries } from './pages/LibrarySeries'
 import { LibraryMusic } from './pages/LibraryMusic'
 import { Diary }        from './pages/Diary'
+import { Wishlist }     from './pages/Wishlist'
 import { MediaDetail }  from './pages/MediaDetail'
 import { Wrap }         from './pages/Wrap'
 import { Settings }     from './pages/Settings'
@@ -33,6 +34,7 @@ export function App() {
             <Route path="library/series" element={<LibrarySeries />} />
             <Route path="library/music"  element={<LibraryMusic />} />
             <Route path="diary"      element={<Diary />} />
+            <Route path="wishlist"   element={<Wishlist />} />
             <Route path="media/:id"  element={<MediaDetail />} />
             <Route path="wrap"       element={<Wrap />} />
             <Route path="settings"   element={<Settings />} />

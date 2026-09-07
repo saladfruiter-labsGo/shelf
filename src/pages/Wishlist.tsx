@@ -1,0 +1,305 @@
+import { useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { api } from '../lib/api'
+import { DiaryEntryModal, type DiaryEntryValues } from '../components/DiaryEntryModal'
+import { CategoryTag } from '../components/CategoryTag'
+import { TYPE_LABEL, formatDate } from '../lib/utils'
+import type { MediaItem, MediaType } from '../types'
+
+/* ─── Ordenações disponíveis ─── */
+type SortKey = 'added_desc' | 'added_asc' | 'release_desc' | 'release_asc'
+const SORTS: { value: SortKey; label: string }[] = [
+  { value: 'added_desc',   label: 'Adicionado — recente' },
+  { value: 'added_asc',    label: 'Adicionado — antigo' },
+  { value: 'release_desc', label: 'Lançamento — recente' },
+  { value: 'release_asc',  label: 'Lançamento — antigo' },
+]
+
+const TYPE_EMOJI: Record<MediaType, string> = {
+  movie: '🎬', series: '📺', game: '🎮', book: '📚', music: '🎵',
+}
+
+/** Mês (YYYY-MM) de added_at. */
+function addedMonthKey(iso: string): string {
+  return iso.slice(0, 7)
+}
+function monthLabel(key: string): string {
+  const [y, m] = key.split('-').map(Number)
+  const s = new Date(y, m - 1, 1).toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' })
+  return s.charAt(0).toUpperCase() + s.slice(1)
+}
+
+/* ─── Select estilizado (combina com o resto do app) ─── */
+function FilterSelect({
+  label, value, onChange, options,
+}: {
+  label: string
+  value: string
+  onChange: (v: string) => void
+  options: { value: string; label: string }[]
+}) {
+  if (options.length === 0) return null
+  return (
+    <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <span style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '1.5px', color: 'var(--text-muted)' }}>
+        {label}
+      </span>
+      <select
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        style={{
+          background: value ? 'var(--accent-bg)' : 'var(--card)',
+          border: `1px solid ${value ? 'var(--accent)' : 'var(--border-strong)'}`,
+          color: value ? 'var(--accent)' : 'var(--text-secondary)',
+          borderRadius: 9999, padding: '7px 14px', fontSize: 13, fontWeight: 500,
+          cursor: 'pointer', outline: 'none', fontFamily: 'inherit', minWidth: 120,
+        }}
+      >
+        <option value="">Todos</option>
+        {options.map(o => (
+          <option key={o.value} value={o.value}>{o.label}</option>
+        ))}
+      </select>
+    </label>
+  )
+}
+
+export function Wishlist() {
+  const navigate = useNavigate()
+  const qc = useQueryClient()
+
+  const { data: items = [], isLoading } = useQuery({
+    queryKey: ['media', 'wishlist'],
+    queryFn: () => api.media.list({ status: 'wishlist', limit: 500 }),
+  })
+
+  /* ─── filtros ─── */
+  const [fType, setFType]         = useState('')
+  const [fGenre, setFGenre]       = useState('')
+  const [fYear, setFYear]         = useState('')
+  const [fDecade, setFDecade]     = useState('')
+  const [fDirector, setFDirector] = useState('')
+  const [fMonth, setFMonth]       = useState('')
+  const [sort, setSort]           = useState<SortKey>('added_desc')
+
+  /* ─── modal "adicionar ao diário" ─── */
+  const [diaryFor, setDiaryFor] = useState<MediaItem | null>(null)
+
+  const addToDiary = useMutation({
+    mutationFn: (values: DiaryEntryValues) =>
+      api.diary.create({
+        media_item_id: diaryFor!.id,
+        watched_at: values.watched_at,
+        rating: values.rating > 0 ? values.rating : null,
+        comment: values.comment || null,
+      }),
+    onSuccess: () => {
+      // O servidor marca a mídia como concluída → sai da wishlist e entra na biblioteca.
+      qc.invalidateQueries({ queryKey: ['media'] })
+      qc.invalidateQueries({ queryKey: ['media-all'] })
+      qc.invalidateQueries({ queryKey: ['recent'] })
+      qc.invalidateQueries({ queryKey: ['upcoming'] })
+      qc.invalidateQueries({ queryKey: ['diary'] })
+      setDiaryFor(null)
+    },
+  })
+
+  /* ─── opções de filtro derivadas dos itens ─── */
+  const opts = useMemo(() => {
+    const uniq = <T,>(arr: T[]) => Array.from(new Set(arr))
+    const types    = uniq(items.map(i => i.type))
+    const genres   = uniq(items.map(i => i.genre).filter((g): g is string => !!g)).sort()
+    const years    = uniq(items.map(i => i.year).filter((y): y is number => !!y).map(String))
+      .sort((a, b) => Number(b) - Number(a))
+    const decades  = uniq(items.map(i => i.year).filter((y): y is number => !!y).map(y => `${Math.floor(y / 10) * 10}`))
+      .sort((a, b) => Number(b) - Number(a))
+    const directors = uniq(items.map(i => i.creators).filter((c): c is string => !!c)).sort()
+    const months   = uniq(items.map(i => addedMonthKey(i.added_at))).sort((a, b) => (a < b ? 1 : -1))
+    return {
+      types:     types.map(t => ({ value: t, label: `${TYPE_EMOJI[t]} ${TYPE_LABEL[t]}` })),
+      genres:    genres.map(g => ({ value: g, label: g })),
+      years:     years.map(y => ({ value: y, label: y })),
+      decades:   decades.map(d => ({ value: d, label: `Anos ${d}` })),
+      directors: directors.map(d => ({ value: d, label: d })),
+      months:    months.map(m => ({ value: m, label: monthLabel(m) })),
+    }
+  }, [items])
+
+  /* ─── aplica filtros + ordenação ─── */
+  const filtered = useMemo(() => {
+    let out = items.filter(i =>
+      (!fType     || i.type === fType) &&
+      (!fGenre    || i.genre === fGenre) &&
+      (!fYear     || String(i.year) === fYear) &&
+      (!fDecade   || (i.year != null && `${Math.floor(i.year / 10) * 10}` === fDecade)) &&
+      (!fDirector || i.creators === fDirector) &&
+      (!fMonth    || addedMonthKey(i.added_at) === fMonth)
+    )
+    const time = (v: string | null | undefined) => (v ? new Date(v).getTime() : 0)
+    out = [...out].sort((a, b) => {
+      switch (sort) {
+        case 'added_asc':    return time(a.added_at) - time(b.added_at)
+        case 'release_desc': return time(b.release_date) - time(a.release_date)
+        case 'release_asc':  return time(a.release_date) - time(b.release_date)
+        case 'added_desc':
+        default:             return time(b.added_at) - time(a.added_at)
+      }
+    })
+    return out
+  }, [items, fType, fGenre, fYear, fDecade, fDirector, fMonth, sort])
+
+  const anyFilter = fType || fGenre || fYear || fDecade || fDirector || fMonth
+  const clearAll = () => { setFType(''); setFGenre(''); setFYear(''); setFDecade(''); setFDirector(''); setFMonth('') }
+
+  return (
+    <div style={{ background: 'var(--bg)', minHeight: '100vh' }}>
+      <div style={{ maxWidth: 1280, margin: '0 auto', padding: '64px var(--page-x) 80px' }}>
+
+        {/* Header */}
+        <p style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '2.5px', color: 'var(--dim)', marginBottom: 16 }}>
+          Quero consumir
+        </p>
+        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 24, flexWrap: 'wrap', marginBottom: 40 }}>
+          <h1 style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: 'clamp(40px,5vw,72px)', fontWeight: 800, letterSpacing: '-2px', lineHeight: 1, color: 'var(--text-primary)' }}>
+            Wishlist
+          </h1>
+          <p style={{ fontFamily: 'Space Grotesk, monospace', fontSize: 13, color: 'var(--text-muted)', paddingBottom: 8 }}>
+            {filtered.length}{anyFilter ? ` de ${items.length}` : ''} {items.length === 1 ? 'item' : 'itens'}
+          </p>
+        </div>
+
+        {/* Barra de filtros + ordenação */}
+        {items.length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', gap: 12, marginBottom: 40 }}>
+            <FilterSelect label="Tipo"      value={fType}     onChange={setFType}     options={opts.types} />
+            <FilterSelect label="Gênero"    value={fGenre}    onChange={setFGenre}    options={opts.genres} />
+            <FilterSelect label="Ano"       value={fYear}     onChange={setFYear}     options={opts.years} />
+            <FilterSelect label="Década"    value={fDecade}   onChange={setFDecade}   options={opts.decades} />
+            <FilterSelect label="Diretor"   value={fDirector} onChange={setFDirector} options={opts.directors} />
+            <FilterSelect label="Mês adic." value={fMonth}    onChange={setFMonth}    options={opts.months} />
+
+            {/* Ordenação */}
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 4, marginLeft: 'auto' }}>
+              <span style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '1.5px', color: 'var(--text-muted)' }}>
+                Ordenar
+              </span>
+              <select
+                value={sort}
+                onChange={e => setSort(e.target.value as SortKey)}
+                style={{
+                  background: 'var(--card)', border: '1px solid var(--border-strong)',
+                  color: 'var(--text-secondary)', borderRadius: 9999, padding: '7px 14px',
+                  fontSize: 13, fontWeight: 500, cursor: 'pointer', outline: 'none', fontFamily: 'inherit',
+                }}
+              >
+                {SORTS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+              </select>
+            </label>
+
+            {anyFilter && (
+              <button
+                onClick={clearAll}
+                className="link-accent"
+                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 12, paddingBottom: 8 }}
+              >
+                Limpar filtros
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Grid */}
+        {isLoading ? (
+          <div style={{ display: 'grid', gridTemplateColumns: 'var(--grid-poster)', gap: 16 }}>
+            {Array.from({ length: 10 }).map((_, i) => (
+              <div key={i} style={{ aspectRatio: '2/3', background: 'var(--card)', borderRadius: 12 }} className="animate-pulse" />
+            ))}
+          </div>
+        ) : filtered.length > 0 ? (
+          <div style={{ display: 'grid', gridTemplateColumns: 'var(--grid-poster)', gap: 16 }}>
+            {filtered.map(item => (
+              <div key={item.id} className="group" style={{ display: 'flex', flexDirection: 'column' }}>
+                {/* Poster → detalhe */}
+                <div
+                  onClick={() => navigate(`/media/${item.id}`)}
+                  className="media-pop"
+                  style={{
+                    aspectRatio: '2/3', background: 'var(--card)', borderRadius: 12,
+                    overflow: 'hidden', position: 'relative', cursor: 'pointer',
+                    border: '1px solid var(--border)', display: 'flex',
+                    alignItems: 'center', justifyContent: 'center', fontSize: 56, marginBottom: 10,
+                  }}
+                >
+                  {item.cover_url
+                    ? <img src={item.cover_url} alt={item.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    : TYPE_EMOJI[item.type]
+                  }
+                  <div style={{ position: 'absolute', top: 8, left: 8 }}>
+                    <CategoryTag type={item.type} size="sm" />
+                  </div>
+                  {item.release_date && (
+                    <div style={{
+                      position: 'absolute', bottom: 8, left: 8, right: 8,
+                      fontSize: 10, fontWeight: 600, color: '#fff',
+                      background: 'rgba(0,0,0,.6)', backdropFilter: 'blur(4px)',
+                      borderRadius: 6, padding: '3px 8px', textAlign: 'center',
+                    }}>
+                      📅 {formatDate(item.release_date)}
+                    </div>
+                  )}
+                </div>
+
+                {/* Título + meta */}
+                <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.2, marginBottom: 2 }}>
+                  {item.title}
+                </p>
+                <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>
+                  {[item.year, item.genre].filter(Boolean).join(' · ') || '—'}
+                </p>
+
+                {/* Ação: adicionar ao diário */}
+                <button
+                  onClick={() => setDiaryFor(item)}
+                  className="btn-accent"
+                  style={{
+                    marginTop: 'auto', width: '100%', padding: '8px 12px',
+                    background: 'var(--accent)', border: 'none', borderRadius: 8,
+                    color: '#000', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                  }}
+                >
+                  + Diário
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : items.length > 0 ? (
+          <div style={{ textAlign: 'center', padding: '80px 0' }}>
+            <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>Nenhum item corresponde aos filtros.</p>
+          </div>
+        ) : (
+          <div style={{ textAlign: 'center', padding: '100px 0' }}>
+            <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '3rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--border)', marginBottom: 12 }}>
+              Vazia
+            </p>
+            <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>
+              Adicione algo com status <strong style={{ color: 'var(--text-secondary)' }}>Wishlist</strong> pelo ⌘K.
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* Modal: adicionar ao diário (marca como concluído → entra na biblioteca) */}
+      <DiaryEntryModal
+        open={!!diaryFor}
+        mode="create"
+        title={diaryFor?.title ?? ''}
+        subtitle="Adicionar ao diário"
+        initial={{ rating: diaryFor?.rating ?? 0 }}
+        busy={addToDiary.isPending}
+        onCancel={() => setDiaryFor(null)}
+        onSubmit={values => addToDiary.mutate(values)}
+      />
+    </div>
+  )
+}
