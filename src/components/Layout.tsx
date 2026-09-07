@@ -117,6 +117,22 @@ function SearchIcon() {
   )
 }
 
+/* ─── Bottom-nav icons (mobile) ─── */
+const iconProps = { width: 22, height: 22, fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const }
+function HomeIcon()    { return (<svg {...iconProps}><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg>) }
+function LibraryIcon() { return (<svg {...iconProps}><rect x="4" y="3" width="5" height="18" rx="1"/><rect x="11" y="3" width="5" height="18" rx="1"/><path d="M18.5 4.5l2.4 16"/></svg>) }
+function DiaryIcon()   { return (<svg {...iconProps}><path d="M6 3h11a2 2 0 012 2v14a2 2 0 01-2 2H6a1 1 0 01-1-1V4a1 1 0 011-1z"/><path d="M9 3v18"/></svg>) }
+function ListsIcon()   { return (<svg {...iconProps}><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>) }
+function WrapIcon()    { return (<svg {...iconProps}><path d="M12 3v18"/><path d="M5 8s2-3 7-3 7 3 7 3M5 8v8c0 2 3 3 7 3s7-1 7-3V8"/></svg>) }
+
+const BOTTOM_NAV = [
+  { to: '/',        label: 'Home',   end: true,  Icon: HomeIcon },
+  { to: '/library', label: 'Biblioteca', end: false, Icon: LibraryIcon },
+  { to: '/diary',   label: 'Diário', end: false, Icon: DiaryIcon },
+  { to: '/lists',   label: 'Listas', end: false, Icon: ListsIcon },
+  { to: '/wrap',    label: 'Wrap',   end: false, Icon: WrapIcon },
+]
+
 /* ─── Profile Overlay (year-by-year stats) ─── */
 function ProfileOverlay({ open, onClose }: { open: boolean; onClose: () => void }) {
   const overlayRef = useRef<HTMLDivElement>(null)
@@ -248,7 +264,7 @@ export function Layout() {
       <nav style={{
         position: 'fixed', top: 0, left: 0, right: 0,
         height: 'var(--nav-h)', zIndex: 100,
-        display: 'flex', alignItems: 'center', padding: '0 32px',
+        display: 'flex', alignItems: 'center', padding: '0 var(--page-x)',
         background: dark ? 'rgba(8,8,17,.88)' : 'rgba(245,245,239,.92)',
         backdropFilter: 'blur(24px)',
         borderBottom: '1px solid var(--border)',
@@ -265,8 +281,8 @@ export function Layout() {
           Shel<span style={{ color: 'var(--accent)' }}>ved.</span>
         </button>
 
-        {/* Nav links */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 1 }}>
+        {/* Nav links (desktop) */}
+        <div className="desktop-only" style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 1 }}>
           {NAV.map(item => (
             item.to === '/library' ? (
               <LibraryNavItem key={item.to} />
@@ -286,11 +302,11 @@ export function Layout() {
 
         {/* Right controls */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto' }}>
-          {/* Add button */}
+          {/* Add button (desktop — mobile uses the floating FAB) */}
           <button
             onClick={openSearch}
             title="Adicionar mídia (⌘K)"
-            className="btn-accent"
+            className="btn-accent desktop-only"
             style={{
               display: 'flex', alignItems: 'center', gap: 6,
               padding: '7px 16px',
@@ -316,7 +332,7 @@ export function Layout() {
             }}
           >
             <SearchIcon />
-            <span style={{ fontFamily: 'Space Grotesk, monospace', fontSize: 11, color: 'var(--dim)' }}>⌘K</span>
+            <span className="desktop-only" style={{ fontFamily: 'Space Grotesk, monospace', fontSize: 11, color: 'var(--dim)' }}>⌘K</span>
           </button>
 
           {/* Theme toggle */}
@@ -385,9 +401,43 @@ export function Layout() {
       <NowPlayingBar />
 
       {/* Main content */}
-      <main style={{ paddingTop: 'calc(var(--nav-h) + var(--npbar-h, 0px))', minHeight: '100vh', transition: 'padding-top .2s' }}>
+      <main style={{ paddingTop: 'calc(var(--nav-h) + var(--npbar-h, 0px))', paddingBottom: 'var(--bottomnav-h)', minHeight: '100vh', transition: 'padding-top .2s' }}>
         <Outlet />
       </main>
+
+      {/* Floating "Add" button (mobile only) */}
+      <button
+        onClick={openSearch}
+        aria-label="Adicionar mídia"
+        className="mobile-only btn-accent"
+        style={{
+          position: 'fixed',
+          right: 'var(--page-x)',
+          bottom: 'calc(var(--bottomnav-h) + 16px)',
+          width: 56, height: 56, borderRadius: '50%',
+          background: 'var(--accent)', border: 'none', color: '#000',
+          alignItems: 'center', justifyContent: 'center',
+          fontSize: 30, lineHeight: 1, cursor: 'pointer', zIndex: 129,
+          boxShadow: '0 8px 24px rgba(0,0,0,.4)',
+        }}
+      >
+        +
+      </button>
+
+      {/* Bottom tab bar (mobile only) */}
+      <nav className="bottom-nav" aria-label="Navegação">
+        {BOTTOM_NAV.map(({ to, label, end, Icon }) => (
+          <NavLink
+            key={to}
+            to={to}
+            end={end}
+            className={({ isActive }) => 'bottom-nav-item' + (isActive ? ' active' : '')}
+          >
+            <span className="bn-icon"><Icon /></span>
+            {label}
+          </NavLink>
+        ))}
+      </nav>
 
       {/* Profile overlay */}
       <ProfileOverlay open={profileOpen} onClose={() => setProfileOpen(false)} />

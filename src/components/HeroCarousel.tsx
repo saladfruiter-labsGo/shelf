@@ -56,7 +56,7 @@ export function HeroCarousel({ items }: Props) {
               <div aria-hidden style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, var(--bg) 1%, rgba(0,0,0,.15) 40%, rgba(0,0,0,.35) 100%)' }} />
               <div aria-hidden style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to right, rgba(0,0,0,.75) 0%, rgba(0,0,0,.35) 45%, transparent 70%)' }} />
 
-              <div style={{ position: 'relative', height: '100%', maxWidth: 1200, margin: '0 auto', padding: '0 64px', display: 'flex', alignItems: 'center', gap: 56 }}>
+              <div style={{ position: 'relative', height: '100%', maxWidth: 1200, margin: '0 auto', padding: '0 var(--page-x)', display: 'flex', alignItems: 'center', gap: 56 }}>
                 {/* text column */}
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <p style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '2.5px', color: '#fff', opacity: .8, marginBottom: 20 }}>
