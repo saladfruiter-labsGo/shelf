@@ -449,8 +449,11 @@ interface KavitaSeries {
   name: string
   pages: number
   pagesRead: number
-  userRating: number
-  hasUserRated: boolean
+  userRating?: number
+  hasUserRated?: boolean
+  // nomes alternativos vistos em diferentes versões da API do Kavita
+  rating?: number
+  hasBeenRated?: boolean
   latestReadDate: string | null
   libraryId: number
 }
@@ -558,10 +561,16 @@ async function kavitaAuthor(seriesId: number): Promise<string | null> {
   } catch { return null }
 }
 
-/** Normaliza a nota do Kavita para a escala 0–5 (meio-ponto) do Shelf. */
+/**
+ * Normaliza a nota do Kavita para a escala 0–5 (meio-ponto) do Shelf.
+ * O nome dos campos de nota mudou entre versões da API do Kavita
+ * (userRating/hasUserRated vs rating/hasBeenRated) — aceita qualquer um.
+ * Um valor > 0 já é evidência suficiente de nota, mesmo sem o flag "rated".
+ */
 function kavitaRating(s: KavitaSeries): number {
-  if (!s.hasUserRated || !s.userRating) return 0
-  let v = s.userRating
+  const raw = s.userRating ?? s.rating
+  if (!raw || raw <= 0) return 0
+  let v = raw
   if (v > 5) v = v / 20 // tolera escala 0–100 de versões antigas
   return Math.round(v * 2) / 2
 }
@@ -571,6 +580,14 @@ async function pollKavita(): Promise<void> {
   const libFilter = cfg('KAVITA_LIBRARY_ID').trim()
   const series = await kavitaAllSeries()
   if (!series.length) return
+
+  // Diagnóstico: se a API do Kavita instalado não expõe nenhum campo de nota
+  // conhecido, a sincronização de nota fica sempre em 0 — loga uma vez por
+  // ciclo para facilitar identificar o nome real do campo nos logs do container.
+  const first = series[0] as unknown as Record<string, unknown>
+  if (!('userRating' in first) && !('rating' in first) && !('hasUserRated' in first) && !('hasBeenRated' in first)) {
+    console.warn('[kavita] payload sem campos de nota conhecidos; chaves recebidas:', Object.keys(first).join(', '))
+  }
 
   const state = readKavitaState()
   for (const s of series) {
