@@ -21,7 +21,9 @@ export interface MediaItem {
   completed_at: string | null
   added_at:     string
   updated_at:   string
-  progress?:    number   // 0..1 — só séries (fração de episódios vistos)
+  progress?:    number   // 0..1 — séries (fração de episódios vistos) e livros (páginas lidas via Kavita)
+  pages_total?: number | null
+  pages_read?:  number | null
 }
 
 /* ─── Diário: registros de "visto/concluído" (N por mídia) ─── */

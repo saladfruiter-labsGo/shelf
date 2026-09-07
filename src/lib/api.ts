@@ -2,7 +2,7 @@ import type {
   Details, List, ListCheck, ListDetail,
   MediaItem, MediaStatus, MediaType,
   SearchResult, WrapData, SeriesView, DiaryEntry,
-  IntegrationStatus, NowPlaying, ActivityEvent, MusicStats,
+  IntegrationStatus, NowPlaying, ActivityEvent, ActivityMediaType, MusicStats,
 } from '../types'
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -95,10 +95,11 @@ export const api = {
     update:     (data: Record<string, unknown>): Promise<{ ok: boolean }> =>
       request('/integrations', { method: 'PATCH', body: JSON.stringify(data) }),
     nowPlaying: (): Promise<NowPlaying> => request('/integrations/now-playing'),
-    activity:   (params?: { limit?: number; source?: 'plex' | 'lastfm' | 'kavita' }): Promise<ActivityEvent[]> => {
+    activity:   (params?: { limit?: number; source?: 'plex' | 'lastfm' | 'kavita'; media_type?: ActivityMediaType }): Promise<ActivityEvent[]> => {
       const qs = new URLSearchParams()
-      if (params?.limit)  qs.set('limit', String(params.limit))
-      if (params?.source) qs.set('source', params.source)
+      if (params?.limit)      qs.set('limit', String(params.limit))
+      if (params?.source)     qs.set('source', params.source)
+      if (params?.media_type) qs.set('media_type', params.media_type)
       return request(`/integrations/activity?${qs}`)
     },
     musicStats: (): Promise<MusicStats> => request('/integrations/music/stats'),

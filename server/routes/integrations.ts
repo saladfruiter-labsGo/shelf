@@ -87,10 +87,10 @@ const upsertSeriesShow = db.prepare(`
 `)
 const getMediaId = db.prepare(`SELECT id FROM media_items WHERE external_id = ? AND type = ?`)
 
-/** Registra no diário cada vez que um filme é assistido (scrobble) no Plex. */
+/** Registra no diário cada vez que um filme/episódio é assistido (scrobble) no Plex. */
 const insertDiaryEntry = db.prepare(`
   INSERT INTO diary_entries (media_item_id, watched_at, rating, comment, source)
-  VALUES (?, ?, NULL, NULL, 'plex')
+  VALUES (?, ?, NULL, ?, 'plex')
 `)
 
 function slugify(s: string): string {
@@ -121,6 +121,11 @@ async function handlePlexEpisode(meta: PlexMeta, occurredAt: string): Promise<vo
   await ensureSeriesStructure(row.id, { guid: meta.grandparentGuid })
 
   setEpisodeWatched(row.id, meta.parentIndex, meta.index, true, meta.title ?? null, occurredAt)
+
+  // Cada episódio assistido também vira um registro no diário (fica visível no
+  // histórico, junto com filmes/livros), identificado por temporada/episódio.
+  const label = `T${meta.parentIndex}E${meta.index}${meta.title ? ` – ${meta.title}` : ''}`
+  insertDiaryEntry.run(row.id, occurredAt, label)
 }
 
 /* ──────────────────────────────────── Plex: webhook ────────────────────────────────── */
@@ -227,7 +232,7 @@ app.post('/plex/webhook', async (c) => {
       // inundar o diário com scrobbles.
       if (m.kind === 'movie') {
         const row = getMediaId.get(m.external_ref, 'movie') as { id: number } | undefined
-        if (row) insertDiaryEntry.run(row.id, now)
+        if (row) insertDiaryEntry.run(row.id, now, null)
       }
     }
   } else if (event === 'media.rate' && rating5 != null) {
@@ -452,17 +457,19 @@ interface KavitaSeries {
 
 /** Upsert de livro sem forçar conclusão (usado para 'in_progress' e como base do 'completed'). */
 const upsertBookProgress = db.prepare(`
-  INSERT INTO media_items (external_id, type, title, cover_url, author, status, rating)
-  VALUES (@external_id, 'book', @title, @cover_url, @author, @status, @rating)
+  INSERT INTO media_items (external_id, type, title, cover_url, author, status, rating, pages_total, pages_read)
+  VALUES (@external_id, 'book', @title, @cover_url, @author, @status, @rating, @pages_total, @pages_read)
   ON CONFLICT(external_id, type) DO UPDATE SET
-    title      = COALESCE(media_items.title, excluded.title),
-    cover_url  = COALESCE(media_items.cover_url, excluded.cover_url),
-    author     = COALESCE(excluded.author, media_items.author),
+    title       = COALESCE(media_items.title, excluded.title),
+    cover_url   = COALESCE(media_items.cover_url, excluded.cover_url),
+    author      = COALESCE(excluded.author, media_items.author),
     -- nunca rebaixa um livro já concluído de volta para 'in_progress'
-    status     = CASE WHEN media_items.status = 'completed' AND excluded.status = 'in_progress'
+    status      = CASE WHEN media_items.status = 'completed' AND excluded.status = 'in_progress'
                       THEN media_items.status ELSE excluded.status END,
-    rating     = CASE WHEN excluded.rating > 0 THEN excluded.rating ELSE media_items.rating END,
-    updated_at = datetime('now')
+    rating      = CASE WHEN excluded.rating > 0 THEN excluded.rating ELSE media_items.rating END,
+    pages_total = excluded.pages_total,
+    pages_read  = excluded.pages_read,
+    updated_at  = datetime('now')
 `)
 
 /** Marca a conclusão preservando o completed_at original. */
@@ -586,7 +593,10 @@ async function pollKavita(): Promise<void> {
     let author: string | null = existing?.author ?? null
     if (!author) author = await kavitaAuthor(s.id)
 
-    upsertBookProgress.run({ external_id: externalId, title: s.name, cover_url: coverUrl, author, status, rating })
+    upsertBookProgress.run({
+      external_id: externalId, title: s.name, cover_url: coverUrl, author, status, rating,
+      pages_total: pages || null, pages_read: read,
+    })
     const row = getMediaId.get(externalId, 'book') as { id: number } | undefined
     if (!row) continue
 
@@ -725,11 +735,13 @@ app.get('/now-playing', (c) => {
 
 // Feed de atividade
 app.get('/activity', (c) => {
-  const limit = Math.min(parseInt(c.req.query('limit') ?? '30'), 100)
+  const limit = Math.min(parseInt(c.req.query('limit') ?? '30'), 500)
   const source = c.req.query('source')
-  let sql = 'SELECT * FROM activity_events'
+  const mediaType = c.req.query('media_type')
+  let sql = 'SELECT * FROM activity_events WHERE 1=1'
   const params: unknown[] = []
-  if (source) { sql += ' WHERE source = ?'; params.push(source) }
+  if (source)    { sql += ' AND source = ?';     params.push(source) }
+  if (mediaType) { sql += ' AND media_type = ?'; params.push(mediaType) }
   sql += ' ORDER BY occurred_at DESC LIMIT ?'
   params.push(limit)
   return c.json(db.prepare(sql).all(...params))

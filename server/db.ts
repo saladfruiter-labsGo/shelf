@@ -73,6 +73,8 @@ const newCols: [string, string][] = [
   ['hype',          'INTEGER DEFAULT 0'],
   ['completed_at',  'TEXT'],
   ['tmdb_id',       'TEXT'],    // id TMDB resolvido (séries importadas do Plex têm guid como external_id)
+  ['pages_total',   'INTEGER'], // livros (Kavita): total de páginas da série/volume
+  ['pages_read',    'INTEGER'], // livros (Kavita): páginas lidas até o último poll
 ]
 for (const [col, def] of newCols) {
   if (!cols.includes(col)) db.exec(`ALTER TABLE media_items ADD COLUMN ${col} ${def}`)
