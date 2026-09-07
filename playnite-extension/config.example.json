@@ -1,0 +1,3 @@
+{
+  "WebhookUrl": "http://SEU-SHELF:3000/api/integrations/playnite/webhook?token=SEU_TOKEN"
+}

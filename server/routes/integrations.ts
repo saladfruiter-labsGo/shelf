@@ -3,6 +3,7 @@ import { randomUUID } from 'crypto'
 import { db } from '../db.js'
 import { sendTelegram, telegramDetectChats, notifyLibraryActivity } from '../notify.js'
 import { ensureSeriesStructure, setEpisodeWatched, tmdbIdFromGuid } from '../series.js'
+import { rawgLookup } from './search.js'
 
 const app = new Hono()
 
@@ -654,6 +655,167 @@ async function pollKavita(): Promise<void> {
   writeKavitaState(state)
 }
 
+/* ──────────────────────────────── Playnite: games (webhook) ────────────────────────── */
+
+/** Garante um segredo para o webhook do Playnite (mesmo molde do Plex). */
+function ensurePlayniteSecret(): string {
+  let s = cfg('PLAYNITE_WEBHOOK_SECRET')
+  if (!s) {
+    s = randomUUID().replace(/-/g, '')
+    setSetting.run('PLAYNITE_WEBHOOK_SECRET', s)
+  }
+  return s
+}
+
+/** Upsert de jogo sem forçar conclusão (aceita 'in_progress' | 'completed' | 'dropped' | 'wishlist'). */
+const upsertGame = db.prepare(`
+  INSERT INTO media_items (external_id, type, title, cover_url, year, genre, creators, status, rating, playtime_seconds)
+  VALUES (@external_id, 'game', @title, @cover_url, @year, @genre, @creators, @status, @rating, @playtime_seconds)
+  ON CONFLICT(external_id, type) DO UPDATE SET
+    title            = COALESCE(media_items.title, excluded.title),
+    cover_url        = COALESCE(media_items.cover_url, excluded.cover_url),
+    year             = COALESCE(media_items.year, excluded.year),
+    genre            = COALESCE(media_items.genre, excluded.genre),
+    creators         = COALESCE(media_items.creators, excluded.creators),
+    -- nunca rebaixa um jogo já concluído de volta para 'in_progress'
+    status           = CASE WHEN media_items.status = 'completed' AND excluded.status = 'in_progress'
+                           THEN media_items.status ELSE excluded.status END,
+    rating           = CASE WHEN excluded.rating > 0 THEN excluded.rating ELSE media_items.rating END,
+    playtime_seconds = excluded.playtime_seconds,
+    updated_at       = datetime('now')
+`)
+
+const completeGame = db.prepare(`
+  UPDATE media_items SET status = 'completed',
+    completed_at = COALESCE(completed_at, @completed_at),
+    updated_at = datetime('now')
+  WHERE external_id = @external_id AND type = 'game'
+`)
+
+const insertDiaryPlaynite = db.prepare(`
+  INSERT INTO diary_entries (media_item_id, watched_at, rating, comment, source)
+  VALUES (?, ?, ?, NULL, 'playnite')
+`)
+
+type PlayniteState = Record<string, { externalId: string; status: string; rating: number; playtime: number }>
+function readPlayniteState(): PlayniteState {
+  try { return JSON.parse(cfg('PLAYNITE_STATE') || '{}') } catch { return {} }
+}
+function writePlayniteState(s: PlayniteState) { setCfg('PLAYNITE_STATE', JSON.stringify(s)) }
+
+/** CompletionStatus do Playnite → status do Shelf (nomes padrão, case-insensitive). */
+function playniteStatus(completion: string | undefined, playtimeSeconds: number): 'wishlist' | 'in_progress' | 'completed' | 'dropped' {
+  const c = (completion ?? '').trim().toLowerCase()
+  if (['completed', 'beaten', 'finished', 'concluído', 'concluido', 'zerado'].includes(c)) return 'completed'
+  if (['abandoned', 'on hold', 'dropped', 'abandonado', 'em espera'].includes(c)) return 'dropped'
+  if (['plan to play', 'not played', 'planejado', 'não jogado', 'nao jogado'].includes(c)) {
+    return playtimeSeconds > 0 ? 'in_progress' : 'wishlist'
+  }
+  // "Playing", "Played" ou status customizado: em progresso se já jogou algo
+  return playtimeSeconds > 0 ? 'in_progress' : 'wishlist'
+}
+
+/** UserScore do Playnite (0–100) → escala 0–5 (meio-ponto) do Shelf. */
+function playniteRating(userScore: number | null | undefined): number {
+  if (userScore == null || userScore <= 0) return 0
+  return Math.round((userScore / 20) * 2) / 2
+}
+
+interface PlaynitePayload {
+  gameId?: string
+  name?: string
+  playtimeSeconds?: number
+  completionStatus?: string
+  userScore?: number | null
+  releaseYear?: number | null
+}
+
+app.post('/playnite/webhook', async (c) => {
+  const token = c.req.query('token')
+  const secret = cfg('PLAYNITE_WEBHOOK_SECRET')
+  if (secret && token !== secret) return c.json({ error: 'unauthorized' }, 401)
+  if (cfg('PLAYNITE_ENABLED') !== '1') return c.json({ ok: true }) // desativado: ignora em silêncio
+
+  let p: PlaynitePayload
+  try { p = (await c.req.json()) as PlaynitePayload } catch { return c.json({ error: 'bad payload' }, 400) }
+
+  const gameId = (p.gameId ?? '').trim()
+  const name = (p.name ?? '').trim()
+  if (!gameId || !name) return c.json({ error: 'gameId and name required' }, 400)
+
+  const playtime = Math.max(0, Math.round(p.playtimeSeconds ?? 0))
+  const status = playniteStatus(p.completionStatus, playtime)
+  const rating = playniteRating(p.userScore)
+  const nowIso = new Date().toISOString()
+
+  const state = readPlayniteState()
+  const prev = state[gameId]
+
+  // Resolve o external_id só uma vez por jogo: tenta casar com a RAWG (mesmo id
+  // do "adicionar manual") para ganhar capa/gênero/ano/sinopse; senão usa o id do Playnite.
+  let externalId = prev?.externalId
+  let cover_url: string | null = null
+  let year: number | null = p.releaseYear ?? null
+  let genre: string | null = null
+  if (!externalId) {
+    const rawg = await rawgLookup(name).catch(() => null)
+    if (rawg) {
+      externalId = rawg.external_id
+      cover_url = rawg.cover_url
+      year = rawg.year ?? year
+      genre = rawg.genre
+    } else {
+      externalId = `playnite:${gameId}`
+    }
+  }
+
+  upsertGame.run({
+    external_id: externalId, title: name, cover_url, year, genre, creators: null,
+    status, rating, playtime_seconds: playtime || null,
+  })
+  const row = getMediaId.get(externalId, 'game') as { id: number } | undefined
+  if (!row) return c.json({ ok: true })
+
+  if (status === 'completed') {
+    completeGame.run({ external_id: externalId, completed_at: nowIso })
+    if (prev?.status !== 'completed') {
+      insertActivity.run({
+        source: 'playnite', event_type: 'played', media_type: 'game',
+        external_ref: externalId, title: name, subtitle: null,
+        cover_url, rating: rating || null, duration_ms: null,
+        genre, occurred_at: nowIso, raw: null,
+      })
+      insertDiaryPlaynite.run(row.id, nowIso, rating || null)
+      notifyLibraryActivity({ event: 'completed', type: 'game', title: name, rating: rating || null })
+    }
+  } else if (!prev && playtime > 0) {
+    // primeira vez que vemos este jogo em progresso
+    insertActivity.run({
+      source: 'playnite', event_type: 'playing', media_type: 'game',
+      external_ref: externalId, title: name, subtitle: null,
+      cover_url, rating: null, duration_ms: null,
+      genre, occurred_at: nowIso, raw: null,
+    })
+    notifyLibraryActivity({ event: 'in_progress', type: 'game', title: name })
+  }
+
+  // mudança de nota (independe do status)
+  if (rating > 0 && prev && prev.rating !== rating) {
+    setMediaRating.run(rating, externalId, 'game')
+    insertActivity.run({
+      source: 'playnite', event_type: 'rate', media_type: 'game',
+      external_ref: externalId, title: name, subtitle: null,
+      cover_url, rating, duration_ms: null,
+      genre, occurred_at: nowIso, raw: null,
+    })
+    notifyLibraryActivity({ event: 'rated', type: 'game', title: name, rating })
+  }
+
+  state[gameId] = { externalId, status, rating, playtime }
+  writePlayniteState(state)
+  return c.json({ ok: true })
+})
+
 /* ─────────────────────────────────────── Loops ────────────────────────────────────── */
 
 let plexBusy = false
@@ -698,6 +860,10 @@ app.get('/', (c) => {
       api_key_masked: mask(cfg('KAVITA_API_KEY')),
       library_id: cfg('KAVITA_LIBRARY_ID'),
     },
+    playnite: {
+      enabled: cfg('PLAYNITE_ENABLED') === '1',
+      webhook_secret: ensurePlayniteSecret(),
+    },
   })
 })
 
@@ -720,6 +886,7 @@ app.patch('/', async (c) => {
     ['KAVITA_ENABLED', bool(b.kavita_enabled)],
     ['KAVITA_URL', str(b.kavita_url)],
     ['KAVITA_LIBRARY_ID', str(b.kavita_library_id)],
+    ['PLAYNITE_ENABLED', bool(b.playnite_enabled)],
   ]
   for (const [k, v] of map) if (v !== undefined) setCfg(k, v)
   // Tokens/segredos só são sobrescritos quando um valor novo é enviado (não apagar ao salvar mascarado)
@@ -837,6 +1004,18 @@ app.post('/kavita/test', async (c) => {
   })
   if (!r || !r.ok) {
     return c.json({ ok: false, error: 'Autenticou, mas não consegui listar séries (all-v2 falhou).' }, 400)
+  }
+  return c.json({ ok: true })
+})
+
+// Playnite: confirma que a busca de capa (RAWG) está funcionando
+app.post('/playnite/test', async (c) => {
+  const rawg = await rawgLookup('The Witcher 3').catch(() => null)
+  if (!rawg) {
+    return c.json({
+      ok: false,
+      error: 'A extensão registra os jogos, mas as capas ficam vazias: configure a RAWG_API_KEY para o Shelf buscar capa/gênero por nome.',
+    }, 400)
   }
   return c.json({ ok: true })
 })

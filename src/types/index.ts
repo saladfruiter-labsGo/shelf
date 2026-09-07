@@ -24,6 +24,7 @@ export interface MediaItem {
   progress?:    number   // 0..1 — séries (fração de episódios vistos) e livros (páginas lidas via Kavita)
   pages_total?: number | null
   pages_read?:  number | null
+  playtime_seconds?: number | null   // games (Playnite): tempo total jogado, em segundos
 }
 
 /* ─── Diário: registros de "visto/concluído" (N por mídia) ─── */
@@ -140,6 +141,10 @@ export interface IntegrationStatus {
     api_key_masked: string
     library_id:     string
   }
+  playnite: {
+    enabled:        boolean
+    webhook_secret: string
+  }
 }
 
 export interface NowPlayingItem {
@@ -160,9 +165,9 @@ export interface NowPlaying {
 
 export interface ActivityEvent {
   id:           number
-  source:       'plex' | 'lastfm' | 'kavita'
+  source:       'plex' | 'lastfm' | 'kavita' | 'playnite'
   event_type:   string
-  media_type:   ActivityMediaType | 'book'
+  media_type:   ActivityMediaType | 'book' | 'game'
   external_ref: string | null
   title:        string
   subtitle:     string | null

@@ -95,7 +95,7 @@ export const api = {
     update:     (data: Record<string, unknown>): Promise<{ ok: boolean }> =>
       request('/integrations', { method: 'PATCH', body: JSON.stringify(data) }),
     nowPlaying: (): Promise<NowPlaying> => request('/integrations/now-playing'),
-    activity:   (params?: { limit?: number; source?: 'plex' | 'lastfm' | 'kavita'; media_type?: ActivityMediaType }): Promise<ActivityEvent[]> => {
+    activity:   (params?: { limit?: number; source?: 'plex' | 'lastfm' | 'kavita' | 'playnite'; media_type?: ActivityMediaType }): Promise<ActivityEvent[]> => {
       const qs = new URLSearchParams()
       if (params?.limit)      qs.set('limit', String(params.limit))
       if (params?.source)     qs.set('source', params.source)
@@ -113,5 +113,7 @@ export const api = {
       request('/integrations/kavita/sync', { method: 'POST' }),
     kavitaTest: (): Promise<{ ok: boolean; error?: string }> =>
       request('/integrations/kavita/test', { method: 'POST' }),
+    playniteTest: (): Promise<{ ok: boolean; error?: string }> =>
+      request('/integrations/playnite/test', { method: 'POST' }),
   },
 }

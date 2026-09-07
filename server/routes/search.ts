@@ -91,6 +91,16 @@ async function searchGames(q: string): Promise<SearchResult[]> {
   }))
 }
 
+/**
+ * Resolve o primeiro jogo da RAWG por nome. Usado pela integração do Playnite
+ * para descobrir capa/gênero/ano e reaproveitar o id da RAWG como external_id
+ * (o mesmo que o "adicionar manual" usa), unificando os dois caminhos.
+ */
+export async function rawgLookup(name: string): Promise<SearchResult | null> {
+  const [first] = await searchGames(name)
+  return first ?? null
+}
+
 async function searchBooks(q: string): Promise<SearchResult[]> {
   const key      = apiKey('GOOGLE_BOOKS_KEY')
   const keyParam = key ? `&key=${key}` : ''
