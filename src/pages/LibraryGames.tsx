@@ -26,7 +26,7 @@ export function LibraryGames() {
   return (
     <div style={{ background: 'var(--bg)', color: 'var(--text-primary)', minHeight: '100vh' }}>
       {/* Header */}
-      <div style={{ padding: '64px var(--page-x) 48px', maxWidth: 1200, margin: '0 auto', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 32 }}>
+      <div style={{ padding: '64px var(--page-x) 48px', maxWidth: 1280, margin: '0 auto', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 32 }}>
         <div>
           <button
             onClick={() => navigate('/library')}
@@ -57,7 +57,7 @@ export function LibraryGames() {
       </div>
 
       {/* Grid */}
-      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 var(--page-x) 80px', display: 'grid', gridTemplateColumns: 'var(--grid-games)', gap: 16 }}>
+      <div style={{ maxWidth: 1280, margin: '0 auto', padding: '0 var(--page-x) 80px', display: 'grid', gridTemplateColumns: 'var(--grid-games)', gap: 16 }}>
         {isLoading
           ? Array.from({ length: 8 }).map((_, i) => (
               <div key={i} style={{ background: 'var(--card)', borderRadius: 16, overflow: 'hidden', border: '1px solid var(--border)', aspectRatio: '2/3.55' }} />

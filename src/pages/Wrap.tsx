@@ -190,7 +190,7 @@ export function Wrap() {
   }
 
   return (
-    <div className="px-6 py-8 max-w-4xl">
+    <div style={{ maxWidth: 1280, margin: '0 auto', padding: '64px var(--page-x) 80px' }}>
       <div className="mb-8">
         <h1 className="font-display text-3xl font-bold text-primary mb-1">Wrap</h1>
         <p className="text-muted text-sm">Seu resumo de consumo de mídia</p>
