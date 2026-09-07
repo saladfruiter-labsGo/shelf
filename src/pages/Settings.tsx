@@ -227,13 +227,15 @@ type ActivityLike = { source: string; media_type: string; event_type: string; ra
 function activityEmoji(ev: ActivityLike): string {
   if (ev.source === 'kavita') return '📖'
   if (ev.source === 'lastfm') return '🎵'
+  if (ev.source === 'playnite' || ev.media_type === 'game') return '🎮'
   return ev.media_type === 'movie' ? '🎬' : '📺'
 }
 
 function activityLabel(ev: ActivityLike): string {
   if (ev.event_type === 'rate') return `Avaliou ${ev.rating}★`
-  if (ev.event_type === 'read' || ev.event_type === 'scrobble') return 'Concluído'
+  if (ev.event_type === 'read' || ev.event_type === 'scrobble' || ev.event_type === 'played') return 'Concluído'
   if (ev.event_type === 'reading') return 'Lendo'
+  if (ev.event_type === 'playing') return 'Jogando'
   return 'Ouviu'
 }
 
@@ -279,6 +281,7 @@ function IntegrationsSection() {
       kavita_url: status.kavita.url,
       kavita_api_key: '',
       kavita_library_id: status.kavita.library_id,
+      playnite_enabled: status.playnite.enabled,
     })
   }, [status])
 
@@ -296,6 +299,7 @@ function IntegrationsSection() {
         kavita_enabled: form.kavita_enabled,
         kavita_url: form.kavita_url,
         kavita_library_id: form.kavita_library_id,
+        playnite_enabled: form.playnite_enabled,
       }
       if (form.plex_token)   payload.plex_token   = form.plex_token
       if (form.lastfm_api_key) payload.lastfm_api_key = form.lastfm_api_key
@@ -335,6 +339,12 @@ function IntegrationsSection() {
     onSuccess: () => { setMsg('Conexão com o Kavita OK!'); setTimeout(() => setMsg(''), 3000) },
     onError: (e: unknown) => { setMsg('Falha no teste: ' + ((e as Error).message || '')); setTimeout(() => setMsg(''), 4000) },
   })
+  const [playniteCopied, setPlayniteCopied] = useState(false)
+  const playniteTest = useMutation({
+    mutationFn: api.integrations.playniteTest,
+    onSuccess: () => { setMsg('Busca de capas (RAWG) OK! Os jogos vão vir com capa.'); setTimeout(() => setMsg(''), 3000) },
+    onError: (e: unknown) => { setMsg('Aviso: ' + ((e as Error).message || '')); setTimeout(() => setMsg(''), 5000) },
+  })
 
   const [detected, setDetected] = useState<{ chat_id: string; thread_id: string; name: string }[]>([])
   const test = useMutation({
@@ -350,6 +360,10 @@ function IntegrationsSection() {
     },
   })
 
+  const playniteWebhookUrl = status
+    ? `${window.location.origin}/api/integrations/playnite/webhook?token=${status.playnite.webhook_secret}`
+    : ''
+
   const webhookUrl = status
     ? `${window.location.origin}/api/integrations/plex/webhook?token=${status.plex.webhook_secret}`
     : ''
@@ -360,7 +374,7 @@ function IntegrationsSection() {
     <div className="mt-12">
       <div className="mb-6">
         <h2 className="font-display text-2xl font-bold text-primary mb-1">Integrações</h2>
-        <p className="text-muted text-sm">Monitore automaticamente o que você assiste no Plex, ouve no YouTube Music e lê no Kavita</p>
+        <p className="text-muted text-sm">Monitore automaticamente o que você assiste no Plex, ouve no YouTube Music, lê no Kavita e joga no Playnite</p>
       </div>
 
       {/* ── Plex ── */}
@@ -584,6 +598,44 @@ function IntegrationsSection() {
           </button>
         </div>
         <p className="text-[11px] text-muted mt-2">O teste usa a config salva — salve antes de testar.</p>
+      </div>
+
+      {/* ── Playnite ── */}
+      <div className="bg-surface border border-border rounded-xl p-5 mb-4">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <span style={{ fontSize: 18 }}>🎮</span>
+            <h3 className="font-medium text-primary text-sm">Playnite <span className="text-muted font-normal">games</span></h3>
+            <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${status?.playnite.enabled ? 'bg-games-bg text-games' : 'bg-card text-muted'}`}>
+              {status?.playnite.enabled ? 'Ativo' : 'Inativo'}
+            </span>
+          </div>
+          <Toggle on={!!form.playnite_enabled} onChange={set('playnite_enabled')} />
+        </div>
+
+        <p className="text-xs text-muted mb-4">
+          Ao fechar um jogo, a extensão do Playnite envia o <b>tempo jogado</b>, o <b>status</b> (jogando/concluído) e a <b>nota</b>
+          para o Shelf. A capa e o gênero são buscados automaticamente pela RAWG. Instale a extensão <code className="bg-card px-1 rounded">ShelfSync</code> no PC de jogos e cole a URL abaixo nas configurações dela.
+        </p>
+
+        {/* Webhook URL */}
+        <div>
+          <label className="text-xs text-secondary mb-1 block">URL do Webhook <span className="text-muted">(cole em Playnite → extensão ShelfSync)</span></label>
+          <div className="flex gap-2">
+            <input readOnly className={inputCls + ' font-mono text-xs'} value={playniteWebhookUrl} onFocus={e => e.currentTarget.select()} />
+            <button type="button"
+              onClick={() => { navigator.clipboard.writeText(playniteWebhookUrl); setPlayniteCopied(true); setTimeout(() => setPlayniteCopied(false), 1500) }}
+              className="px-3 py-2 bg-card border border-border rounded-lg text-xs text-primary hover:border-accent transition-colors whitespace-nowrap">
+              {playniteCopied ? '✓ Copiado' : 'Copiar'}
+            </button>
+          </div>
+          <p className="text-[11px] text-muted mt-1">O token na URL evita registros falsos. Ative o toggle e salve para o Shelf aceitar os envios.</p>
+        </div>
+
+        <button type="button" onClick={() => playniteTest.mutate()} disabled={playniteTest.isPending}
+          className="mt-4 text-xs px-3 py-2 bg-card border border-border rounded-lg text-primary hover:border-accent transition-colors disabled:opacity-50">
+          {playniteTest.isPending ? 'Testando…' : '⚡ Testar busca de capas'}
+        </button>
       </div>
 
       {/* Salvar */}

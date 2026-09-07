@@ -8,7 +8,7 @@ import { SeriesSeasons } from '../components/SeriesSeasons'
 import { DiaryEntryModal, type DiaryEntryValues } from '../components/DiaryEntryModal'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import type { MediaStatus } from '../types'
-import { STATUS_LABEL, formatRuntime, formatDate } from '../lib/utils'
+import { STATUS_LABEL, formatRuntime, formatPlaytime, formatDate } from '../lib/utils'
 
 const STATUSES: MediaStatus[] = ['wishlist', 'in_progress', 'completed', 'dropped']
 
@@ -233,6 +233,16 @@ export function MediaDetail() {
               <p className="text-xs text-muted">
                 {Math.round(item.progress * 100)}% lido
                 {item.pages_total ? ` · ${item.pages_read ?? 0}/${item.pages_total} páginas` : ''}
+              </p>
+            </div>
+          )}
+
+          {/* Tempo de jogo (games, via Playnite) */}
+          {item.type === 'game' && (item.playtime_seconds ?? 0) > 0 && (
+            <div className="mb-4">
+              <p className="text-xs text-muted uppercase tracking-wide mb-1">Tempo de jogo</p>
+              <p className="font-display text-lg font-bold" style={{ color: 'var(--games)' }}>
+                {formatPlaytime(item.playtime_seconds!)}
               </p>
             </div>
           )}

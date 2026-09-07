@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../lib/api'
+import { formatPlaytime } from '../lib/utils'
 
 const STATUS_LABEL: Record<string, string> = {
   completed:   'Concluído',
@@ -93,9 +94,11 @@ export function LibraryGames() {
                     {item.title}
                   </p>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 }}>
-                    {item.runtime
-                      ? <span style={{ fontFamily: 'Space Grotesk, monospace', fontSize: 13, color: 'var(--games)' }}>{item.runtime}h</span>
-                      : <span />
+                    {(item.playtime_seconds ?? 0) > 0
+                      ? <span style={{ fontFamily: 'Space Grotesk, monospace', fontSize: 13, color: 'var(--games)' }}>⏱ {formatPlaytime(item.playtime_seconds!)}</span>
+                      : item.runtime
+                        ? <span style={{ fontFamily: 'Space Grotesk, monospace', fontSize: 13, color: 'var(--games)' }}>{item.runtime}h</span>
+                        : <span />
                     }
                     <span style={{
                       fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.5px',

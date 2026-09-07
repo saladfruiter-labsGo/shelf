@@ -35,6 +35,15 @@ export function formatRuntime(minutes: number): string {
   return m > 0 ? `${h}h ${m}min` : `${h}h`
 }
 
+/** Tempo de jogo (Playnite) a partir de segundos: "45min", "12h", "12h 30min". */
+export function formatPlaytime(seconds: number): string {
+  const totalMin = Math.round(seconds / 60)
+  if (totalMin < 60) return `${totalMin}min`
+  const h = Math.floor(totalMin / 60)
+  const m = totalMin % 60
+  return m > 0 ? `${h}h ${m}min` : `${h}h`
+}
+
 export function cn(...classes: (string | false | null | undefined)[]): string {
   return classes.filter(Boolean).join(' ')
 }

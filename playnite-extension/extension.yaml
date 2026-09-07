@@ -1,0 +1,6 @@
+Id: Shelf_ShelfSync
+Name: Shelf Sync
+Author: Shelf
+Version: 1.0
+Module: ShelfSync.psm1
+Type: Script
