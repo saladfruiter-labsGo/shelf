@@ -56,7 +56,7 @@ function NowPlayingRow({ item, source }: { item: NowPlayingItem; source: 'plex' 
       style={{
         position: 'relative',
         height: ROW_H, display: 'flex', alignItems: 'center', gap: 12,
-        padding: '0 32px',
+        padding: '0 var(--page-x)',
         borderBottom: '1px solid var(--border)',
         overflow: 'hidden',
       }}

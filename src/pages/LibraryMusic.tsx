@@ -13,7 +13,7 @@ export function LibraryMusic() {
   return (
     <div style={{ background: 'var(--bg)', color: 'var(--text-primary)', minHeight: '100vh' }}>
       {/* Header */}
-      <div style={{ padding: '64px 64px 48px', maxWidth: 1280, margin: '0 auto', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between' }}>
+      <div style={{ padding: '64px var(--page-x) 48px', maxWidth: 1280, margin: '0 auto', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between' }}>
         <div>
           <button
             onClick={() => navigate('/library')}
@@ -35,7 +35,7 @@ export function LibraryMusic() {
       </div>
 
       {/* Grid — 5 columns square art */}
-      <div style={{ maxWidth: 1280, margin: '0 auto', padding: '0 64px 80px', display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 16 }}>
+      <div style={{ maxWidth: 1280, margin: '0 auto', padding: '0 var(--page-x) 80px', display: 'grid', gridTemplateColumns: 'var(--grid-films)', gap: 16 }}>
         {isLoading
           ? Array.from({ length: 10 }).map((_, i) => (
               <div key={i} style={{ aspectRatio: '1/1', background: 'var(--card)', borderRadius: 12 }} />

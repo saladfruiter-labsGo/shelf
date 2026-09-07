@@ -25,7 +25,7 @@ export function Library() {
 
   return (
     <div style={{ background: 'var(--bg)', minHeight: '100vh' }}>
-      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '80px 64px' }}>
+      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '80px var(--page-x)' }}>
 
         {/* Header */}
         <p style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '2.5px', color: 'var(--dim)', marginBottom: 16 }}>
@@ -39,7 +39,7 @@ export function Library() {
         </p>
 
         {/* Category hub cards */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 16, marginBottom: 80 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'var(--grid-cats)', gap: 16, marginBottom: 80 }}>
           {CATS.map(cat => (
             <button
               key={cat.label}
@@ -73,7 +73,7 @@ export function Library() {
           </div>
 
           {isLoading ? (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: '16px 16px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'var(--grid-lib)', gap: '16px 16px' }}>
               {Array.from({ length: 14 }).map((_, i) => (
                 <div key={i}>
                   <div style={{ width: '100%', aspectRatio: '2/3', background: 'var(--card)', borderRadius: 6, marginBottom: 8 }} className="animate-pulse" />
@@ -82,7 +82,7 @@ export function Library() {
               ))}
             </div>
           ) : allItems.length > 0 ? (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: '16px 16px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'var(--grid-lib)', gap: '16px 16px' }}>
               {allItems.map(item => (
                 <MediaCard key={item.id} item={item} compact />
               ))}

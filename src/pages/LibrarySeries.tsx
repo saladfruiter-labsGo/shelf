@@ -25,7 +25,7 @@ export function LibrarySeries() {
   return (
     <div style={{ background: 'var(--bg)', color: 'var(--text-primary)', minHeight: '100vh' }}>
       {/* Header */}
-      <div style={{ padding: '64px 64px 48px', maxWidth: 1280, margin: '0 auto', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between' }}>
+      <div style={{ padding: '64px var(--page-x) 48px', maxWidth: 1280, margin: '0 auto', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between' }}>
         <div>
           <button
             onClick={() => navigate('/library')}
@@ -47,7 +47,7 @@ export function LibrarySeries() {
       </div>
 
       {/* Grid — 3 columns banner cards */}
-      <div style={{ maxWidth: 1280, margin: '0 auto', padding: '0 64px 80px', display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16 }}>
+      <div style={{ maxWidth: 1280, margin: '0 auto', padding: '0 var(--page-x) 80px', display: 'grid', gridTemplateColumns: 'var(--grid-games)', gap: 16 }}>
         {isLoading
           ? Array.from({ length: 8 }).map((_, i) => (
               <div key={i} style={{ background: 'var(--card)', borderRadius: 16, overflow: 'hidden', aspectRatio: '2/3.6' }} />

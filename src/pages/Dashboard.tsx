@@ -144,7 +144,7 @@ export function Dashboard() {
     )
   }
 
-  const HERO_H = 'calc(100vh - var(--nav-h) - var(--npbar-h, 0px))'
+  const HERO_H = 'calc(100vh - var(--nav-h) - var(--npbar-h, 0px) - var(--bottomnav-h))'
 
   return (
     <div
@@ -186,7 +186,7 @@ export function Dashboard() {
             >
               <BlockBg colorVar={cat.colorVar} art={artCover} />
 
-              <div style={{ position: 'relative', maxWidth: 1400, width: '100%', margin: '0 auto', padding: '0 64px' }}>
+              <div style={{ position: 'relative', maxWidth: 1400, width: '100%', margin: '0 auto', padding: '0 var(--page-x)' }}>
                 <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 28, gap: 16 }}>
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: 16, flexWrap: 'wrap' }}>
                     <h2 style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: 'clamp(28px,3.4vw,44px)', fontWeight: 800, letterSpacing: '-1.5px', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 14 }}>
