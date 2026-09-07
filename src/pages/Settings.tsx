@@ -222,6 +222,21 @@ function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void 
   )
 }
 
+type ActivityLike = { source: string; media_type: string; event_type: string; rating: number | null }
+
+function activityEmoji(ev: ActivityLike): string {
+  if (ev.source === 'kavita') return '📖'
+  if (ev.source === 'lastfm') return '🎵'
+  return ev.media_type === 'movie' ? '🎬' : '📺'
+}
+
+function activityLabel(ev: ActivityLike): string {
+  if (ev.event_type === 'rate') return `Avaliou ${ev.rating}★`
+  if (ev.event_type === 'read' || ev.event_type === 'scrobble') return 'Concluído'
+  if (ev.event_type === 'reading') return 'Lendo'
+  return 'Ouviu'
+}
+
 function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso + (iso.includes('Z') ? '' : 'Z')).getTime()
   const min = Math.floor(diff / 60000)
@@ -260,6 +275,10 @@ function IntegrationsSection() {
       telegram_bot_token: '',
       telegram_chat_id: status.telegram.chat_id,
       telegram_thread_id: status.telegram.thread_id,
+      kavita_enabled: status.kavita.enabled,
+      kavita_url: status.kavita.url,
+      kavita_api_key: '',
+      kavita_library_id: status.kavita.library_id,
     })
   }, [status])
 
@@ -274,15 +293,19 @@ function IntegrationsSection() {
         telegram_enabled: form.telegram_enabled,
         telegram_chat_id: form.telegram_chat_id,
         telegram_thread_id: form.telegram_thread_id,
+        kavita_enabled: form.kavita_enabled,
+        kavita_url: form.kavita_url,
+        kavita_library_id: form.kavita_library_id,
       }
       if (form.plex_token)   payload.plex_token   = form.plex_token
       if (form.lastfm_api_key) payload.lastfm_api_key = form.lastfm_api_key
       if (form.telegram_bot_token) payload.telegram_bot_token = form.telegram_bot_token
+      if (form.kavita_api_key) payload.kavita_api_key = form.kavita_api_key
       return api.integrations.update(payload)
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['integrations'] })
-      setForm(f => ({ ...f, plex_token: '', lastfm_api_key: '' }))
+      setForm(f => ({ ...f, plex_token: '', lastfm_api_key: '', kavita_api_key: '' }))
       setMsg('Integrações salvas!')
       setTimeout(() => setMsg(''), 3000)
     },
@@ -296,6 +319,21 @@ function IntegrationsSection() {
       setMsg('Sincronizado com o Last.fm.')
       setTimeout(() => setMsg(''), 3000)
     },
+  })
+
+  const kavitaSync = useMutation({
+    mutationFn: api.integrations.kavitaSync,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['integration-activity'] })
+      setMsg('Sincronizado com o Kavita.')
+      setTimeout(() => setMsg(''), 3000)
+    },
+    onError: (e: unknown) => { setMsg('Falha ao sincronizar: ' + ((e as Error).message || '')); setTimeout(() => setMsg(''), 4000) },
+  })
+  const kavitaTest = useMutation({
+    mutationFn: api.integrations.kavitaTest,
+    onSuccess: () => { setMsg('Conexão com o Kavita OK!'); setTimeout(() => setMsg(''), 3000) },
+    onError: (e: unknown) => { setMsg('Falha no teste: ' + ((e as Error).message || '')); setTimeout(() => setMsg(''), 4000) },
   })
 
   const [detected, setDetected] = useState<{ chat_id: string; thread_id: string; name: string }[]>([])
@@ -322,7 +360,7 @@ function IntegrationsSection() {
     <div className="mt-12">
       <div className="mb-6">
         <h2 className="font-display text-2xl font-bold text-primary mb-1">Integrações</h2>
-        <p className="text-muted text-sm">Monitore automaticamente o que você assiste no Plex e ouve no YouTube Music</p>
+        <p className="text-muted text-sm">Monitore automaticamente o que você assiste no Plex, ouve no YouTube Music e lê no Kavita</p>
       </div>
 
       {/* ── Plex ── */}
@@ -498,6 +536,56 @@ function IntegrationsSection() {
         <p className="text-[11px] text-muted mt-2">O teste usa a configuração já salva — salve antes de testar.</p>
       </div>
 
+      {/* ── Kavita ── */}
+      <div className="bg-surface border border-border rounded-xl p-5 mb-4">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <span style={{ fontSize: 18 }}>📖</span>
+            <h3 className="font-medium text-primary text-sm">Kavita <span className="text-muted font-normal">livros</span></h3>
+            <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${status?.kavita.api_key_set ? 'bg-games-bg text-games' : 'bg-card text-muted'}`}>
+              {status?.kavita.api_key_set ? 'Conectado' : 'Não conectado'}
+            </span>
+          </div>
+          <Toggle on={!!form.kavita_enabled} onChange={set('kavita_enabled')} />
+        </div>
+
+        <p className="text-xs text-muted mb-4">
+          Lê seu progresso de leitura no Kavita e registra livros como <b>em andamento</b> ou <b>concluídos</b> automaticamente
+          (com a nota, quando você avalia lá). Verifica a cada minuto. Gere a API key em <span className="text-secondary">Kavita → Configurações → Conta → Chaves de API</span>.
+        </p>
+
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs text-secondary mb-1 block">URL do servidor Kavita</label>
+            <input className={inputCls} placeholder="http://192.168.0.10:5000"
+              value={String(form.kavita_url ?? '')} onChange={e => set('kavita_url')(e.target.value)} spellCheck={false} />
+          </div>
+          <div>
+            <label className="text-xs text-secondary mb-1 block">API Key</label>
+            <input className={inputCls + ' font-mono'} type="password" autoComplete="off"
+              placeholder={status?.kavita.api_key_set ? status.kavita.api_key_masked : 'sua API key do Kavita'}
+              value={String(form.kavita_api_key ?? '')} onChange={e => set('kavita_api_key')(e.target.value)} spellCheck={false} />
+          </div>
+          <div>
+            <label className="text-xs text-secondary mb-1 block">ID da biblioteca <span className="text-muted">(opcional — deixe vazio para todas)</span></label>
+            <input className={inputCls} placeholder="ex.: 1 — só importa dessa biblioteca"
+              value={String(form.kavita_library_id ?? '')} onChange={e => set('kavita_library_id')(e.target.value)} spellCheck={false} />
+          </div>
+        </div>
+
+        <div className="flex gap-2 mt-4">
+          <button type="button" onClick={() => kavitaTest.mutate()} disabled={kavitaTest.isPending || !status?.kavita.api_key_set}
+            className="text-xs px-3 py-2 bg-card border border-border rounded-lg text-primary hover:border-accent transition-colors disabled:opacity-50">
+            {kavitaTest.isPending ? 'Testando…' : '⚡ Testar conexão'}
+          </button>
+          <button type="button" onClick={() => kavitaSync.mutate()} disabled={kavitaSync.isPending || !status?.kavita.api_key_set}
+            className="text-xs px-3 py-2 bg-card border border-border rounded-lg text-primary hover:border-accent transition-colors disabled:opacity-50">
+            {kavitaSync.isPending ? 'Sincronizando…' : '↻ Sincronizar agora'}
+          </button>
+        </div>
+        <p className="text-[11px] text-muted mt-2">O teste usa a config salva — salve antes de testar.</p>
+      </div>
+
       {/* Salvar */}
       <div className="flex items-center gap-4 mb-8">
         <button onClick={() => save.mutate()} disabled={save.isPending}
@@ -516,14 +604,14 @@ function IntegrationsSection() {
           <div className="space-y-2">
             {activity.map(ev => (
               <div key={ev.id} className="flex items-center gap-3 py-1.5">
-                <span style={{ fontSize: 14 }}>{ev.source === 'plex' ? (ev.media_type === 'movie' ? '🎬' : '📺') : '🎵'}</span>
+                <span style={{ fontSize: 14 }}>{activityEmoji(ev)}</span>
                 <div className="min-w-0 flex-1">
                   <p className="text-sm text-primary truncate">
                     {ev.title}
                     {ev.subtitle && <span className="text-muted"> · {ev.subtitle}</span>}
                   </p>
                   <p className="text-[11px] text-muted">
-                    {ev.event_type === 'rate' ? `Avaliou ${ev.rating}★` : ev.event_type === 'scrobble' ? 'Concluído' : 'Ouviu'}
+                    {activityLabel(ev)}
                     {ev.genre && ` · ${ev.genre}`}
                   </p>
                 </div>

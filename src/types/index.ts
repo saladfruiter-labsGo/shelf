@@ -131,6 +131,13 @@ export interface IntegrationStatus {
     chat_id:          string
     thread_id:        string
   }
+  kavita: {
+    enabled:        boolean
+    url:            string
+    api_key_set:    boolean
+    api_key_masked: string
+    library_id:     string
+  }
 }
 
 export interface NowPlayingItem {
@@ -151,9 +158,9 @@ export interface NowPlaying {
 
 export interface ActivityEvent {
   id:           number
-  source:       'plex' | 'lastfm'
+  source:       'plex' | 'lastfm' | 'kavita'
   event_type:   string
-  media_type:   ActivityMediaType
+  media_type:   ActivityMediaType | 'book'
   external_ref: string | null
   title:        string
   subtitle:     string | null
