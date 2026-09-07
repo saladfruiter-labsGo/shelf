@@ -12,10 +12,13 @@ const STATUS_LABEL: Record<string, string> = {
 export function LibraryGames() {
   const navigate = useNavigate()
 
-  const { data: items = [], isLoading } = useQuery({
+  const { data: rawItems = [], isLoading } = useQuery({
     queryKey: ['media', 'game'],
     queryFn: () => api.media.list({ type: 'game', limit: 500 }),
   })
+
+  // Itens em wishlist ficam só na Wishlist, fora da biblioteca.
+  const items = rawItems.filter(i => i.status !== 'wishlist')
 
   const done = items.filter(i => i.status === 'completed').length
   const playing = items.filter(i => i.status === 'in_progress').length

@@ -5,10 +5,13 @@ import { api } from '../lib/api'
 export function LibraryFilms() {
   const navigate = useNavigate()
 
-  const { data: items = [], isLoading } = useQuery({
+  const { data: rawItems = [], isLoading } = useQuery({
     queryKey: ['media', 'movie'],
     queryFn: () => api.media.list({ type: 'movie', limit: 500 }),
   })
+
+  // Itens em wishlist ficam só na Wishlist, fora da biblioteca.
+  const items = rawItems.filter(i => i.status !== 'wishlist')
 
   const watched = items.filter(i => i.status === 'completed').length
 

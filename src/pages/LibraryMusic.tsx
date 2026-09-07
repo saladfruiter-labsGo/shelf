@@ -5,10 +5,13 @@ import { api } from '../lib/api'
 export function LibraryMusic() {
   const navigate = useNavigate()
 
-  const { data: items = [], isLoading } = useQuery({
+  const { data: rawItems = [], isLoading } = useQuery({
     queryKey: ['media', 'music'],
     queryFn: () => api.media.list({ type: 'music', limit: 500 }),
   })
+
+  // Itens em wishlist ficam só na Wishlist, fora da biblioteca.
+  const items = rawItems.filter(i => i.status !== 'wishlist')
 
   return (
     <div style={{ background: 'var(--bg)', color: 'var(--text-primary)', minHeight: '100vh' }}>
