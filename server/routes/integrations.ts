@@ -2,7 +2,7 @@ import { Hono } from 'hono'
 import { randomUUID } from 'crypto'
 import { db } from '../db.js'
 import { sendTelegram, telegramDetectChats, notifyLibraryActivity } from '../notify.js'
-import { ensureSeriesStructure, setEpisodeWatched, tmdbIdFromGuid } from '../series.js'
+import { ensureSeriesStructure, setEpisodeWatched, tmdbIdFromGuid, resolveTmdbSeriesId } from '../series.js'
 import { rawgLookup } from './search.js'
 
 const app = new Hono()
@@ -91,6 +91,25 @@ const upsertSeriesShow = db.prepare(`
 `)
 const getMediaId = db.prepare(`SELECT id FROM media_items WHERE external_id = ? AND type = ?`)
 
+/**
+ * Procura uma série já existente pelo id TMDB — casa tanto o card importado do
+ * Plex (coluna tmdb_id) quanto o cadastrado pela busca manual (external_id = id
+ * numérico do TMDB). É o que evita duplicar quando o guid do Plex difere da
+ * chave usada no cadastro original.
+ */
+const findSeriesByTmdb = db.prepare(
+  `SELECT id FROM media_items WHERE type = 'series' AND (tmdb_id = @tmdb OR external_id = @tmdb) LIMIT 1`,
+)
+/** Backfill leve na série casada, sem sobrescrever o que já existe. */
+const backfillSeriesMeta = db.prepare(`
+  UPDATE media_items SET
+    tmdb_id    = COALESCE(tmdb_id, @tmdb),
+    cover_url  = COALESCE(cover_url, @cover_url),
+    year       = COALESCE(year, @year),
+    updated_at = datetime('now')
+  WHERE id = @id
+`)
+
 /** Registra no diário cada vez que um filme/episódio é assistido (scrobble) no Plex. */
 const insertDiaryEntry = db.prepare(`
   INSERT INTO diary_entries (media_item_id, watched_at, rating, comment, source)
@@ -102,6 +121,33 @@ function slugify(s: string): string {
 }
 
 /**
+ * Consulta o servidor Plex pelo ratingKey e extrai o id TMDB dos Guid externos.
+ * O agente novo do Plex usa um guid interno (plex://show/<hash>) que não expõe o
+ * TMDB, mas o item guarda os ids externos (tmdb://, tvdb://, imdb://) — este é o
+ * jeito determinístico de casar a série sem depender de busca por título.
+ */
+async function tmdbIdFromPlexRatingKey(ratingKey?: string): Promise<string | null> {
+  const url = cfg('PLEX_URL')
+  const tk = cfg('PLEX_TOKEN')
+  if (!ratingKey || !url || !tk) return null
+  try {
+    const r = await fetch(`${url.replace(/\/$/, '')}/library/metadata/${ratingKey}`, {
+      headers: { 'X-Plex-Token': tk, Accept: 'application/json' },
+    })
+    if (!r.ok) return null
+    const data = (await r.json()) as any
+    const guids: any[] = data?.MediaContainer?.Metadata?.[0]?.Guid ?? []
+    for (const g of guids) {
+      const id = tmdbIdFromGuid(typeof g?.id === 'string' ? g.id : null)
+      if (id) return id
+    }
+    return null
+  } catch {
+    return null
+  }
+}
+
+/**
  * Registra um episódio assistido no Plex: encontra/cria a série, garante a
  * estrutura (temporadas/episódios via TMDB) e marca o episódio como visto.
  * A conclusão de temporada/série é recalculada em setEpisodeWatched.
@@ -110,26 +156,48 @@ async function handlePlexEpisode(meta: PlexMeta, occurredAt: string): Promise<vo
   const showTitle = meta.grandparentTitle
   if (!showTitle || meta.parentIndex == null || meta.index == null) return
 
-  const externalId = meta.grandparentGuid
-    ?? (meta.grandparentRatingKey ? `plex:${meta.grandparentRatingKey}` : `plex-show:${slugify(showTitle)}`)
-
   const thumb = meta.grandparentThumb ?? null
   const cover_url = thumb ? `/api/integrations/plex/image?path=${encodeURIComponent(thumb)}` : null
-  const tmdb_id = tmdbIdFromGuid(meta.grandparentGuid) ?? null
 
-  upsertSeriesShow.run({ external_id: externalId, title: showTitle, cover_url, year: meta.year ?? null, tmdb_id })
-  const row = getMediaId.get(externalId, 'series') as { id: number } | undefined
-  if (!row) return
+  // Resolve o id TMDB para casar com uma série já existente na biblioteca. Sem
+  // isso, um card criado por outra via — ex.: busca manual, com external_id = id
+  // do TMDB e título em inglês — não é reconhecido e o Plex acaba criando uma
+  // série duplicada com o título localizado ("Confusões de Leslie" no lugar de
+  // "Parks and Recreation"). Ordem: guid (barato) → servidor Plex pelo ratingKey
+  // (determinístico, cobre o agente novo cujo guid é plex://show/<hash>) → busca
+  // por título (último recurso).
+  let tmdb_id = tmdbIdFromGuid(meta.grandparentGuid)
+  if (!tmdb_id) tmdb_id = await tmdbIdFromPlexRatingKey(meta.grandparentRatingKey)
+  if (!tmdb_id) tmdb_id = await resolveTmdbSeriesId(showTitle, meta.year ?? null)
+
+  let mediaId: number | undefined
+  if (tmdb_id) {
+    const existing = findSeriesByTmdb.get({ tmdb: tmdb_id }) as { id: number } | undefined
+    if (existing) {
+      mediaId = existing.id
+      backfillSeriesMeta.run({ id: mediaId, tmdb: tmdb_id, cover_url, year: meta.year ?? null })
+    }
+  }
+
+  // Nenhuma série casada: cria a partir do Plex (chaveada pelo guid).
+  if (mediaId == null) {
+    const externalId = meta.grandparentGuid
+      ?? (meta.grandparentRatingKey ? `plex:${meta.grandparentRatingKey}` : `plex-show:${slugify(showTitle)}`)
+    upsertSeriesShow.run({ external_id: externalId, title: showTitle, cover_url, year: meta.year ?? null, tmdb_id })
+    const row = getMediaId.get(externalId, 'series') as { id: number } | undefined
+    if (!row) return
+    mediaId = row.id
+  }
 
   // popula temporadas/episódios na primeira vez (TMDB); tolera ausência de chave
-  await ensureSeriesStructure(row.id, { guid: meta.grandparentGuid })
+  await ensureSeriesStructure(mediaId, { guid: meta.grandparentGuid })
 
-  setEpisodeWatched(row.id, meta.parentIndex, meta.index, true, meta.title ?? null, occurredAt)
+  setEpisodeWatched(mediaId, meta.parentIndex, meta.index, true, meta.title ?? null, occurredAt)
 
   // Cada episódio assistido também vira um registro no diário (fica visível no
   // histórico, junto com filmes/livros), identificado por temporada/episódio.
   const label = `T${meta.parentIndex}E${meta.index}${meta.title ? ` – ${meta.title}` : ''}`
-  insertDiaryEntry.run(row.id, occurredAt, label)
+  insertDiaryEntry.run(mediaId, occurredAt, label)
 }
 
 /* ──────────────────────────────────── Plex: webhook ────────────────────────────────── */
