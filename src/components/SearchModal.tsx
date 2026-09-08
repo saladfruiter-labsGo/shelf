@@ -2,14 +2,25 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
-import type { MediaStatus, MediaType, SearchResult } from '../types'
+import type { MediaStatus, MediaType, SearchResult, SeriesPreviewSeason } from '../types'
 import { CategoryTag } from './CategoryTag'
 import { StarRating } from './StarRating'
-import { TYPE_LABEL, STATUS_LABEL, todayISODate } from '../lib/utils'
+import { TYPE_LABEL, todayISODate } from '../lib/utils'
 
 interface Props {
   open:    boolean
   onClose: () => void
+}
+
+type AddAction = 'seen' | 'watchlist' | 'diary'
+
+interface AddOpts {
+  action:   AddAction
+  rating:   number
+  date:     string                                              // YYYY-MM-DD (conclusão/registro; editável)
+  comment:  string                                              // comentário do registro no diário (opcional)
+  hours:    number                                              // games (opcional); 0 = não informado
+  episodes: { season_number: number; episode_number: number }[] // séries
 }
 
 const TYPE_FILTERS: { label: string; value: MediaType; tag: string; emoji: string }[] = [
@@ -17,13 +28,6 @@ const TYPE_FILTERS: { label: string; value: MediaType; tag: string; emoji: strin
   { label: 'Séries',  value: 'series', tag: '/series',  emoji: '📺' },
   { label: 'Jogos',   value: 'game',   tag: '/jogos',   emoji: '🎮' },
   { label: 'Livros',  value: 'book',   tag: '/livros',  emoji: '📚' },
-]
-
-const STATUSES: { value: MediaStatus; label: string }[] = [
-  { value: 'wishlist',    label: 'Wishlist' },
-  { value: 'in_progress', label: 'Em curso' },
-  { value: 'completed',   label: 'Concluído' },
-  { value: 'dropped',     label: 'Abandonei' },
 ]
 
 const TAG_MAP: Record<string, MediaType> = {
@@ -42,31 +46,166 @@ function parseInput(raw: string): { tagType: MediaType | null; q: string } {
 
 // ─── Confirmation panel ────────────────────────────────────────────────
 interface ConfirmProps {
-  result:   SearchResult
-  onBack:   () => void
-  onAdd:    (opts: { status: MediaStatus; rating: number; completed_at: string | null; comment: string | null }) => void
+  result:    SearchResult
+  onBack:    () => void
+  onAdd:     (opts: AddOpts) => void
   isPending: boolean
 }
 
-function ConfirmPanel({ result, onBack, onAdd, isPending }: ConfirmProps) {
-  const [status, setStatus]       = useState<MediaStatus>('wishlist')
-  const [rating, setRating]       = useState(0)
-  const [completedAt, setCompletedAt] = useState(todayISODate())
-  const [comment, setComment]     = useState('')
+const epKey = (s: number, e: number) => `${s}-${e}`
 
-  const showDate = status === 'completed'
+/** Seletor de temporadas/episódios para séries (Série › Temporada › Episódio). */
+function SeasonPicker({
+  seasons, selected, onToggleEp, onToggleSeason,
+}: {
+  seasons:       SeriesPreviewSeason[]
+  selected:      Set<string>
+  onToggleEp:    (s: number, e: number) => void
+  onToggleSeason: (season: SeriesPreviewSeason) => void
+}) {
+  const [open, setOpen] = useState<Set<number>>(() => new Set(seasons.length === 1 ? [seasons[0].season_number] : []))
+  const toggleOpen = (n: number) => setOpen(prev => {
+    const next = new Set(prev); next.has(n) ? next.delete(n) : next.add(n); return next
+  })
 
   return (
-    <div className="p-4">
+    <div className="border border-border rounded-lg divide-y divide-border overflow-hidden">
+      {seasons.map(season => {
+        const keys    = season.episodes.map(ep => epKey(season.season_number, ep.episode_number))
+        const selCount = keys.filter(k => selected.has(k)).length
+        const allSel   = keys.length > 0 && selCount === keys.length
+        const isOpen   = open.has(season.season_number)
+        return (
+          <div key={season.season_number}>
+            <div className="flex items-center gap-2 px-3 py-2.5">
+              <button
+                type="button"
+                onClick={() => toggleOpen(season.season_number)}
+                className="text-muted hover:text-primary text-xs w-4 flex-shrink-0 transition-transform"
+                style={{ transform: isOpen ? 'rotate(90deg)' : 'none' }}
+                aria-label={isOpen ? 'Recolher' : 'Expandir'}
+              >▶</button>
+              <button
+                type="button"
+                onClick={() => toggleOpen(season.season_number)}
+                className="flex-1 min-w-0 text-left"
+              >
+                <p className="text-sm font-medium text-primary truncate">
+                  {season.title || `Temporada ${season.season_number}`}
+                </p>
+                <p className="text-xs text-muted">{selCount}/{season.episodes.length || season.episode_count} selecionados</p>
+              </button>
+              <button
+                type="button"
+                onClick={() => onToggleSeason(season)}
+                disabled={keys.length === 0}
+                className={`flex-shrink-0 text-xs font-medium px-2.5 py-1 rounded-full border transition-colors ${
+                  allSel ? 'bg-accent text-bg border-accent' : 'bg-card text-muted border-border hover:text-primary'
+                } disabled:opacity-40`}
+              >
+                {allSel ? 'Tudo' : 'Marcar tudo'}
+              </button>
+            </div>
+
+            {isOpen && (
+              <div className="px-3 pb-2 pl-9">
+                {season.episodes.length === 0 ? (
+                  <p className="text-xs text-muted py-1">Episódios não catalogados.</p>
+                ) : season.episodes.map(ep => {
+                  const k = epKey(season.season_number, ep.episode_number)
+                  const on = selected.has(k)
+                  return (
+                    <button
+                      key={ep.episode_number}
+                      type="button"
+                      onClick={() => onToggleEp(season.season_number, ep.episode_number)}
+                      className="flex items-center gap-2.5 w-full text-left py-1.5 hover:bg-card rounded px-1 transition-colors"
+                    >
+                      <span
+                        className="flex-shrink-0 w-4 h-4 rounded grid place-items-center text-[10px] text-bg border"
+                        style={{
+                          borderColor: on ? 'var(--accent)' : 'var(--border-strong)',
+                          background:  on ? 'var(--accent)' : 'transparent',
+                        }}
+                      >{on ? '✓' : ''}</span>
+                      <span className="text-xs text-muted flex-shrink-0 w-7">E{ep.episode_number}</span>
+                      <span className={`text-sm min-w-0 truncate ${on ? 'text-primary' : 'text-secondary'}`}>
+                        {ep.title || `Episódio ${ep.episode_number}`}
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function ConfirmPanel({ result, onBack, onAdd, isPending }: ConfirmProps) {
+  const [rating, setRating]     = useState(0)
+  const [date, setDate]         = useState(todayISODate())
+  const [comment, setComment]   = useState('')
+  const [hours, setHours]       = useState('')
+  const [selected, setSelected] = useState<Set<string>>(() => new Set())
+  const [pending, setPending]   = useState<AddAction | null>(null)
+
+  const isSeries = result.type === 'series'
+  const isGame   = result.type === 'game'
+
+  const { data: preview, isFetching: loadingPreview } = useQuery({
+    queryKey: ['series-preview', result.external_id],
+    queryFn:  () => api.series.preview(result.external_id),
+    enabled:  isSeries,
+    staleTime: 5 * 60_000,
+  })
+  const seasons = preview?.seasons ?? []
+
+  const toggleEp = (s: number, e: number) => setSelected(prev => {
+    const next = new Set(prev); const k = epKey(s, e)
+    next.has(k) ? next.delete(k) : next.add(k); return next
+  })
+  const toggleSeason = (season: SeriesPreviewSeason) => setSelected(prev => {
+    const next = new Set(prev)
+    const keys = season.episodes.map(ep => epKey(season.season_number, ep.episode_number))
+    const allSel = keys.length > 0 && keys.every(k => next.has(k))
+    for (const k of keys) allSel ? next.delete(k) : next.add(k)
+    return next
+  })
+
+  const episodesPayload = () => [...selected].map(k => {
+    const [s, e] = k.split('-').map(Number)
+    return { season_number: s, episode_number: e }
+  })
+
+  const submit = (action: AddAction) => {
+    setPending(action)
+    onAdd({
+      action,
+      rating,
+      date:    date || todayISODate(),
+      comment: comment.trim(),
+      hours:   hours.trim() ? Math.max(0, parseFloat(hours.replace(',', '.')) || 0) : 0,
+      episodes: episodesPayload(),
+    })
+  }
+
+  // Séries: "Visto"/"Diário" exigem ao menos um episódio marcado (o diário é sempre por episódio).
+  const needsEpisodes = isSeries && selected.size === 0
+  const emoji = TYPE_FILTERS.find(f => f.value === result.type)?.emoji
+
+  const btnBusy = (a: AddAction) => isPending && pending === a
+
+  return (
+    <div className="p-4 max-h-[70vh] overflow-y-auto">
       {/* Selected item preview */}
       <div className="flex items-center gap-3 mb-4 p-3 bg-card rounded-lg border border-border">
         <div className="w-9 h-12 flex-shrink-0 rounded overflow-hidden bg-surface border border-border">
           {result.cover_url
             ? <img src={result.cover_url} alt="" className="w-full h-full object-cover" />
-            : <div className="w-full h-full flex items-center justify-center text-base text-muted">
-                {TYPE_FILTERS.find(f => f.value === result.type)?.emoji}
-              </div>
-          }
+            : <div className="w-full h-full flex items-center justify-center text-base text-muted">{emoji}</div>}
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium text-primary truncate">{result.title}</p>
@@ -75,75 +214,105 @@ function ConfirmPanel({ result, onBack, onAdd, isPending }: ConfirmProps) {
         <button onClick={onBack} className="text-muted hover:text-primary text-lg leading-none flex-shrink-0">←</button>
       </div>
 
-      {/* Status */}
-      <div className="mb-4">
-        <p className="text-xs text-muted uppercase tracking-wide mb-2">Status</p>
-        <div className="flex flex-wrap gap-1.5">
-          {STATUSES.map(s => (
-            <button
-              key={s.value}
-              type="button"
-              onClick={() => setStatus(s.value)}
-              className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-                status === s.value
-                  ? 'bg-accent text-bg'
-                  : 'bg-card text-muted hover:text-primary border border-border'
-              }`}
-            >
-              {s.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
       {/* Rating */}
       <div className="mb-4">
-        <p className="text-xs text-muted uppercase tracking-wide mb-2">Avaliação</p>
+        <p className="text-xs text-muted uppercase tracking-wide mb-2">Avaliação <span className="text-dim normal-case">(opcional)</span></p>
         <StarRating value={rating} onChange={setRating} size="lg" />
-        {rating > 0 && (
-          <span className="text-xs text-muted ml-1 mt-1 inline-block">{rating} estrela{rating !== 1 ? 's' : ''}</span>
-        )}
       </div>
 
-      {/* Completion date + comment (only when completed) */}
-      {showDate && (
-        <>
-          <div className="mb-4">
-            <p className="text-xs text-muted uppercase tracking-wide mb-2">Data de conclusão</p>
-            <input
-              type="date"
-              value={completedAt}
-              max={todayISODate()}
-              onChange={e => setCompletedAt(e.target.value)}
-              className="bg-card border border-border rounded-md px-3 py-1.5 text-sm text-primary outline-none focus:border-accent w-full"
-            />
+      {/* Data (conclusão / registro no diário — editável, permite dias anteriores) */}
+      <div className="mb-4">
+        <p className="text-xs text-muted uppercase tracking-wide mb-2">Data</p>
+        <input
+          type="date"
+          value={date}
+          max={todayISODate()}
+          onChange={e => setDate(e.target.value)}
+          className="bg-card border border-border rounded-md px-3 py-1.5 text-sm text-primary outline-none focus:border-accent w-full"
+        />
+      </div>
+
+      {/* Comentário (vai para o registro no diário) */}
+      <div className="mb-4">
+        <p className="text-xs text-muted uppercase tracking-wide mb-2">Comentário <span className="text-dim normal-case">(opcional)</span></p>
+        <textarea
+          value={comment}
+          onChange={e => setComment(e.target.value)}
+          rows={2}
+          placeholder="O que você achou?"
+          className="bg-card border border-border rounded-md px-3 py-1.5 text-sm text-primary placeholder:text-muted outline-none focus:border-accent w-full resize-none"
+        />
+      </div>
+
+      {/* Séries: seletor de temporadas/episódios */}
+      {isSeries && (
+        <div className="mb-4">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs text-muted uppercase tracking-wide">Episódios</p>
+            {selected.size > 0 && <span className="text-xs text-accent">{selected.size} selecionado{selected.size !== 1 ? 's' : ''}</span>}
           </div>
-          <div className="mb-4">
-            <p className="text-xs text-muted uppercase tracking-wide mb-2">Comentário <span className="text-dim normal-case">(opcional)</span></p>
-            <textarea
-              value={comment}
-              onChange={e => setComment(e.target.value)}
-              rows={2}
-              placeholder="O que você achou?"
-              className="bg-card border border-border rounded-md px-3 py-1.5 text-sm text-primary placeholder:text-muted outline-none focus:border-accent w-full resize-none"
-            />
-          </div>
-        </>
+          {loadingPreview ? (
+            <div className="space-y-2">
+              {[0, 1, 2].map(i => <div key={i} className="h-11 bg-card rounded-lg animate-pulse" />)}
+            </div>
+          ) : seasons.length === 0 ? (
+            <p className="text-xs text-muted py-2">Não foi possível carregar as temporadas (verifique a chave do TMDB). Você ainda pode adicionar à Watchlist.</p>
+          ) : (
+            <>
+              <SeasonPicker seasons={seasons} selected={selected} onToggleEp={toggleEp} onToggleSeason={toggleSeason} />
+              <p className="text-[11px] text-dim mt-2">No diário, cada episódio marcado vira um registro próprio.</p>
+            </>
+          )}
+        </div>
       )}
 
-      {/* Add button */}
+      {/* Games: horas jogadas (opcional) */}
+      {isGame && (
+        <div className="mb-4">
+          <p className="text-xs text-muted uppercase tracking-wide mb-2">Horas jogadas <span className="text-dim normal-case">(opcional)</span></p>
+          <input
+            type="number"
+            min={0}
+            step="0.5"
+            inputMode="decimal"
+            value={hours}
+            onChange={e => setHours(e.target.value)}
+            placeholder="Ex.: 12"
+            className="bg-card border border-border rounded-md px-3 py-1.5 text-sm text-primary placeholder:text-muted outline-none focus:border-accent w-full"
+          />
+        </div>
+      )}
+
+      {/* Ações */}
+      <div className="flex gap-2 mb-2">
+        <button
+          onClick={() => submit('seen')}
+          disabled={isPending || needsEpisodes}
+          className="flex-1 py-2 rounded-lg text-sm font-semibold border border-border text-primary bg-card hover:border-border-strong transition-colors disabled:opacity-50"
+          title={isSeries ? 'Marca os episódios como vistos na biblioteca, sem entrar no diário' : 'Adiciona à biblioteca sem registrar no diário'}
+        >
+          {btnBusy('seen') ? '...' : '✓ Visto'}
+        </button>
+        <button
+          onClick={() => submit('watchlist')}
+          disabled={isPending}
+          className="flex-1 py-2 rounded-lg text-sm font-semibold border border-border text-primary bg-card hover:border-border-strong transition-colors disabled:opacity-50"
+          title="Envia para a Watchlist (quero ver/ouvir/ler/jogar depois)"
+        >
+          {btnBusy('watchlist') ? '...' : '♡ Watchlist'}
+        </button>
+      </div>
       <button
-        onClick={() => onAdd({
-          status,
-          rating,
-          completed_at: showDate && completedAt ? completedAt : null,
-          comment: showDate && comment.trim() ? comment.trim() : null,
-        })}
-        disabled={isPending}
-        className="w-full py-2 bg-accent text-bg rounded-lg text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-60"
+        onClick={() => submit('diary')}
+        disabled={isPending || needsEpisodes}
+        className="w-full py-2 bg-accent text-bg rounded-lg text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-50"
+        title="Registra no diário e adiciona à biblioteca"
       >
-        {isPending ? 'Adicionando...' : '+ Adicionar à biblioteca'}
+        {btnBusy('diary') ? 'Registrando...' : '✎ Registrar no Diário'}
       </button>
+      {needsEpisodes && seasons.length > 0 && (
+        <p className="text-[11px] text-dim mt-2 text-center">Selecione ao menos um episódio para "Visto" ou "Registrar no Diário".</p>
+      )}
     </div>
   )
 }
@@ -197,13 +366,19 @@ export function SearchModal({ open, onClose }: Props) {
   })
 
   const addMutation = useMutation({
-    mutationFn: async ({ result, status, rating, completed_at, comment }: {
-      result: SearchResult
-      status: MediaStatus
-      rating: number
-      completed_at: string | null
-      comment: string | null
-    }) => {
+    mutationFn: async ({ result, action, rating, date, comment, hours, episodes }: { result: SearchResult } & AddOpts) => {
+      const isSeries = result.type === 'series'
+      const when     = date || todayISODate()
+      const note     = comment.trim() ? comment.trim() : null
+
+      // Status base: Watchlist → wishlist; séries entram como "em andamento"
+      // (os episódios marcados recomputam para "concluído" se completarem);
+      // demais tipos vistos/registrados entram como "concluído".
+      const status: MediaStatus =
+        action === 'watchlist' ? 'wishlist'
+        : isSeries             ? 'in_progress'
+        : 'completed'
+
       const item = await api.media.add({
         external_id:  result.external_id,
         type:         result.type,
@@ -219,17 +394,35 @@ export function SearchModal({ open, onClose }: Props) {
         creators:     null,
         author:       result.author,
         release_date: result.release_date,
-        completed_at,
+        completed_at: (!isSeries && action !== 'watchlist') ? when : null,
       })
-      // Concluído ao adicionar → cria também um registro no diário.
-      if (status === 'completed') {
-        await api.diary.create({
-          media_item_id: item.id,
-          watched_at: completed_at ?? undefined,
-          rating: rating > 0 ? rating : null,
-          comment,
+
+      // Games: horas jogadas (opcional) → playtime_seconds
+      if (result.type === 'game' && action !== 'watchlist' && hours > 0) {
+        await api.media.update(item.id, { playtime_seconds: Math.round(hours * 3600) })
+      }
+
+      // Séries: marca os episódios escolhidos (e registra no diário por episódio, se for o caso)
+      if (isSeries && action !== 'watchlist' && episodes.length > 0) {
+        await api.series.watchedBatch(item.id, {
+          episodes,
+          diary:      action === 'diary',
+          watched_at: when,
+          rating:     rating > 0 ? rating : null,
+          comment:    action === 'diary' ? note : null,
         })
       }
+
+      // Não-séries + "Registrar no Diário" → cria o registro no diário
+      if (!isSeries && action === 'diary') {
+        await api.diary.create({
+          media_item_id: item.id,
+          watched_at:    when,
+          rating:        rating > 0 ? rating : null,
+          comment:       note,
+        })
+      }
+
       return item
     },
     onSuccess: (item) => {
@@ -237,6 +430,7 @@ export function SearchModal({ open, onClose }: Props) {
       qc.invalidateQueries({ queryKey: ['recent'] })
       qc.invalidateQueries({ queryKey: ['upcoming'] })
       qc.invalidateQueries({ queryKey: ['diary'] })
+      qc.invalidateQueries({ queryKey: ['series', item.id] })
       onClose()
       navigate(`/media/${item.id}`)
     },
@@ -267,9 +461,7 @@ export function SearchModal({ open, onClose }: Props) {
             result={confirming}
             onBack={() => setConfirming(null)}
             isPending={addMutation.isPending}
-            onAdd={({ status, rating, completed_at, comment }) =>
-              addMutation.mutate({ result: confirming, status, rating, completed_at, comment })
-            }
+            onAdd={(opts) => addMutation.mutate({ result: confirming, ...opts })}
           />
         ) : (
           <>

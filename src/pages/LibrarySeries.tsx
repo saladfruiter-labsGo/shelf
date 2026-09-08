@@ -7,7 +7,7 @@ import { SeriesModal } from '../components/SeriesModal'
 const STATUS_LABEL: Record<string, string> = {
   completed:   'Finalizada',
   in_progress: 'Assistindo',
-  wishlist:    'Wishlist',
+  wishlist:    'Watchlist',
   dropped:     'Abandonada',
 }
 

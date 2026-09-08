@@ -43,6 +43,8 @@ export interface DiaryEntry {
   comment:       string | null
   source:        'manual' | 'plex' | 'backfill' | string
   created_at:    string
+  season_number:  number | null   // séries: episódio registrado
+  episode_number: number | null
   // campos da mídia (join)
   title:         string
   type:          MediaType
@@ -76,6 +78,26 @@ export interface SeriesView {
   watched:       number
   percent:       number   // 0..1
   seasons:       SeriesSeason[]
+}
+
+/* ─── Séries: preview (TMDB, antes de adicionar à biblioteca) ─── */
+
+export interface SeriesPreviewEpisode {
+  episode_number: number
+  title:          string | null
+}
+
+export interface SeriesPreviewSeason {
+  season_number: number
+  title:         string | null
+  episode_count: number
+  episodes:      SeriesPreviewEpisode[]
+}
+
+export interface SeriesPreview {
+  tmdb_id: string
+  total:   number
+  seasons: SeriesPreviewSeason[]
 }
 
 export interface SearchResult {

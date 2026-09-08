@@ -6,7 +6,7 @@ import { StarRating } from '../components/StarRating'
 const STATUS_LABEL: Record<string, string> = {
   completed:   'Lido',
   in_progress: 'Lendo',
-  wishlist:    'Wishlist',
+  wishlist:    'Watchlist',
   dropped:     'Abandonado',
 }
 

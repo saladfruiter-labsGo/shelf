@@ -8,6 +8,7 @@ const app = new Hono()
 const SELECT_ENTRY = `
   SELECT
     d.id, d.media_item_id, d.watched_at, d.rating, d.comment, d.source, d.created_at,
+    d.season_number, d.episode_number,
     m.title, m.type, m.cover_url, m.year, m.genre, m.external_id
   FROM diary_entries d
   JOIN media_items m ON m.id = d.media_item_id

@@ -122,6 +122,88 @@ export async function enrichSeriesStructure(mediaItemId: number, tmdbId: string)
   }
 }
 
+/* ─────────────────────────── preview (sem gravar no banco) ─────────────────────────── */
+
+export interface PreviewEpisode { episode_number: number; title: string | null }
+export interface PreviewSeason {
+  season_number: number
+  title: string | null
+  episode_count: number
+  episodes: PreviewEpisode[]
+}
+export interface SeriesPreview {
+  tmdb_id: string
+  total: number
+  seasons: PreviewSeason[]
+}
+
+/**
+ * Busca temporadas + episódios de uma série no TMDB SEM tocar no banco.
+ * Usado pelo modal de adicionar mídia, onde a série ainda não existe na biblioteca.
+ */
+export async function fetchTmdbSeriesStructure(tmdbId: string): Promise<SeriesPreview | null> {
+  const key = apiKey('TMDB_API_KEY')
+  if (!key || !tmdbId) return null
+  try {
+    const res = await fetch(`https://api.themoviedb.org/3/tv/${tmdbId}?api_key=${key}`)
+    if (!res.ok) return null
+    const show = await res.json() as any
+    const seasons: any[] = (show.seasons ?? []).filter((s: any) => s.season_number >= 1) // ignora especiais (0)
+    if (!seasons.length) return null
+
+    const out: PreviewSeason[] = []
+    let total = 0
+    for (const s of seasons) {
+      const seasonNumber: number = s.season_number
+      let episodes: PreviewEpisode[] = []
+      try {
+        const r = await fetch(`https://api.themoviedb.org/3/tv/${tmdbId}/season/${seasonNumber}?api_key=${key}`)
+        if (r.ok) {
+          const sd = await r.json() as any
+          episodes = (sd.episodes ?? []).map((ep: any) => ({
+            episode_number: ep.episode_number,
+            title: ep.name ?? null,
+          }))
+        }
+      } catch { /* segue sem a lista detalhada */ }
+      const count = s.episode_count || episodes.length
+      total += count
+      out.push({ season_number: seasonNumber, title: s.name ?? `Temporada ${seasonNumber}`, episode_count: count, episodes })
+    }
+    return { tmdb_id: String(tmdbId), total, seasons: out }
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Marca um lote de episódios como vistos numa série já existente e recomputa
+ * o status uma única vez. Retorna quantos episódios foram marcados.
+ */
+export function markEpisodesWatched(
+  mediaItemId: number,
+  episodes: { season_number: number; episode_number: number }[],
+  watchedAt?: string,
+): number {
+  const now = watchedAt ?? new Date().toISOString()
+  const tx = db.transaction((list: { season_number: number; episode_number: number }[]) => {
+    for (const e of list) {
+      upsertSeason.run({ media_item_id: mediaItemId, season_number: e.season_number, title: null, episode_count: 0 })
+      markEpisode.run({
+        media_item_id: mediaItemId,
+        season_number: e.season_number,
+        episode_number: e.episode_number,
+        title: null,
+        watched: 1,
+        watched_at: now,
+      })
+    }
+  })
+  tx(episodes)
+  recomputeSeriesStatus(mediaItemId)
+  return episodes.length
+}
+
 /**
  * Garante a estrutura da série. Resolve o tmdb_id (coluna, external_id numérico ou guid)
  * e enriquece via TMDB caso ainda não haja episódios registrados.

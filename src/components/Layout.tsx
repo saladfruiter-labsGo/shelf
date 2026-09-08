@@ -12,7 +12,7 @@ import type { MediaItem } from '../types'
 const NAV = [
   { to: '/',         label: 'Home',        end: true  },
   { to: '/library',  label: 'Biblioteca',  end: false },
-  { to: '/wishlist', label: 'Wishlist',    end: false },
+  { to: '/wishlist', label: 'Watchlist',   end: false },
   { to: '/diary',    label: 'Diário',      end: false },
   { to: '/lists',    label: 'Listas',      end: false },
   { to: '/wrap',     label: 'Wrap',        end: false },
@@ -138,7 +138,7 @@ function WrapIcon()    { return (<svg {...iconProps}><path d="M12 3v18"/><path d
 const BOTTOM_NAV = [
   { to: '/',         label: 'Home',   end: true,  Icon: HomeIcon },
   { to: '/library',  label: 'Biblioteca', end: false, Icon: LibraryIcon },
-  { to: '/wishlist', label: 'Wishlist', end: false, Icon: WishlistIcon },
+  { to: '/wishlist', label: 'Watchlist', end: false, Icon: WishlistIcon },
   { to: '/diary',    label: 'Diário', end: false, Icon: DiaryIcon },
   { to: '/lists',    label: 'Listas', end: false, Icon: ListsIcon },
   { to: '/wrap',     label: 'Wrap',   end: false, Icon: WrapIcon },

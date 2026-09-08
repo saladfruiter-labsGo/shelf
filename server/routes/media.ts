@@ -117,7 +117,7 @@ app.patch('/:id', async (c) => {
     if (base === 'completed' && body.completed_at == null) body.completed_at = new Date().toISOString()
   }
 
-  const allowed = ['rating', 'status', 'notes', 'runtime', 'synopsis', 'creators', 'author', 'release_date', 'hype', 'completed_at', 'game_status', 'last_played_at']
+  const allowed = ['rating', 'status', 'notes', 'runtime', 'synopsis', 'creators', 'author', 'release_date', 'hype', 'completed_at', 'game_status', 'last_played_at', 'playtime_seconds']
   const fields  = Object.keys(body).filter(k => allowed.includes(k))
   if (fields.length === 0) return c.json({ error: 'No valid fields' }, 400)
 
