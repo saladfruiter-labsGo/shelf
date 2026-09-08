@@ -1,5 +1,7 @@
 export type MediaType   = 'movie' | 'series' | 'game' | 'book' | 'music'
 export type MediaStatus = 'wishlist' | 'in_progress' | 'completed' | 'dropped'
+/** Status granular exclusivo de games (Playnite). */
+export type GameStatus  = 'jogando' | 'zerado' | 'platinado' | 'abandonado' | 'nunca_jogado'
 
 export interface MediaItem {
   id:           number
@@ -25,6 +27,8 @@ export interface MediaItem {
   pages_total?: number | null
   pages_read?:  number | null
   playtime_seconds?: number | null   // games (Playnite): tempo total jogado, em segundos
+  game_status?:      GameStatus | null // games (Playnite): status granular
+  last_played_at?:   string | null     // games (Playnite): última vez jogado (ISO)
 }
 
 /* ─── Diário: registros de "visto/concluído" (N por mídia) ─── */

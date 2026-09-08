@@ -1,4 +1,4 @@
-import type { MediaType } from '../types'
+import type { MediaType, GameStatus, MediaItem } from '../types'
 
 export const TYPE_LABEL: Record<MediaType, string> = {
   movie:  'Filme',
@@ -22,6 +22,27 @@ export const STATUS_LABEL = {
   completed:   'Concluído',
   dropped:     'Abandonado',
 } as const
+
+/** Status granular de games (Playnite). Ordem usada nos botões. */
+export const GAME_STATUS_LABEL: Record<GameStatus, string> = {
+  jogando:      'Jogando',
+  zerado:       'Zerado',
+  platinado:    'Platinado',
+  abandonado:   'Abandonado',
+  nunca_jogado: 'Nunca jogado',
+}
+export const GAME_STATUSES: GameStatus[] = ['jogando', 'zerado', 'platinado', 'abandonado', 'nunca_jogado']
+
+/** game_status do item; se ausente (jogo adicionado à mão), deriva do status base. */
+export function gameStatusOf(item: Pick<MediaItem, 'game_status' | 'status'>): GameStatus {
+  if (item.game_status) return item.game_status
+  switch (item.status) {
+    case 'completed': return 'zerado'
+    case 'dropped':   return 'abandonado'
+    case 'wishlist':  return 'nunca_jogado'
+    default:          return 'jogando'
+  }
+}
 
 /** "5" for whole ratings, "4.5" for half steps. */
 export function fmtRating(r: number): string {

@@ -76,6 +76,8 @@ const newCols: [string, string][] = [
   ['pages_total',   'INTEGER'], // livros (Kavita): total de páginas da série/volume
   ['pages_read',    'INTEGER'], // livros (Kavita): páginas lidas até o último poll
   ['playtime_seconds', 'INTEGER'], // games (Playnite): tempo total jogado, em segundos
+  ['game_status',   'TEXT'],    // games (Playnite): status granular (jogando|zerado|platinado|abandonado|nunca_jogado)
+  ['last_played_at','TEXT'],    // games (Playnite): última vez jogado (ISO), do LastActivity
 ]
 for (const [col, def] of newCols) {
   if (!cols.includes(col)) db.exec(`ALTER TABLE media_items ADD COLUMN ${col} ${def}`)

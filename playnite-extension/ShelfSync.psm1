@@ -77,6 +77,11 @@ function Send-ShelfGame {
     $year = $null
     if ($game.ReleaseDate -and $game.ReleaseDate.Year) { $year = [int]$game.ReleaseDate.Year }
 
+    $lastPlayed = $null
+    if ($null -ne $game.LastActivity) {
+        try { $lastPlayed = ([datetime]$game.LastActivity).ToUniversalTime().ToString("o") } catch {}
+    }
+
     $payload = @{
         gameId           = $game.Id.ToString()
         name             = [string]$game.Name
@@ -84,6 +89,7 @@ function Send-ShelfGame {
         completionStatus = $completion
         userScore        = $score
         releaseYear      = $year
+        lastPlayed       = $lastPlayed
     }
 
     try {

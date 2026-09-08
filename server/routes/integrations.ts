@@ -667,29 +667,30 @@ function ensurePlayniteSecret(): string {
   return s
 }
 
-/** Upsert de jogo sem forçar conclusão (aceita 'in_progress' | 'completed' | 'dropped' | 'wishlist'). */
+/**
+ * Upsert de jogo do Playnite. O Playnite é a fonte de verdade do status
+ * (o usuário curou lá, inclusive regra de auto-abandono), então status/game_status
+ * do envio sempre vencem. completed_at só é gravado quando vira concluído (zerado/platinado).
+ */
 const upsertGame = db.prepare(`
-  INSERT INTO media_items (external_id, type, title, cover_url, year, genre, creators, status, rating, playtime_seconds)
-  VALUES (@external_id, 'game', @title, @cover_url, @year, @genre, @creators, @status, @rating, @playtime_seconds)
+  INSERT INTO media_items
+    (external_id, type, title, cover_url, year, genre, creators, status, game_status, rating, playtime_seconds, last_played_at, completed_at)
+  VALUES
+    (@external_id, 'game', @title, @cover_url, @year, @genre, @creators, @status, @game_status, @rating, @playtime_seconds, @last_played_at,
+     CASE WHEN @is_completed = 1 THEN @completed_at ELSE NULL END)
   ON CONFLICT(external_id, type) DO UPDATE SET
     title            = COALESCE(media_items.title, excluded.title),
     cover_url        = COALESCE(media_items.cover_url, excluded.cover_url),
     year             = COALESCE(media_items.year, excluded.year),
     genre            = COALESCE(media_items.genre, excluded.genre),
     creators         = COALESCE(media_items.creators, excluded.creators),
-    -- nunca rebaixa um jogo já concluído de volta para 'in_progress'
-    status           = CASE WHEN media_items.status = 'completed' AND excluded.status = 'in_progress'
-                           THEN media_items.status ELSE excluded.status END,
+    status           = excluded.status,
+    game_status      = excluded.game_status,
     rating           = CASE WHEN excluded.rating > 0 THEN excluded.rating ELSE media_items.rating END,
     playtime_seconds = excluded.playtime_seconds,
+    last_played_at   = COALESCE(excluded.last_played_at, media_items.last_played_at),
+    completed_at     = CASE WHEN @is_completed = 1 THEN COALESCE(media_items.completed_at, @completed_at) ELSE media_items.completed_at END,
     updated_at       = datetime('now')
-`)
-
-const completeGame = db.prepare(`
-  UPDATE media_items SET status = 'completed',
-    completed_at = COALESCE(completed_at, @completed_at),
-    updated_at = datetime('now')
-  WHERE external_id = @external_id AND type = 'game'
 `)
 
 const insertDiaryPlaynite = db.prepare(`
@@ -697,22 +698,35 @@ const insertDiaryPlaynite = db.prepare(`
   VALUES (?, ?, ?, NULL, 'playnite')
 `)
 
-type PlayniteState = Record<string, { externalId: string; status: string; rating: number; playtime: number }>
+type PlayniteState = Record<string, { externalId: string; gameStatus: string; rating: number; playtime: number }>
 function readPlayniteState(): PlayniteState {
   try { return JSON.parse(cfg('PLAYNITE_STATE') || '{}') } catch { return {} }
 }
 function writePlayniteState(s: PlayniteState) { setCfg('PLAYNITE_STATE', JSON.stringify(s)) }
 
-/** CompletionStatus do Playnite → status do Shelf (nomes padrão, case-insensitive). */
-function playniteStatus(completion: string | undefined, playtimeSeconds: number): 'wishlist' | 'in_progress' | 'completed' | 'dropped' {
-  const c = (completion ?? '').trim().toLowerCase()
-  if (['completed', 'beaten', 'finished', 'concluído', 'concluido', 'zerado'].includes(c)) return 'completed'
-  if (['abandoned', 'on hold', 'dropped', 'abandonado', 'em espera'].includes(c)) return 'dropped'
-  if (['plan to play', 'not played', 'planejado', 'não jogado', 'nao jogado'].includes(c)) {
-    return playtimeSeconds > 0 ? 'in_progress' : 'wishlist'
+/** Status granular de games no Shelf. */
+export type GameStatus = 'jogando' | 'zerado' | 'platinado' | 'abandonado' | 'nunca_jogado'
+
+/** CompletionStatus do Playnite → status granular de game do Shelf (de-para do usuário). */
+function playniteGameStatus(completion: string | undefined, playtimeSeconds: number): GameStatus {
+  switch ((completion ?? '').trim().toLowerCase()) {
+    case 'beaten':                       return 'platinado'
+    case 'completed': case 'finished':   return 'zerado'
+    case 'abandoned':                    return 'abandonado'
+    case 'not played': case 'plan to play': return 'nunca_jogado'
+    case 'played': case 'playing': case 'on hold': return 'jogando'
+    // status customizado/desconhecido: pelo tempo jogado
+    default: return playtimeSeconds > 0 ? 'jogando' : 'nunca_jogado'
   }
-  // "Playing", "Played" ou status customizado: em progresso se já jogou algo
-  return playtimeSeconds > 0 ? 'in_progress' : 'wishlist'
+}
+
+/** game_status → status base do Shelf (mantém contagens/wishlist/wrap funcionando). */
+export const GAME_STATUS_TO_BASE: Record<GameStatus, 'wishlist' | 'in_progress' | 'completed' | 'dropped'> = {
+  jogando:      'in_progress',
+  zerado:       'completed',
+  platinado:    'completed',
+  abandonado:   'dropped',
+  nunca_jogado: 'wishlist',
 }
 
 /** UserScore do Playnite (0–100) → escala 0–5 (meio-ponto) do Shelf. */
@@ -728,6 +742,7 @@ interface PlaynitePayload {
   completionStatus?: string
   userScore?: number | null
   releaseYear?: number | null
+  lastPlayed?: string | null   // ISO 8601 (Playnite LastActivity)
 }
 
 app.post('/playnite/webhook', async (c) => {
@@ -744,9 +759,16 @@ app.post('/playnite/webhook', async (c) => {
   if (!gameId || !name) return c.json({ error: 'gameId and name required' }, 400)
 
   const playtime = Math.max(0, Math.round(p.playtimeSeconds ?? 0))
-  const status = playniteStatus(p.completionStatus, playtime)
+  const gameStatus = playniteGameStatus(p.completionStatus, playtime)
+  const status = GAME_STATUS_TO_BASE[gameStatus]
   const rating = playniteRating(p.userScore)
   const nowIso = new Date().toISOString()
+
+  // última vez jogada (LastActivity do Playnite); tolera valor inválido
+  let lastPlayedIso: string | null = null
+  if (p.lastPlayed) { const d = new Date(p.lastPlayed); if (!isNaN(d.getTime())) lastPlayedIso = d.toISOString() }
+
+  const isCompleted = gameStatus === 'zerado' || gameStatus === 'platinado'
 
   const state = readPlayniteState()
   const prev = state[gameId]
@@ -771,30 +793,33 @@ app.post('/playnite/webhook', async (c) => {
 
   upsertGame.run({
     external_id: externalId, title: name, cover_url, year, genre, creators: null,
-    status, rating, playtime_seconds: playtime || null,
+    status, game_status: gameStatus, rating, playtime_seconds: playtime || null,
+    last_played_at: lastPlayedIso,
+    is_completed: isCompleted ? 1 : 0, completed_at: lastPlayedIso ?? nowIso,
   })
   const row = getMediaId.get(externalId, 'game') as { id: number } | undefined
   if (!row) return c.json({ ok: true })
 
-  if (status === 'completed') {
-    completeGame.run({ external_id: externalId, completed_at: nowIso })
-    if (prev?.status !== 'completed') {
-      insertActivity.run({
-        source: 'playnite', event_type: 'played', media_type: 'game',
-        external_ref: externalId, title: name, subtitle: null,
-        cover_url, rating: rating || null, duration_ms: null,
-        genre, occurred_at: nowIso, raw: null,
-      })
-      insertDiaryPlaynite.run(row.id, nowIso, rating || null)
-      notifyLibraryActivity({ event: 'completed', type: 'game', title: name, rating: rating || null })
-    }
-  } else if (!prev && playtime > 0) {
+  const prevGS = prev?.gameStatus
+  const wasCompleted = prevGS === 'zerado' || prevGS === 'platinado'
+
+  if (isCompleted && !wasCompleted) {
+    // transição para concluído (zerado/platinado)
+    insertActivity.run({
+      source: 'playnite', event_type: 'played', media_type: 'game',
+      external_ref: externalId, title: name, subtitle: null,
+      cover_url, rating: rating || null, duration_ms: null,
+      genre, occurred_at: lastPlayedIso ?? nowIso, raw: null,
+    })
+    insertDiaryPlaynite.run(row.id, lastPlayedIso ?? nowIso, rating || null)
+    notifyLibraryActivity({ event: 'completed', type: 'game', title: name, rating: rating || null })
+  } else if (!prev && gameStatus === 'jogando') {
     // primeira vez que vemos este jogo em progresso
     insertActivity.run({
       source: 'playnite', event_type: 'playing', media_type: 'game',
       external_ref: externalId, title: name, subtitle: null,
       cover_url, rating: null, duration_ms: null,
-      genre, occurred_at: nowIso, raw: null,
+      genre, occurred_at: lastPlayedIso ?? nowIso, raw: null,
     })
     notifyLibraryActivity({ event: 'in_progress', type: 'game', title: name })
   }
@@ -811,7 +836,7 @@ app.post('/playnite/webhook', async (c) => {
     notifyLibraryActivity({ event: 'rated', type: 'game', title: name, rating })
   }
 
-  state[gameId] = { externalId, status, rating, playtime }
+  state[gameId] = { externalId, gameStatus, rating, playtime }
   writePlayniteState(state)
   return c.json({ ok: true })
 })

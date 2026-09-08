@@ -101,10 +101,23 @@ app.post('/', async (c) => {
   }
 })
 
+// game_status (granular de games) → status base do Shelf
+const GAME_STATUS_TO_BASE: Record<string, 'wishlist' | 'in_progress' | 'completed' | 'dropped'> = {
+  jogando: 'in_progress', zerado: 'completed', platinado: 'completed', abandonado: 'dropped', nunca_jogado: 'wishlist',
+}
+
 app.patch('/:id', async (c) => {
   const id   = c.req.param('id')
   const body = await c.req.json()
-  const allowed = ['rating', 'status', 'notes', 'runtime', 'synopsis', 'creators', 'author', 'release_date', 'hype', 'completed_at']
+
+  // Ao mudar o status granular de um game, deriva o status base (e a data de conclusão).
+  if (typeof body.game_status === 'string' && GAME_STATUS_TO_BASE[body.game_status]) {
+    const base = GAME_STATUS_TO_BASE[body.game_status]
+    body.status = base
+    if (base === 'completed' && body.completed_at == null) body.completed_at = new Date().toISOString()
+  }
+
+  const allowed = ['rating', 'status', 'notes', 'runtime', 'synopsis', 'creators', 'author', 'release_date', 'hype', 'completed_at', 'game_status', 'last_played_at']
   const fields  = Object.keys(body).filter(k => allowed.includes(k))
   if (fields.length === 0) return c.json({ error: 'No valid fields' }, 400)
 
