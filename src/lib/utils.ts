@@ -33,6 +33,15 @@ export const GAME_STATUS_LABEL: Record<GameStatus, string> = {
 }
 export const GAME_STATUSES: GameStatus[] = ['jogando', 'zerado', 'platinado', 'abandonado', 'nunca_jogado']
 
+/** Cor (texto/fundo) por status de game — theme-aware, uma cor distinta por estado. */
+export const GAME_STATUS_STYLE: Record<GameStatus, { color: string; bg: string }> = {
+  jogando:      { color: 'var(--games)',      bg: 'var(--games-bg)' },
+  zerado:       { color: 'var(--series)',     bg: 'var(--series-bg)' },
+  platinado:    { color: 'var(--music)',      bg: 'var(--music-bg)' },
+  abandonado:   { color: 'var(--movies)',     bg: 'var(--movies-bg)' },
+  nunca_jogado: { color: 'var(--text-muted)', bg: 'var(--card-hover)' },
+}
+
 /** game_status do item; se ausente (jogo adicionado à mão), deriva do status base. */
 export function gameStatusOf(item: Pick<MediaItem, 'game_status' | 'status'>): GameStatus {
   if (item.game_status) return item.game_status

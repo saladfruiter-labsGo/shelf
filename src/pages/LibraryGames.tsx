@@ -1,7 +1,11 @@
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../lib/api'
-import { formatPlaytime, GAME_STATUS_LABEL, gameStatusOf } from '../lib/utils'
+import { formatPlaytime, formatDate, GAME_STATUS_LABEL, GAME_STATUS_STYLE, gameStatusOf } from '../lib/utils'
+import type { GameStatus } from '../types'
+
+// Estados que aparecem na biblioteca (nunca_jogado = wishlist, fica de fora).
+const HEADER_STATES: GameStatus[] = ['jogando', 'zerado', 'platinado', 'abandonado']
 
 export function LibraryGames() {
   const navigate = useNavigate()
@@ -12,15 +16,17 @@ export function LibraryGames() {
   })
 
   // Itens em wishlist (nunca jogado) ficam só na Wishlist, fora da biblioteca.
-  const items = rawItems.filter(i => i.status !== 'wishlist')
+  // Ordena da última vez jogada mais recente para a mais antiga (sem data vai pro fim).
+  const items = rawItems
+    .filter(i => i.status !== 'wishlist')
+    .sort((a, b) => (b.last_played_at ? Date.parse(b.last_played_at) : 0) - (a.last_played_at ? Date.parse(a.last_played_at) : 0))
 
-  const done = items.filter(i => { const s = gameStatusOf(i); return s === 'zerado' || s === 'platinado' }).length
-  const playing = items.filter(i => gameStatusOf(i) === 'jogando').length
+  const countByStatus = (s: GameStatus) => items.filter(i => gameStatusOf(i) === s).length
 
   return (
     <div style={{ background: 'var(--bg)', color: 'var(--text-primary)', minHeight: '100vh' }}>
       {/* Header */}
-      <div style={{ padding: '64px var(--page-x) 48px', maxWidth: 1280, margin: '0 auto', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 32 }}>
+      <div className="lib-header" style={{ padding: '64px var(--page-x) 48px', maxWidth: 1280, margin: '0 auto' }}>
         <div>
           <button
             onClick={() => navigate('/library')}
@@ -36,14 +42,13 @@ export function LibraryGames() {
             Meus jogos
           </h1>
         </div>
-        <div style={{ display: 'flex', gap: 32, flexShrink: 0 }}>
+        <div className="lib-stats">
           {[
-            { n: items.length, l: 'Total' },
-            { n: done,         l: 'Concluídos' },
-            { n: playing,      l: 'Jogando' },
+            { n: items.length, l: 'Total', color: 'var(--text-primary)' },
+            ...HEADER_STATES.map(s => ({ n: countByStatus(s), l: GAME_STATUS_LABEL[s], color: GAME_STATUS_STYLE[s].color })),
           ].map(s => (
             <div key={s.l} style={{ textAlign: 'right' }}>
-              <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: 40, fontWeight: 800, color: 'var(--games)', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{s.n}</p>
+              <p className="lib-stat-n" style={{ fontFamily: 'Space Grotesk, sans-serif', fontWeight: 800, color: s.color, lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{s.n}</p>
               <p style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px' }}>{s.l}</p>
             </div>
           ))}
@@ -86,7 +91,7 @@ export function LibraryGames() {
                   <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8, lineHeight: 1.2 }}>
                     {item.title}
                   </p>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, flexWrap: 'wrap', marginTop: 10 }}>
                     {(item.playtime_seconds ?? 0) > 0
                       ? <span style={{ fontFamily: 'Space Grotesk, monospace', fontSize: 13, color: 'var(--games)' }}>⏱ {formatPlaytime(item.playtime_seconds!)}</span>
                       : item.runtime
@@ -95,19 +100,23 @@ export function LibraryGames() {
                     }
                     {(() => {
                       const gs = gameStatusOf(item)
-                      const isDone = gs === 'zerado' || gs === 'platinado'
+                      const st = GAME_STATUS_STYLE[gs]
                       return (
                         <span style={{
                           fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.5px',
                           padding: '3px 8px', borderRadius: 4,
-                          background: isDone ? 'var(--accent-bg)' : 'var(--games-bg)',
-                          color: isDone ? 'var(--accent)' : 'var(--games)',
+                          background: st.bg, color: st.color,
                         }}>
                           {GAME_STATUS_LABEL[gs]}
                         </span>
                       )
                     })()}
                   </div>
+                  {item.last_played_at && (
+                    <p style={{ fontFamily: 'Space Grotesk, monospace', fontSize: 11, color: 'var(--text-muted)', marginTop: 8 }}>
+                      Jogado em {formatDate(item.last_played_at)}
+                    </p>
+                  )}
                 </div>
               </div>
             ))
