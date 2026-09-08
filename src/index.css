@@ -255,6 +255,20 @@ body {
   }
 }
 
+/* ─── Cabeçalho de biblioteca (título + contadores) — responsivo ─── */
+.lib-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 32px; }
+.lib-stats  { display: flex; gap: 28px; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
+.lib-stat-n { font-size: 40px; }
+@media (max-width: 760px) {
+  .lib-header { flex-direction: column; align-items: flex-start; gap: 20px; }
+  .lib-stats  { justify-content: flex-start; gap: 22px 20px; }
+  .lib-stat-n { font-size: 30px; }
+}
+@media (max-width: 420px) {
+  .lib-stats  { gap: 18px 16px; }
+  .lib-stat-n { font-size: 24px; }
+}
+
 /* ─── Bottom tab bar (mobile app navigation) ─── */
 .bottom-nav {
   position: fixed;
