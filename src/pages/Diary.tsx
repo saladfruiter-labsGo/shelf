@@ -21,8 +21,32 @@ const CAT_STYLE: Record<string, { bg: string; color: string; label: string }> = 
   music:  { bg: 'var(--music-bg)',  color: 'var(--music)',  label: 'Música' },
 }
 
+/**
+ * Interpreta o watched_at. Strings só-data ("YYYY-MM-DD") são tratadas como
+ * data LOCAL (evita o deslocamento de -1 dia ao renderizar em fusos negativos);
+ * datetimes completos usam o parser nativo.
+ */
+function parseLocal(iso: string): Date {
+  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
+  return new Date(iso)
+}
+
 function formatDiaryDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })
+  return parseLocal(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })
+}
+
+/** Chave de dia local (YYYY-MM-DD) para agrupar registros. */
+function dayKey(iso: string): string {
+  const d = parseLocal(iso)
+  if (isNaN(d.getTime())) return iso.slice(0, 10)
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 10)
+}
+
+/** Cabeçalho de um grupo de dia: "sexta-feira, 08 de setembro de 2026". */
+function formatDayHeader(iso: string): string {
+  const s = parseLocal(iso).toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })
+  return s.charAt(0).toUpperCase() + s.slice(1)
 }
 
 const MONTHS = [
@@ -118,6 +142,18 @@ export function Diary() {
 
   const hasFilters = !!(nameQ || month || execYear || releaseYear)
   const clearFilters = () => { setNameQ(''); setMonth(''); setExecYear(''); setRelYear('') }
+
+  // Agrupa os registros já ordenados por dia (separadores orgânicos, dia a dia).
+  const groups = useMemo(() => {
+    const out: { key: string; label: string; entries: DiaryEntry[] }[] = []
+    for (const e of filtered) {
+      const key = dayKey(e.watched_at)
+      const last = out[out.length - 1]
+      if (last && last.key === key) last.entries.push(e)
+      else out.push({ key, label: formatDayHeader(e.watched_at), entries: [e] })
+    }
+    return out
+  }, [filtered])
 
   const updateMutation = useMutation({
     mutationFn: ({ id, values }: { id: number; values: DiaryEntryValues }) =>
@@ -216,63 +252,69 @@ export function Diary() {
               <div style={{ flex: 1, height: 14, background: 'var(--card)', borderRadius: 4, maxWidth: 240 }} />
             </div>
           ))
-        ) : filtered.length > 0 ? (
-          filtered.map(entry => {
-            const cat = CAT_STYLE[entry.type] ?? { bg: 'rgba(106,106,136,.1)', color: 'var(--text-muted)', label: entry.type }
-            return (
-              <div
-                key={entry.id}
-                className="row-fade diary-row"
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: '96px 34px 1fr auto',
-                  alignItems: 'center', gap: 14,
-                  padding: '18px 0',
-                  borderBottom: '1px solid var(--border)',
-                }}
-              >
-                <span style={{ fontFamily: 'Space Grotesk, monospace', fontSize: 12, color: 'var(--text-muted)' }}>
-                  {formatDiaryDate(entry.watched_at)}
+        ) : groups.length > 0 ? (
+          groups.map(group => (
+            <section key={group.key} className="diary-group">
+              {/* Separador de data — as mídias do dia ficam aninhadas abaixo */}
+              <header className="diary-day">
+                <span className="diary-day-bar" aria-hidden />
+                <span className="diary-day-label">{group.label}</span>
+                <span className="diary-day-count">
+                  {group.entries.length} {group.entries.length === 1 ? 'registro' : 'registros'}
                 </span>
-                <span style={{ fontSize: 20, textAlign: 'center' }}>{TYPE_EMOJI[entry.type] ?? '📌'}</span>
-                <div
-                  onClick={() => navigate(`/media/${entry.media_item_id}`)}
-                  style={{ cursor: 'pointer', minWidth: 0 }}
-                >
-                  <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.3 }}>
-                    {entry.title}
-                    {entry.season_number != null && entry.episode_number != null && (
-                      <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 700, color: 'var(--series)' }}>
-                        T{entry.season_number}E{entry.episode_number}
-                      </span>
-                    )}
-                    {entry.source === 'plex' && (
-                      <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 600, color: 'var(--dim)', textTransform: 'uppercase', letterSpacing: '.5px' }}>Plex</span>
-                    )}
-                  </p>
-                  <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 3 }}>
-                    {entry.year ?? '—'}{entry.genre ? ` · ${entry.genre}` : ''}
-                    {entry.rating && entry.rating > 0 ? ` · ★ ${entry.rating}` : ''}
-                  </p>
-                  {entry.comment && (
-                    <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4, fontStyle: 'italic', lineHeight: 1.4 }}>
-                      “{entry.comment}”
-                    </p>
-                  )}
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: '.5px', textTransform: 'uppercase', padding: '3px 8px', borderRadius: 4, background: cat.bg, color: cat.color, whiteSpace: 'nowrap' }}>
-                    {cat.label}
-                  </span>
-                  {isMobile && (
-                    <button onClick={() => setStoryFor(entry)} title="Gerar Story" className="diary-action">🎨</button>
-                  )}
-                  <button onClick={() => setEditing(entry)} title="Editar" className="diary-action">✎</button>
-                  <button onClick={() => setRemoving(entry)} title="Remover" className="diary-action diary-action-danger">🗑</button>
-                </div>
+              </header>
+
+              <div className="diary-day-items">
+                {group.entries.map(entry => {
+                  const cat = CAT_STYLE[entry.type] ?? { bg: 'rgba(106,106,136,.1)', color: 'var(--text-muted)', label: entry.type }
+                  return (
+                    <div key={entry.id} className="row-fade diary-item">
+                      <div
+                        className="diary-item-cover"
+                        onClick={() => navigate(`/media/${entry.media_item_id}`)}
+                      >
+                        {entry.cover_url
+                          ? <img src={entry.cover_url} alt="" loading="lazy" />
+                          : <span>{TYPE_EMOJI[entry.type] ?? '📌'}</span>}
+                      </div>
+
+                      <div className="diary-item-main" onClick={() => navigate(`/media/${entry.media_item_id}`)}>
+                        <p className="diary-item-title">
+                          {entry.title}
+                          {entry.season_number != null && entry.episode_number != null && (
+                            <span className="diary-item-ep">T{entry.season_number}E{entry.episode_number}</span>
+                          )}
+                          {entry.source === 'plex' && <span className="diary-item-plex">Plex</span>}
+                        </p>
+                        <p className="diary-item-meta">
+                          {entry.year ?? '—'}{entry.genre ? ` · ${entry.genre}` : ''}
+                          {entry.rating && entry.rating > 0 && (
+                            <span className="diary-item-rating"> · ★ {entry.rating}</span>
+                          )}
+                        </p>
+                        {entry.comment && (
+                          <p className="diary-item-comment">“{entry.comment}”</p>
+                        )}
+                      </div>
+
+                      <div className="diary-item-side">
+                        <span className="diary-item-tag" style={{ background: cat.bg, color: cat.color }}>
+                          {cat.label}
+                        </span>
+                        <div className="diary-item-actions">
+                          {isMobile && (
+                            <button onClick={() => setStoryFor(entry)} title="Gerar Story" className="diary-action">🎨</button>
+                          )}
+                          <button onClick={() => setEditing(entry)} title="Editar" className="diary-action">✎</button>
+                          <button onClick={() => setRemoving(entry)} title="Remover" className="diary-action diary-action-danger">🗑</button>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
-            )
-          })
+            </section>
+          ))
         ) : (
           <div style={{ textAlign: 'center', padding: '80px 0' }}>
             <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '3rem', fontWeight: 800, color: 'var(--border)', marginBottom: 12 }}>Vazio</p>
@@ -311,6 +353,70 @@ export function Diary() {
       />
 
       <style>{`
+        .diary-group { margin-bottom: 30px; }
+
+        .diary-day {
+          display: flex; align-items: center; gap: 12px;
+          padding: 0 4px 12px;
+          margin-bottom: 6px;
+          border-bottom: 1px solid var(--border);
+        }
+        .diary-day-bar {
+          width: 4px; height: 22px; border-radius: 999px;
+          background: var(--accent); flex-shrink: 0;
+        }
+        .diary-day-label {
+          font-family: 'Space Grotesk', sans-serif;
+          font-size: 17px; font-weight: 700; letter-spacing: -.3px;
+          color: var(--text-secondary);
+        }
+        .diary-day-count {
+          margin-left: auto; flex-shrink: 0;
+          font-size: 11px; font-weight: 600; letter-spacing: .2px;
+          color: var(--text-muted); background: var(--card);
+          padding: 4px 11px; border-radius: 999px;
+        }
+
+        .diary-day-items { display: flex; flex-direction: column; gap: 2px; }
+        .diary-item {
+          display: grid; grid-template-columns: 44px 1fr auto;
+          align-items: center; gap: 14px;
+          padding: 10px; border-radius: 12px;
+          transition: background .15s;
+        }
+        .diary-item:hover { background: var(--card); }
+        .diary-item-cover {
+          width: 44px; height: 44px; border-radius: 9px; overflow: hidden;
+          background: var(--card-hover); border: 1px solid var(--border);
+          display: grid; place-items: center; font-size: 20px;
+          cursor: pointer; flex-shrink: 0;
+        }
+        .diary-item-cover img { width: 100%; height: 100%; object-fit: cover; }
+        .diary-item-main { min-width: 0; cursor: pointer; }
+        .diary-item-title {
+          font-family: 'Space Grotesk', sans-serif; font-size: 15px; font-weight: 600;
+          color: var(--text-primary); line-height: 1.3;
+          overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        .diary-item-ep { margin-left: 8px; font-size: 11px; font-weight: 700; color: var(--series); }
+        .diary-item-plex {
+          margin-left: 8px; font-size: 10px; font-weight: 600;
+          color: var(--dim); text-transform: uppercase; letter-spacing: .5px;
+        }
+        .diary-item-meta { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+        .diary-item-rating { color: var(--accent); font-weight: 600; }
+        .diary-item-comment {
+          font-size: 12px; color: var(--text-secondary); font-style: italic;
+          margin-top: 3px; line-height: 1.4;
+          overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        .diary-item-side { display: flex; align-items: center; gap: 10px; }
+        .diary-item-tag {
+          font-size: 10px; font-weight: 600; letter-spacing: .5px; text-transform: uppercase;
+          padding: 3px 8px; border-radius: 5px; white-space: nowrap;
+        }
+        .diary-item-actions { display: flex; align-items: center; gap: 4px; }
+
         .diary-action {
           background: none; border: none; cursor: pointer;
           font-size: 15px; line-height: 1; padding: 6px; border-radius: 8px;
