@@ -206,6 +206,17 @@ export interface ActivityEvent {
   occurred_at:  string
 }
 
+/** "Em alta no público": item de trending externo (TMDB/RAWG/Last.fm). */
+export interface TrendingItem {
+  type:         'movie' | 'series' | 'game' | 'music'
+  title:        string
+  subtitle:     string | null
+  cover_url:    string | null
+  metric:       string
+  metric_label: string
+  external_id:  string | null
+}
+
 export interface MusicStats {
   plays:       number
   hours:       number
