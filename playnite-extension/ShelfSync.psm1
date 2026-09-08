@@ -58,6 +58,36 @@ function Set-LastDailySync {
     try { @{ LastDailySync = $dateStr } | ConvertTo-Json | Set-Content -Path (Get-StatePath) -Encoding UTF8 } catch {}
 }
 
+# Mapa PluginId(Guid) -> nome da biblioteca: nomes conhecidos das lojas +
+# nomes reais dos plugins carregados. Cacheado por sessao.
+$script:ShelfLibMap = $null
+function Get-ShelfLibraryMap {
+    if ($null -ne $script:ShelfLibMap) { return $script:ShelfLibMap }
+    $map = @{}
+    # nomes reais dos plugins carregados (cobre lojas nao listadas abaixo)
+    try {
+        foreach ($pl in $PlayniteApi.Addons.Plugins) {
+            try { if ($pl.Id -and $pl.Name) { $map[$pl.Id.ToString().ToLower()] = [string]$pl.Name } } catch {}
+        }
+    } catch {}
+    # nomes curados das lojas conhecidas VENCEM (ex.: "Steam", nao "Steam Library")
+    $known = @{
+        'cb91dfc9-b977-43bf-8e70-55f46e410fab' = 'Steam'
+        'aebe8b7c-6dc3-4a66-af31-e7375c6b5e9e' = 'GOG'
+        '00000002-dbd1-46c6-b5d0-b1ba559d10e4' = 'Epic'
+        'c2f038e5-8b92-4877-91f1-da9094155fc5' = 'Ubisoft Connect'
+        '85dd7072-2f20-4e76-a007-41035e390724' = 'EA app'
+        'e3c26a3d-d695-4cb7-a769-5ff7612c7edd' = 'Battle.net'
+        '7e4fbb5e-2ae3-48d4-8ba0-6b30e7a4e287' = 'Xbox'
+        '402674cd-4af6-4886-b6ec-0e695bfa0688' = 'Amazon Games'
+        '00000001-ebb2-4eec-abcb-7c89937a42bb' = 'itch.io'
+        'e4ac81cb-1b1a-4ec9-8639-9a9633989a71' = 'PlayStation'
+    }
+    foreach ($k in $known.Keys) { $map[$k] = $known[$k] }
+    $script:ShelfLibMap = $map
+    return $map
+}
+
 function Send-ShelfGame {
     param($game)
 
@@ -82,13 +112,22 @@ function Send-ShelfGame {
         try { $lastPlayed = ([datetime]$game.LastActivity).ToUniversalTime().ToString("o") } catch {}
     }
 
-    $library = $null
-    if ($game.Source) { $library = [string]$game.Source.Name }
+    # Biblioteca = plugin que importou o jogo (NAO o Source). Sem plugin = biblioteca nativa "Playnite".
+    $library = 'Playnite'
+    if ($game.PluginId) {
+        $plgId = $game.PluginId.ToString().ToLower()
+        if ($plgId -ne '00000000-0000-0000-0000-000000000000') {
+            $m = Get-ShelfLibraryMap
+            $library = if ($m.ContainsKey($plgId)) { $m[$plgId] } else { $null }
+        }
+    }
 
     $developers = @()
     if ($game.Developers) { $developers = @($game.Developers | ForEach-Object { [string]$_.Name } | Where-Object { $_ }) }
+    elseif ($game.DeveloperIds) { $developers = @($game.DeveloperIds | ForEach-Object { $c = $PlayniteApi.Database.Companies.Get($_); if ($c) { [string]$c.Name } } | Where-Object { $_ }) }
     $publishers = @()
     if ($game.Publishers) { $publishers = @($game.Publishers | ForEach-Object { [string]$_.Name } | Where-Object { $_ }) }
+    elseif ($game.PublisherIds) { $publishers = @($game.PublisherIds | ForEach-Object { $c = $PlayniteApi.Database.Companies.Get($_); if ($c) { [string]$c.Name } } | Where-Object { $_ }) }
 
     $payload = @{
         gameId           = $game.Id.ToString()
