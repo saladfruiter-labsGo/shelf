@@ -82,6 +82,14 @@ function Send-ShelfGame {
         try { $lastPlayed = ([datetime]$game.LastActivity).ToUniversalTime().ToString("o") } catch {}
     }
 
+    $library = $null
+    if ($game.Source) { $library = [string]$game.Source.Name }
+
+    $developers = @()
+    if ($game.Developers) { $developers = @($game.Developers | ForEach-Object { [string]$_.Name } | Where-Object { $_ }) }
+    $publishers = @()
+    if ($game.Publishers) { $publishers = @($game.Publishers | ForEach-Object { [string]$_.Name } | Where-Object { $_ }) }
+
     $payload = @{
         gameId           = $game.Id.ToString()
         name             = [string]$game.Name
@@ -90,6 +98,9 @@ function Send-ShelfGame {
         userScore        = $score
         releaseYear      = $year
         lastPlayed       = $lastPlayed
+        library          = $library
+        developers       = @($developers)
+        publishers       = @($publishers)
     }
 
     try {

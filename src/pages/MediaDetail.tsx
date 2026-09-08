@@ -338,6 +338,20 @@ export function MediaDetail() {
             <p className="text-sm text-secondary">{creators}</p>
           </div>
         )}
+
+        {item.type === 'game' && item.publisher && (
+          <div className="mb-6">
+            <p className="text-xs text-muted uppercase tracking-wide mb-1">Distribuidora</p>
+            <p className="text-sm text-secondary">{item.publisher}</p>
+          </div>
+        )}
+
+        {item.type === 'game' && item.library && (
+          <div className="mb-6">
+            <p className="text-xs text-muted uppercase tracking-wide mb-1">Biblioteca</p>
+            <p className="text-sm text-secondary">{item.library}</p>
+          </div>
+        )}
       </div>
 
       {/* Temporadas e episódios (apenas séries) */}

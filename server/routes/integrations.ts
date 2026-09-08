@@ -674,16 +674,19 @@ function ensurePlayniteSecret(): string {
  */
 const upsertGame = db.prepare(`
   INSERT INTO media_items
-    (external_id, type, title, cover_url, year, genre, creators, status, game_status, rating, playtime_seconds, last_played_at, completed_at)
+    (external_id, type, title, cover_url, year, genre, creators, publisher, library, status, game_status, rating, playtime_seconds, last_played_at, completed_at)
   VALUES
-    (@external_id, 'game', @title, @cover_url, @year, @genre, @creators, @status, @game_status, @rating, @playtime_seconds, @last_played_at,
+    (@external_id, 'game', @title, @cover_url, @year, @genre, @creators, @publisher, @library, @status, @game_status, @rating, @playtime_seconds, @last_played_at,
      CASE WHEN @is_completed = 1 THEN @completed_at ELSE NULL END)
   ON CONFLICT(external_id, type) DO UPDATE SET
     title            = COALESCE(media_items.title, excluded.title),
     cover_url        = COALESCE(media_items.cover_url, excluded.cover_url),
     year             = COALESCE(media_items.year, excluded.year),
     genre            = COALESCE(media_items.genre, excluded.genre),
-    creators         = COALESCE(media_items.creators, excluded.creators),
+    -- Playnite é a fonte de verdade destes quando envia algo (senão mantém o que já tem)
+    creators         = COALESCE(excluded.creators, media_items.creators),
+    publisher        = COALESCE(excluded.publisher, media_items.publisher),
+    library          = COALESCE(excluded.library, media_items.library),
     status           = excluded.status,
     game_status      = excluded.game_status,
     rating           = CASE WHEN excluded.rating > 0 THEN excluded.rating ELSE media_items.rating END,
@@ -742,7 +745,17 @@ interface PlaynitePayload {
   completionStatus?: string
   userScore?: number | null
   releaseYear?: number | null
-  lastPlayed?: string | null   // ISO 8601 (Playnite LastActivity)
+  lastPlayed?: string | null            // ISO 8601 (Playnite LastActivity)
+  library?: string | null               // Source do Playnite (Steam, GOG, Epic...)
+  developers?: string[] | string | null // desenvolvedores (PS pode mandar 1 como string)
+  publishers?: string[] | string | null // distribuidoras
+}
+
+/** junta nomes em string (", "), aceitando array ou string única (quirk do ConvertTo-Json). */
+function joinNames(list: string[] | string | null | undefined): string | null {
+  const arr = Array.isArray(list) ? list : typeof list === 'string' ? [list] : []
+  const v = arr.map(s => String(s ?? '').trim()).filter(Boolean).join(', ')
+  return v || null
 }
 
 app.post('/playnite/webhook', async (c) => {
@@ -791,8 +804,13 @@ app.post('/playnite/webhook', async (c) => {
     }
   }
 
+  const developers = joinNames(p.developers)
+  const publisher = joinNames(p.publishers)
+  const library = (p.library ?? '').trim() || null
+
   upsertGame.run({
-    external_id: externalId, title: name, cover_url, year, genre, creators: null,
+    external_id: externalId, title: name, cover_url, year, genre,
+    creators: developers, publisher, library,
     status, game_status: gameStatus, rating, playtime_seconds: playtime || null,
     last_played_at: lastPlayedIso,
     is_completed: isCompleted ? 1 : 0, completed_at: lastPlayedIso ?? nowIso,
