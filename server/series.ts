@@ -63,6 +63,22 @@ export async function resolveTmdbSeriesId(title: string, year?: number | null): 
   }
 }
 
+/** Procura o id TMDB de um filme pelo título (fallback quando o guid não expõe tmdb). */
+export async function resolveTmdbMovieId(title: string, year?: number | null): Promise<string | null> {
+  const key = apiKey('TMDB_API_KEY')
+  if (!key || !title) return null
+  try {
+    const qs = new URLSearchParams({ api_key: key, query: title, page: '1' })
+    if (year) qs.set('primary_release_year', String(year))
+    const res = await fetch(`https://api.themoviedb.org/3/search/movie?${qs}`)
+    if (!res.ok) return null
+    const data = await res.json() as { results?: any[] }
+    return data.results?.[0]?.id != null ? String(data.results[0].id) : null
+  } catch {
+    return null
+  }
+}
+
 /**
  * Popula temporadas e episódios de uma série a partir do TMDB.
  * `mode: 'watched'` marca todos os episódios já inseridos como não-assistidos por padrão,
