@@ -8,7 +8,7 @@ import { SeriesSeasons } from '../components/SeriesSeasons'
 import { DiaryEntryModal, type DiaryEntryValues } from '../components/DiaryEntryModal'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import type { MediaStatus } from '../types'
-import { STATUS_LABEL, GAME_STATUSES, GAME_STATUS_LABEL, gameStatusOf, formatRuntime, formatPlaytime, formatDate } from '../lib/utils'
+import { STATUS_LABEL, GAME_STATUSES, GAME_STATUS_LABEL, gameStatusOf, formatRuntime, formatPlaytime, formatDate, fmtRating } from '../lib/utils'
 
 const STATUSES: MediaStatus[] = ['wishlist', 'in_progress', 'completed', 'dropped']
 
@@ -90,6 +90,12 @@ export function MediaDetail() {
   const [editRelease, setEditRelease] = useState(false)
   const [completionOpen, setCompletionOpen] = useState(false)
   const [confirmRemove, setConfirmRemove] = useState(false)
+
+  const { data: history = [] } = useQuery({
+    queryKey: ['diary', 'media', id],
+    queryFn: () => api.diary.list({ media_item_id: parseInt(id!) }),
+    enabled: !!id,
+  })
 
   const { data: details, isLoading: loadingDetails } = useQuery({
     queryKey: ['details', item?.type, item?.external_id],
@@ -359,6 +365,39 @@ export function MediaDetail() {
         <div className="mb-6">
           <p className="text-xs text-muted uppercase tracking-wide mb-2">Temporadas</p>
           <SeriesSeasons mediaId={item.id} />
+        </div>
+      )}
+
+      {/* Histórico no diário */}
+      {history.length > 0 && (
+        <div className="mb-6">
+          <p className="text-xs text-muted uppercase tracking-wide mb-2">
+            Histórico no diário · {history.length}
+          </p>
+          <div className="border-t border-border">
+            {history.map(entry => (
+              <div key={entry.id} className="flex gap-4 py-3 border-b border-border">
+                <span className="font-display text-xs text-muted whitespace-nowrap pt-0.5 w-24 flex-shrink-0">
+                  {formatDate(entry.watched_at)}
+                </span>
+                <div className="min-w-0 flex-1">
+                  {entry.rating != null && entry.rating > 0 && (
+                    <span className="text-sm font-medium" style={{ color: 'var(--accent)' }}>
+                      ★ {fmtRating(entry.rating)}
+                    </span>
+                  )}
+                  {entry.comment && (
+                    <p className="text-sm text-secondary italic leading-relaxed mt-0.5">
+                      “{entry.comment}”
+                    </p>
+                  )}
+                  {(entry.rating == null || entry.rating === 0) && !entry.comment && (
+                    <span className="text-sm text-muted">Registrado</span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

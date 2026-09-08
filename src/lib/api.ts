@@ -44,7 +44,12 @@ export const api = {
   },
 
   diary: {
-    list:   (): Promise<DiaryEntry[]> => request('/diary'),
+    list: (params?: { media_item_id?: number }): Promise<DiaryEntry[]> => {
+      const qs = new URLSearchParams()
+      if (params?.media_item_id) qs.set('media_item_id', String(params.media_item_id))
+      const q = qs.toString()
+      return request(`/diary${q ? `?${q}` : ''}`)
+    },
     create: (data: { media_item_id: number; watched_at?: string; rating?: number | null; comment?: string | null }): Promise<DiaryEntry> =>
       request('/diary', { method: 'POST', body: JSON.stringify(data) }),
     update: (id: number, data: { watched_at?: string; rating?: number | null; comment?: string | null }): Promise<DiaryEntry> =>
