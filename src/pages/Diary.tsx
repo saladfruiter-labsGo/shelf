@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
@@ -25,6 +25,21 @@ function formatDiaryDate(iso: string): string {
   return new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
+const MONTHS = [
+  'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+  'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
+]
+
+type SortField = 'watched_at' | 'rating' | 'title' | 'year'
+type SortDir = 'asc' | 'desc'
+
+const SORT_LABEL: Record<SortField, string> = {
+  watched_at: 'Data de execução',
+  rating:     'Nota',
+  title:      'Nome',
+  year:       'Ano de lançamento',
+}
+
 function subjectOf(e: DiaryEntry): StorySubject {
   return {
     title: e.title, type: e.type, cover_url: e.cover_url,
@@ -41,10 +56,68 @@ export function Diary() {
   const [editing, setEditing]     = useState<DiaryEntry | null>(null)
   const [removing, setRemoving]   = useState<DiaryEntry | null>(null)
 
+  // Filtros e ordenação
+  const [nameQ, setNameQ]         = useState('')
+  const [month, setMonth]         = useState('')   // '' = todos; '1'..'12'
+  const [execYear, setExecYear]   = useState('')   // ano da execução (watched_at)
+  const [releaseYear, setRelYear] = useState('')   // ano de lançamento (mídia)
+  const [sortField, setSortField] = useState<SortField>('watched_at')
+  const [sortDir, setSortDir]     = useState<SortDir>('desc')
+
   const { data: items = [], isLoading } = useQuery({
     queryKey: ['diary'],
     queryFn: () => api.diary.list(),
   })
+
+  // Anos disponíveis para os selects (a partir dos registros)
+  const { execYears, releaseYears } = useMemo(() => {
+    const ex = new Set<number>()
+    const rel = new Set<number>()
+    for (const e of items) {
+      const y = new Date(e.watched_at).getFullYear()
+      if (!isNaN(y)) ex.add(y)
+      if (e.year) rel.add(e.year)
+    }
+    return {
+      execYears:    [...ex].sort((a, b) => b - a),
+      releaseYears: [...rel].sort((a, b) => b - a),
+    }
+  }, [items])
+
+  const filtered = useMemo(() => {
+    const q = nameQ.trim().toLowerCase()
+    const out = items.filter(e => {
+      if (q && !e.title.toLowerCase().includes(q)) return false
+      const d = new Date(e.watched_at)
+      if (month && d.getMonth() + 1 !== Number(month)) return false
+      if (execYear && d.getFullYear() !== Number(execYear)) return false
+      if (releaseYear && e.year !== Number(releaseYear)) return false
+      return true
+    })
+    const dir = sortDir === 'asc' ? 1 : -1
+    out.sort((a, b) => {
+      let cmp = 0
+      switch (sortField) {
+        case 'title':
+          cmp = a.title.localeCompare(b.title, 'pt-BR')
+          break
+        case 'rating':
+          cmp = (a.rating ?? 0) - (b.rating ?? 0)
+          break
+        case 'year':
+          cmp = (a.year ?? 0) - (b.year ?? 0)
+          break
+        default: // watched_at
+          cmp = new Date(a.watched_at).getTime() - new Date(b.watched_at).getTime()
+      }
+      if (cmp === 0) cmp = a.id - b.id
+      return cmp * dir
+    })
+    return out
+  }, [items, nameQ, month, execYear, releaseYear, sortField, sortDir])
+
+  const hasFilters = !!(nameQ || month || execYear || releaseYear)
+  const clearFilters = () => { setNameQ(''); setMonth(''); setExecYear(''); setRelYear('') }
 
   const updateMutation = useMutation({
     mutationFn: ({ id, values }: { id: number; values: DiaryEntryValues }) =>
@@ -78,9 +151,61 @@ export function Diary() {
           Diário
         </h1>
         <p style={{ marginTop: 16, fontSize: 15, color: 'var(--text-muted)' }}>
-          {isLoading ? '…' : `${items.length} registro${items.length !== 1 ? 's' : ''}`}
+          {isLoading
+            ? '…'
+            : hasFilters
+              ? `${filtered.length} de ${items.length} registro${items.length !== 1 ? 's' : ''}`
+              : `${items.length} registro${items.length !== 1 ? 's' : ''}`}
         </p>
       </div>
+
+      {/* Barra de filtros e ordenação */}
+      {!isLoading && items.length > 0 && (
+        <div
+          className="diary-filters"
+          style={{ maxWidth: 1280, margin: '0 auto', padding: '0 var(--page-x) 24px', display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}
+        >
+          <input
+            value={nameQ}
+            onChange={e => setNameQ(e.target.value)}
+            placeholder="Buscar por nome…"
+            className="diary-input"
+            style={{ flex: '1 1 220px', minWidth: 180 }}
+          />
+          <select value={month} onChange={e => setMonth(e.target.value)} className="diary-input">
+            <option value="">Mês (todos)</option>
+            {MONTHS.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
+          </select>
+          <select value={execYear} onChange={e => setExecYear(e.target.value)} className="diary-input">
+            <option value="">Ano de execução</option>
+            {execYears.map(y => <option key={y} value={y}>{y}</option>)}
+          </select>
+          <select value={releaseYear} onChange={e => setRelYear(e.target.value)} className="diary-input">
+            <option value="">Ano de lançamento</option>
+            {releaseYears.map(y => <option key={y} value={y}>{y}</option>)}
+          </select>
+
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginLeft: 'auto' }}>
+            <span style={{ fontSize: 11, color: 'var(--dim)', textTransform: 'uppercase', letterSpacing: '1px' }}>Ordenar</span>
+            <select value={sortField} onChange={e => setSortField(e.target.value as SortField)} className="diary-input">
+              {(Object.keys(SORT_LABEL) as SortField[]).map(f => (
+                <option key={f} value={f}>{SORT_LABEL[f]}</option>
+              ))}
+            </select>
+            <button
+              onClick={() => setSortDir(d => (d === 'asc' ? 'desc' : 'asc'))}
+              className="diary-input diary-sortdir"
+              title={sortDir === 'asc' ? 'Crescente' : 'Decrescente'}
+            >
+              {sortDir === 'asc' ? '↑' : '↓'}
+            </button>
+          </div>
+
+          {hasFilters && (
+            <button onClick={clearFilters} className="diary-input diary-clear">Limpar</button>
+          )}
+        </div>
+      )}
 
       <div style={{ maxWidth: 1280, margin: '0 auto', padding: '0 var(--page-x) 80px' }}>
         {isLoading ? (
@@ -91,8 +216,8 @@ export function Diary() {
               <div style={{ flex: 1, height: 14, background: 'var(--card)', borderRadius: 4, maxWidth: 240 }} />
             </div>
           ))
-        ) : items.length > 0 ? (
-          items.map(entry => {
+        ) : filtered.length > 0 ? (
+          filtered.map(entry => {
             const cat = CAT_STYLE[entry.type] ?? { bg: 'rgba(106,106,136,.1)', color: 'var(--text-muted)', label: entry.type }
             return (
               <div
@@ -146,7 +271,12 @@ export function Diary() {
         ) : (
           <div style={{ textAlign: 'center', padding: '80px 0' }}>
             <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '3rem', fontWeight: 800, color: 'var(--border)', marginBottom: 12 }}>Vazio</p>
-            <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>Nenhum registro ainda</p>
+            <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>
+              {hasFilters ? 'Nenhum registro para os filtros selecionados' : 'Nenhum registro ainda'}
+            </p>
+            {hasFilters && (
+              <button onClick={clearFilters} className="diary-input diary-clear" style={{ marginTop: 16 }}>Limpar filtros</button>
+            )}
           </div>
         )}
       </div>
@@ -183,6 +313,23 @@ export function Diary() {
         }
         .diary-action:hover { opacity: 1; background: var(--card); }
         .diary-action-danger:hover { background: rgba(220,60,60,.15); }
+
+        .diary-input {
+          background: var(--card); border: 1px solid var(--border);
+          color: var(--text-primary); font-size: 13px;
+          padding: 8px 12px; border-radius: 8px; outline: none;
+          transition: border-color .15s;
+        }
+        .diary-input:hover { border-color: var(--border-strong, var(--dim)); }
+        .diary-input:focus { border-color: var(--accent); }
+        select.diary-input { cursor: pointer; }
+        .diary-sortdir { cursor: pointer; font-weight: 700; padding: 8px 12px; }
+        .diary-clear { cursor: pointer; color: var(--text-muted); }
+        .diary-clear:hover { color: var(--text-primary); }
+        @media (max-width: 640px) {
+          .diary-filters { flex-direction: column; align-items: stretch !important; }
+          .diary-filters > div { margin-left: 0 !important; }
+        }
       `}</style>
     </div>
   )

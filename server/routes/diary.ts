@@ -13,9 +13,17 @@ const SELECT_ENTRY = `
   JOIN media_items m ON m.id = d.media_item_id
 `
 
-// Lista todas as entradas (mais recentes primeiro)
+// Lista entradas (mais recentes primeiro).
+// Com ?media_item_id=X, retorna só o histórico daquele item.
 app.get('/', (c) => {
   const limit = Math.min(parseInt(c.req.query('limit') ?? '500'), 1000)
+  const mediaId = c.req.query('media_item_id')
+  if (mediaId) {
+    const rows = db.prepare(
+      `${SELECT_ENTRY} WHERE d.media_item_id = ? ORDER BY d.watched_at DESC, d.id DESC LIMIT ?`
+    ).all(Number(mediaId), limit)
+    return c.json(rows)
+  }
   const rows = db.prepare(`${SELECT_ENTRY} ORDER BY d.watched_at DESC, d.id DESC LIMIT ?`).all(limit)
   return c.json(rows)
 })
