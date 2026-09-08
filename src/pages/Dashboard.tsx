@@ -4,8 +4,11 @@ import { useQuery } from '@tanstack/react-query'
 import { api } from '../lib/api'
 import { AutoCarousel } from '../components/AutoCarousel'
 import { HeroCarousel } from '../components/HeroCarousel'
+import { MusicCarousel, type MusicTile } from '../components/MusicCarousel'
 import { CATEGORIES } from '../lib/categories'
 import type { MediaItem, MediaType } from '../types'
+
+const MUSIC_CAT = CATEGORIES.find(c => c.key === 'music')!
 
 const byCompleted = (a: MediaItem, b: MediaItem) =>
   new Date(b.completed_at ?? b.updated_at).getTime() - new Date(a.completed_at ?? a.updated_at).getTime()
@@ -41,6 +44,13 @@ export function Dashboard() {
     queryFn: () => api.media.list({ limit: 1000 }),
   })
 
+  // Música não é um item da coleção: a home mostra o histórico de execuções
+  // (scrobbles), igual à biblioteca de músicas — não os media_items.
+  const { data: musicEvents = [] } = useQuery({
+    queryKey: ['integrations', 'activity', 'music'],
+    queryFn: () => api.integrations.activity({ limit: 500, media_type: 'music' }),
+  })
+
   /* ─── derive data ─── */
   // As prateleiras da home são a biblioteca: itens em wishlist ficam só na Wishlist.
   const recentByType = useMemo(() => {
@@ -69,11 +79,32 @@ export function Dashboard() {
     return [...allItems].filter(i => i.status !== 'wishlist' && i.type !== 'music').sort(byRecent).slice(0, 1)
   }, [allItems])
 
-  /** Categories that actually have something to show, in canonical order. */
-  const activeCats = CATEGORIES.filter(c => (recentByType[c.key]?.length ?? 0) > 0)
+  /** Categories that actually have something to show, in canonical order.
+   *  Music is excluded here — it gets its own block fed by play history. */
+  const activeCats = CATEGORIES.filter(c => c.key !== 'music' && (recentByType[c.key]?.length ?? 0) > 0)
 
-  /* ─── sections: hero + one block per active category ─── */
-  const sectionCount = 1 + activeCats.length
+  /** Music block: recent plays as an album-cover shelf; counter = execuções. */
+  const musicPlays = useMemo(
+    () => musicEvents.filter(e => e.event_type === 'scrobble' || e.event_type === 'listen'),
+    [musicEvents],
+  )
+  const musicTiles = useMemo<MusicTile[]>(() => {
+    // Plays arrive newest-first; keep each track once so the shelf shows variety.
+    const seen = new Set<string>()
+    const tiles: MusicTile[] = []
+    for (const e of musicPlays) {
+      const key = e.external_ref ?? `${e.subtitle ?? ''}|${e.title}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      tiles.push({ key, title: e.title, artist: e.subtitle, cover_url: e.cover_url })
+      if (tiles.length >= 24) break
+    }
+    return tiles
+  }, [musicPlays])
+  const musicActive = musicPlays.length > 0
+
+  /* ─── sections: hero + one block per active category (+ music) ─── */
+  const sectionCount = 1 + activeCats.length + (musicActive ? 1 : 0)
 
   const [index, setIndex] = useState(0)
   const indexRef = useRef(0)
@@ -140,7 +171,7 @@ export function Dashboard() {
   }, [sectionCount])
 
   /* ─── empty state ─── */
-  if (allItems.length === 0) {
+  if (allItems.length === 0 && !musicActive) {
     return (
       <div style={{ background: 'var(--bg)', minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
         <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '3rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--border)' }}>Vazio</p>
@@ -219,6 +250,41 @@ export function Dashboard() {
             </section>
           )
         })}
+
+        {/* ── Music block: recent plays as an album-cover shelf ── */}
+        {musicActive && (
+          <section
+            style={{ height: '100%', position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}
+          >
+            <BlockBg colorVar={MUSIC_CAT.colorVar} art={musicTiles.find(t => t.cover_url)?.cover_url ?? undefined} />
+
+            <div style={{ position: 'relative', maxWidth: 1400, width: '100%', margin: '0 auto', padding: '0 var(--page-x)' }}>
+              <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 28, gap: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 16, flexWrap: 'wrap' }}>
+                  <h2 style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: 'clamp(28px,3.4vw,44px)', fontWeight: 800, letterSpacing: '-1.5px', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 14 }}>
+                    <span style={{ fontSize: '0.9em' }}>{MUSIC_CAT.emoji}</span>
+                    {MUSIC_CAT.label}
+                  </h2>
+                  <span
+                    title="Execuções registradas"
+                    style={{ fontFamily: 'Space Grotesk, monospace', fontSize: 15, fontWeight: 600, color: `var(${MUSIC_CAT.colorVar})`, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 9999, padding: '4px 14px', fontVariantNumeric: 'tabular-nums' }}
+                  >
+                    {musicPlays.length} execu{musicPlays.length === 1 ? 'ção' : 'ções'}
+                  </span>
+                </div>
+                <button
+                  onClick={() => navigate(MUSIC_CAT.path)}
+                  className="link-accent"
+                  style={{ fontSize: 14, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                >
+                  Ver todos →
+                </button>
+              </div>
+
+              <MusicCarousel tiles={musicTiles} />
+            </div>
+          </section>
+        )}
       </div>
 
       {/* ── Section dots ── */}
