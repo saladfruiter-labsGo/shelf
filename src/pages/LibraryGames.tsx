@@ -1,14 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../lib/api'
-import { formatPlaytime } from '../lib/utils'
-
-const STATUS_LABEL: Record<string, string> = {
-  completed:   'Concluído',
-  in_progress: 'Jogando',
-  wishlist:    'Wishlist',
-  dropped:     'Abandonado',
-}
+import { formatPlaytime, GAME_STATUS_LABEL, gameStatusOf } from '../lib/utils'
 
 export function LibraryGames() {
   const navigate = useNavigate()
@@ -18,11 +11,11 @@ export function LibraryGames() {
     queryFn: () => api.media.list({ type: 'game', limit: 500 }),
   })
 
-  // Itens em wishlist ficam só na Wishlist, fora da biblioteca.
+  // Itens em wishlist (nunca jogado) ficam só na Wishlist, fora da biblioteca.
   const items = rawItems.filter(i => i.status !== 'wishlist')
 
-  const done = items.filter(i => i.status === 'completed').length
-  const playing = items.filter(i => i.status === 'in_progress').length
+  const done = items.filter(i => { const s = gameStatusOf(i); return s === 'zerado' || s === 'platinado' }).length
+  const playing = items.filter(i => gameStatusOf(i) === 'jogando').length
 
   return (
     <div style={{ background: 'var(--bg)', color: 'var(--text-primary)', minHeight: '100vh' }}>
@@ -100,14 +93,20 @@ export function LibraryGames() {
                         ? <span style={{ fontFamily: 'Space Grotesk, monospace', fontSize: 13, color: 'var(--games)' }}>{item.runtime}h</span>
                         : <span />
                     }
-                    <span style={{
-                      fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.5px',
-                      padding: '3px 8px', borderRadius: 4,
-                      background: item.status === 'completed' ? 'var(--accent-bg)' : 'var(--games-bg)',
-                      color: item.status === 'completed' ? 'var(--accent)' : 'var(--games)',
-                    }}>
-                      {STATUS_LABEL[item.status] ?? item.status}
-                    </span>
+                    {(() => {
+                      const gs = gameStatusOf(item)
+                      const isDone = gs === 'zerado' || gs === 'platinado'
+                      return (
+                        <span style={{
+                          fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.5px',
+                          padding: '3px 8px', borderRadius: 4,
+                          background: isDone ? 'var(--accent-bg)' : 'var(--games-bg)',
+                          color: isDone ? 'var(--accent)' : 'var(--games)',
+                        }}>
+                          {GAME_STATUS_LABEL[gs]}
+                        </span>
+                      )
+                    })()}
                   </div>
                 </div>
               </div>

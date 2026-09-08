@@ -8,7 +8,7 @@ import { SeriesSeasons } from '../components/SeriesSeasons'
 import { DiaryEntryModal, type DiaryEntryValues } from '../components/DiaryEntryModal'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import type { MediaStatus } from '../types'
-import { STATUS_LABEL, formatRuntime, formatPlaytime, formatDate } from '../lib/utils'
+import { STATUS_LABEL, GAME_STATUSES, GAME_STATUS_LABEL, gameStatusOf, formatRuntime, formatPlaytime, formatDate } from '../lib/utils'
 
 const STATUSES: MediaStatus[] = ['wishlist', 'in_progress', 'completed', 'dropped']
 
@@ -206,17 +206,32 @@ export function MediaDetail() {
           <div className="mb-4">
             <p className="text-xs text-muted uppercase tracking-wide mb-2">Status</p>
             <div className="flex flex-wrap gap-1.5">
-              {STATUSES.map(s => (
-                <button
-                  key={s}
-                  onClick={() => onStatusClick(s)}
-                  className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-                    item.status === s ? 'bg-accent text-bg' : 'bg-card text-muted hover:text-primary border border-border'
-                  }`}
-                >
-                  {STATUS_LABEL[s]}
-                </button>
-              ))}
+              {item.type === 'game' ? (
+                // Games têm status próprios (espelham o Playnite)
+                GAME_STATUSES.map(s => (
+                  <button
+                    key={s}
+                    onClick={() => updateMutation.mutate({ game_status: s })}
+                    className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                      gameStatusOf(item) === s ? 'bg-accent text-bg' : 'bg-card text-muted hover:text-primary border border-border'
+                    }`}
+                  >
+                    {GAME_STATUS_LABEL[s]}
+                  </button>
+                ))
+              ) : (
+                STATUSES.map(s => (
+                  <button
+                    key={s}
+                    onClick={() => onStatusClick(s)}
+                    className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                      item.status === s ? 'bg-accent text-bg' : 'bg-card text-muted hover:text-primary border border-border'
+                    }`}
+                  >
+                    {STATUS_LABEL[s]}
+                  </button>
+                ))
+              )}
             </div>
           </div>
 
@@ -237,13 +252,23 @@ export function MediaDetail() {
             </div>
           )}
 
-          {/* Tempo de jogo (games, via Playnite) */}
-          {item.type === 'game' && (item.playtime_seconds ?? 0) > 0 && (
-            <div className="mb-4">
-              <p className="text-xs text-muted uppercase tracking-wide mb-1">Tempo de jogo</p>
-              <p className="font-display text-lg font-bold" style={{ color: 'var(--games)' }}>
-                {formatPlaytime(item.playtime_seconds!)}
-              </p>
+          {/* Tempo de jogo + última vez jogado (games, via Playnite) */}
+          {item.type === 'game' && ((item.playtime_seconds ?? 0) > 0 || item.last_played_at) && (
+            <div className="mb-4 flex gap-8">
+              {(item.playtime_seconds ?? 0) > 0 && (
+                <div>
+                  <p className="text-xs text-muted uppercase tracking-wide mb-1">Tempo de jogo</p>
+                  <p className="font-display text-lg font-bold" style={{ color: 'var(--games)' }}>
+                    {formatPlaytime(item.playtime_seconds!)}
+                  </p>
+                </div>
+              )}
+              {item.last_played_at && (
+                <div>
+                  <p className="text-xs text-muted uppercase tracking-wide mb-1">Última vez jogado</p>
+                  <p className="font-display text-lg font-bold text-primary">{formatDate(item.last_played_at)}</p>
+                </div>
+              )}
             </div>
           )}
 
