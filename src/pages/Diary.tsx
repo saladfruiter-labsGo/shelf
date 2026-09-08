@@ -241,6 +241,11 @@ export function Diary() {
                 >
                   <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.3 }}>
                     {entry.title}
+                    {entry.season_number != null && entry.episode_number != null && (
+                      <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 700, color: 'var(--series)' }}>
+                        T{entry.season_number}E{entry.episode_number}
+                      </span>
+                    )}
                     {entry.source === 'plex' && (
                       <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 600, color: 'var(--dim)', textTransform: 'uppercase', letterSpacing: '.5px' }}>Plex</span>
                     )}

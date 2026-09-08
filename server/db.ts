@@ -177,6 +177,15 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_diary_watched ON diary_entries(watched_at);
 `)
 
+// Migrations do diário: granularidade de episódio (séries).
+// Um registro de série sempre aponta para um episódio (season_number + episode_number).
+{
+  const diaryCols = (db.prepare('PRAGMA table_info(diary_entries)').all() as { name: string }[]).map(c => c.name)
+  for (const [col, def] of [['season_number', 'INTEGER'], ['episode_number', 'INTEGER']] as [string, string][]) {
+    if (!diaryCols.includes(col)) db.exec(`ALTER TABLE diary_entries ADD COLUMN ${col} ${def}`)
+  }
+}
+
 // Backfill único: cada item já concluído vira uma entrada no diário, para
 // preservar o histórico que hoje aparece no Diário. Roda só uma vez.
 const backfilled = (db.prepare("SELECT value FROM settings WHERE key = 'DIARY_BACKFILLED'").get() as { value: string } | undefined)?.value

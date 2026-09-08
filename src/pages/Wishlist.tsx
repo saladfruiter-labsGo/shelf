@@ -162,7 +162,7 @@ export function Wishlist() {
         </p>
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 24, flexWrap: 'wrap', marginBottom: 40 }}>
           <h1 style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: 'clamp(40px,5vw,72px)', fontWeight: 800, letterSpacing: '-2px', lineHeight: 1, color: 'var(--text-primary)' }}>
-            Wishlist
+            Watchlist
           </h1>
           <p style={{ fontFamily: 'Space Grotesk, monospace', fontSize: 13, color: 'var(--text-muted)', paddingBottom: 8 }}>
             {filtered.length}{anyFilter ? ` de ${items.length}` : ''} {items.length === 1 ? 'item' : 'itens'}
@@ -283,7 +283,7 @@ export function Wishlist() {
               Vazia
             </p>
             <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>
-              Adicione algo com status <strong style={{ color: 'var(--text-secondary)' }}>Wishlist</strong> pelo ⌘K.
+              Adicione algo à <strong style={{ color: 'var(--text-secondary)' }}>Watchlist</strong> pelo ⌘K.
             </p>
           </div>
         )}
