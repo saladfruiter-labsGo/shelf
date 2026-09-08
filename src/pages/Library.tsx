@@ -20,12 +20,21 @@ export function Library() {
     queryFn: () => api.media.list({ limit: 500 }),
   })
 
+  // Música não é um item por faixa na coleção: a biblioteca de músicas é o
+  // histórico de execuções (scrobbles), então o card conta execuções — igual à
+  // página de músicas — em vez de media_items (que ficaria sempre em 0).
+  const { data: musicEvents = [] } = useQuery({
+    queryKey: ['integrations', 'activity', 'music'],
+    queryFn: () => api.integrations.activity({ limit: 500, media_type: 'music' }),
+  })
+  const musicPlays = musicEvents.filter(e => e.event_type === 'scrobble' || e.event_type === 'listen').length
+
   // A wishlist é separada da coleção: itens ainda não adquiridos/consumidos
   // vivem só na Wishlist e não contam para a biblioteca.
   const allItems = rawItems.filter(i => i.status !== 'wishlist')
 
   const countByType = (key: MediaType) =>
-    allItems.filter(i => i.type === key).length
+    key === 'music' ? musicPlays : allItems.filter(i => i.type === key).length
 
   return (
     <div style={{ background: 'var(--bg)', minHeight: '100vh' }}>
@@ -59,7 +68,9 @@ export function Library() {
               <span style={{ fontSize: 40, display: 'block', marginBottom: 16 }}>{cat.emoji}</span>
               <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>{cat.label}</p>
               <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                {countByType(cat.key)} itens
+                {countByType(cat.key)} {cat.key === 'music'
+                  ? (countByType(cat.key) === 1 ? 'execução' : 'execuções')
+                  : 'itens'}
               </p>
             </button>
           ))}
