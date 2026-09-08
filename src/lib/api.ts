@@ -2,7 +2,7 @@ import type {
   Details, List, ListCheck, ListDetail,
   MediaItem, MediaStatus, MediaType,
   SearchResult, WrapData, SeriesView, SeriesPreview, DiaryEntry,
-  IntegrationStatus, NowPlaying, ActivityEvent, ActivityMediaType, MusicStats,
+  IntegrationStatus, NowPlaying, ActivityEvent, ActivityMediaType, MusicStats, TrendingItem,
 } from '../types'
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -117,6 +117,7 @@ export const api = {
       return request(`/integrations/activity?${qs}`)
     },
     musicStats: (): Promise<MusicStats> => request('/integrations/music/stats'),
+    trending:   (): Promise<TrendingItem[]> => request('/integrations/trending'),
     lastfmSync: (): Promise<{ ok: boolean }> =>
       request('/integrations/lastfm/sync', { method: 'POST' }),
     telegramTest: (): Promise<{ ok: boolean; error?: string }> =>

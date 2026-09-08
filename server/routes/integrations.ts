@@ -996,6 +996,96 @@ app.get('/music/stats', (c) => {
   })
 })
 
+/* ─── "Em alta no público": trending externo (TMDB + RAWG + Last.fm) ─── */
+interface TrendingItem {
+  type: 'movie' | 'series' | 'game' | 'music'
+  title: string
+  subtitle: string | null
+  cover_url: string | null
+  metric: string
+  metric_label: string
+  external_id: string | null
+}
+
+let trendingCache: { at: number; items: TrendingItem[] } | null = null
+
+async function fetchTrending(): Promise<TrendingItem[]> {
+  const tmdb = cfg('TMDB_API_KEY')
+  const rawg = cfg('RAWG_API_KEY')
+  const lastfm = cfg('LASTFM_API_KEY')
+
+  const jobs: Promise<TrendingItem[]>[] = []
+
+  if (tmdb) {
+    jobs.push((async () => {
+      const r = await fetch(`https://api.themoviedb.org/3/trending/movie/week?api_key=${tmdb}`)
+      if (!r.ok) return []
+      const d = await r.json() as { results: any[] }
+      return d.results.slice(0, 3).map(m => ({
+        type: 'movie' as const, title: m.title, subtitle: m.release_date ? String(new Date(m.release_date).getFullYear()) : null,
+        cover_url: m.backdrop_path ? `https://image.tmdb.org/t/p/w780${m.backdrop_path}` : (m.poster_path ? `https://image.tmdb.org/t/p/w500${m.poster_path}` : null),
+        metric: String(Math.round(m.popularity ?? 0)), metric_label: 'popularidade TMDB', external_id: String(m.id),
+      }))
+    })())
+    jobs.push((async () => {
+      const r = await fetch(`https://api.themoviedb.org/3/trending/tv/week?api_key=${tmdb}`)
+      if (!r.ok) return []
+      const d = await r.json() as { results: any[] }
+      return d.results.slice(0, 3).map(m => ({
+        type: 'series' as const, title: m.name, subtitle: m.first_air_date ? String(new Date(m.first_air_date).getFullYear()) : null,
+        cover_url: m.backdrop_path ? `https://image.tmdb.org/t/p/w780${m.backdrop_path}` : (m.poster_path ? `https://image.tmdb.org/t/p/w500${m.poster_path}` : null),
+        metric: String(Math.round(m.popularity ?? 0)), metric_label: 'popularidade TMDB', external_id: String(m.id),
+      }))
+    })())
+  }
+
+  if (rawg) {
+    jobs.push((async () => {
+      const r = await fetch(`https://api.rawg.io/api/games?key=${rawg}&ordering=-added&page_size=3`)
+      if (!r.ok) return []
+      const d = await r.json() as { results: any[] }
+      return d.results.slice(0, 3).map(g => ({
+        type: 'game' as const, title: g.name, subtitle: g.released ? String(new Date(g.released).getFullYear()) : null,
+        cover_url: g.background_image ?? null,
+        metric: g.added != null ? g.added.toLocaleString('pt-BR') : String(g.rating ?? ''), metric_label: 'na coleção RAWG', external_id: String(g.id),
+      }))
+    })())
+  }
+
+  if (lastfm) {
+    jobs.push((async () => {
+      const r = await fetch(`https://ws.audioscrobbler.com/2.0/?method=chart.gettoptracks&api_key=${lastfm}&format=json&limit=3`)
+      if (!r.ok) return []
+      const d = await r.json() as { tracks?: { track: any[] } }
+      return (d.tracks?.track ?? []).slice(0, 3).map((t, i) => ({
+        type: 'music' as const, title: t.name, subtitle: t.artist?.name ?? null,
+        cover_url: (t.image?.find((im: any) => im.size === 'extralarge')?.['#text']) || null,
+        metric: `#${i + 1}`, metric_label: 'charts Last.fm', external_id: t.mbid || null,
+      }))
+    })())
+  }
+
+  const settled = await Promise.allSettled(jobs)
+  const groups = settled.filter((s): s is PromiseFulfilledResult<TrendingItem[]> => s.status === 'fulfilled').map(s => s.value)
+  // Intercala os grupos (1 de cada tipo por rodada) pra variar o carrossel.
+  const out: TrendingItem[] = []
+  for (let i = 0; out.length < 8 && groups.some(g => g[i]); i++) {
+    for (const g of groups) if (g[i]) out.push(g[i])
+  }
+  return out
+}
+
+app.get('/trending', async (c) => {
+  if (trendingCache && Date.now() - trendingCache.at < 3_600_000) return c.json(trendingCache.items)
+  try {
+    const items = await fetchTrending()
+    if (items.length) trendingCache = { at: Date.now(), items }
+    return c.json(items)
+  } catch {
+    return c.json(trendingCache?.items ?? [])
+  }
+})
+
 // Sincronizar Last.fm sob demanda
 app.post('/lastfm/sync', async (c) => {
   await pollLastfm()
