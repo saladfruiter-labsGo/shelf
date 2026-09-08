@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../lib/api'
@@ -7,8 +8,13 @@ import type { GameStatus } from '../types'
 // Estados que aparecem na biblioteca (nunca_jogado = wishlist, fica de fora).
 const HEADER_STATES: GameStatus[] = ['jogando', 'zerado', 'platinado', 'abandonado']
 
+// normaliza para busca insensível a acento/caixa
+const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()
+
 export function LibraryGames() {
   const navigate = useNavigate()
+  const [statusFilter, setStatusFilter] = useState<GameStatus | null>(null)
+  const [search, setSearch] = useState('')
 
   const { data: rawItems = [], isLoading } = useQuery({
     queryKey: ['media', 'game'],
@@ -22,6 +28,14 @@ export function LibraryGames() {
     .sort((a, b) => (b.last_played_at ? Date.parse(b.last_played_at) : 0) - (a.last_played_at ? Date.parse(a.last_played_at) : 0))
 
   const countByStatus = (s: GameStatus) => items.filter(i => gameStatusOf(i) === s).length
+
+  // Grid filtrado por status (contador clicado) + busca por nome (instantânea).
+  const q = norm(search)
+  const visible = items.filter(i => {
+    if (statusFilter && gameStatusOf(i) !== statusFilter) return false
+    if (q && !norm(i.title).includes(q)) return false
+    return true
+  })
 
   return (
     <div style={{ background: 'var(--bg)', color: 'var(--text-primary)', minHeight: '100vh' }}>
@@ -44,15 +58,54 @@ export function LibraryGames() {
         </div>
         <div className="lib-stats">
           {[
-            { n: items.length, l: 'Total', color: 'var(--text-primary)' },
-            ...HEADER_STATES.map(s => ({ n: countByStatus(s), l: GAME_STATUS_LABEL[s], color: GAME_STATUS_STYLE[s].color })),
-          ].map(s => (
-            <div key={s.l} style={{ textAlign: 'right' }}>
-              <p className="lib-stat-n" style={{ fontFamily: 'Space Grotesk, sans-serif', fontWeight: 800, color: s.color, lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{s.n}</p>
-              <p style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px' }}>{s.l}</p>
-            </div>
-          ))}
+            { key: null as GameStatus | null, n: items.length, l: 'Total', color: 'var(--text-primary)' },
+            ...HEADER_STATES.map(s => ({ key: s as GameStatus | null, n: countByStatus(s), l: GAME_STATUS_LABEL[s], color: GAME_STATUS_STYLE[s].color })),
+          ].map(s => {
+            const active = statusFilter === s.key
+            return (
+              <button
+                key={s.l}
+                onClick={() => setStatusFilter(prev => (s.key && prev === s.key ? null : s.key))}
+                title={s.key ? `Filtrar por ${s.l}` : 'Mostrar todos'}
+                style={{
+                  textAlign: 'right', background: 'none', border: 'none', cursor: 'pointer', padding: '0 0 4px',
+                  borderBottom: `2px solid ${active ? s.color : 'transparent'}`, opacity: active ? 1 : 0.55,
+                  transition: 'opacity .15s',
+                }}
+              >
+                <p className="lib-stat-n" style={{ fontFamily: 'Space Grotesk, sans-serif', fontWeight: 800, color: s.color, lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{s.n}</p>
+                <p style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px' }}>{s.l}</p>
+              </button>
+            )
+          })}
         </div>
+      </div>
+
+      {/* Busca por nome (filtra instantaneamente) */}
+      <div style={{ maxWidth: 1280, margin: '0 auto', padding: '0 var(--page-x) 24px', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <div style={{ position: 'relative', flex: '1 1 280px', maxWidth: 420 }}>
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Buscar por nome…"
+            aria-label="Buscar jogo por nome"
+            style={{
+              width: '100%', boxSizing: 'border-box', padding: '10px 34px 10px 14px', borderRadius: 10,
+              border: '1px solid var(--border)', background: 'var(--card)', color: 'var(--text-primary)', fontSize: 14, outline: 'none',
+            }}
+          />
+          {search && (
+            <button onClick={() => setSearch('')} title="Limpar" aria-label="Limpar busca"
+              style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 18, lineHeight: 1 }}>
+              ×
+            </button>
+          )}
+        </div>
+        {(statusFilter || q) && (
+          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+            {visible.length} resultado{visible.length === 1 ? '' : 's'}{statusFilter ? ` · ${GAME_STATUS_LABEL[statusFilter]}` : ''}
+          </span>
+        )}
       </div>
 
       {/* Grid */}
@@ -61,7 +114,7 @@ export function LibraryGames() {
           ? Array.from({ length: 8 }).map((_, i) => (
               <div key={i} style={{ background: 'var(--card)', borderRadius: 16, overflow: 'hidden', border: '1px solid var(--border)', aspectRatio: '2/3.55' }} />
             ))
-          : items.map(item => (
+          : visible.map(item => (
               <div
                 key={item.id}
                 onClick={() => navigate(`/media/${item.id}`)}
@@ -123,10 +176,10 @@ export function LibraryGames() {
         }
       </div>
 
-      {items.length === 0 && !isLoading && (
+      {visible.length === 0 && !isLoading && (
         <div style={{ textAlign: 'center', padding: '80px 0', color: 'var(--text-muted)' }}>
           <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '3rem', fontWeight: 800, color: 'var(--border-strong)', marginBottom: 12 }}>Vazio</p>
-          <p>Nenhum jogo na biblioteca ainda</p>
+          <p>{items.length === 0 ? 'Nenhum jogo na biblioteca ainda' : 'Nenhum jogo encontrado'}</p>
         </div>
       )}
     </div>
