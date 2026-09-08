@@ -78,6 +78,8 @@ const newCols: [string, string][] = [
   ['playtime_seconds', 'INTEGER'], // games (Playnite): tempo total jogado, em segundos
   ['game_status',   'TEXT'],    // games (Playnite): status granular (jogando|zerado|platinado|abandonado|nunca_jogado)
   ['last_played_at','TEXT'],    // games (Playnite): última vez jogado (ISO), do LastActivity
+  ['publisher',     'TEXT'],    // games (Playnite): distribuidora(s)
+  ['library',       'TEXT'],    // games (Playnite): biblioteca/origem (Source: Steam, GOG, Epic...)
 ]
 for (const [col, def] of newCols) {
   if (!cols.includes(col)) db.exec(`ALTER TABLE media_items ADD COLUMN ${col} ${def}`)

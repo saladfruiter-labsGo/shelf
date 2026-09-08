@@ -29,6 +29,8 @@ export interface MediaItem {
   playtime_seconds?: number | null   // games (Playnite): tempo total jogado, em segundos
   game_status?:      GameStatus | null // games (Playnite): status granular
   last_played_at?:   string | null     // games (Playnite): última vez jogado (ISO)
+  publisher?:        string | null     // games (Playnite): distribuidora(s)
+  library?:          string | null     // games (Playnite): biblioteca/origem (Steam, GOG...)
 }
 
 /* ─── Diário: registros de "visto/concluído" (N por mídia) ─── */
