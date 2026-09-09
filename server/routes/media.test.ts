@@ -15,6 +15,7 @@ const dataDir = mkdtempSync(join(tmpdir(), 'shelf-media-'))
 process.env.DATA_DIR = dataDir
 
 let app: { request: (path: string) => Promise<Response> }
+let gameId: number
 
 before(async () => {
   const db = (await import('../db.js')).db
@@ -34,7 +35,10 @@ before(async () => {
   const game = db.prepare(
     "INSERT INTO media_items (external_id, type, title, status, added_at) VALUES (?, 'game', ?, 'wishlist', '2024-01-01 00:00:00')",
   )
-  for (let i = 1; i <= 7; i++) game.run(`gm-${i}`, `Jogo ${i}`)
+  for (let i = 1; i <= 7; i++) {
+    const result = game.run(`gm-${i}`, `Jogo ${i}`)
+    if (i === 1) gameId = Number(result.lastInsertRowid)
+  }
 })
 
 const titles = async (qs: string) =>
@@ -85,4 +89,12 @@ test('offset além do fim devolve lista vazia, não erro', async () => {
 test('offset inválido é tratado como zero', async () => {
   assert.deepEqual(await titles('type=game&limit=2&offset=-5'), await titles('type=game&limit=2'))
   assert.deepEqual(await titles('type=game&limit=2&offset=abc'), await titles('type=game&limit=2'))
+})
+
+test('identificação TMDB rejeita código inválido e tipos incompatíveis', async () => {
+  const invalid = await app.request('/1/tmdb-preview?tmdb_id=abc')
+  assert.equal(invalid.status, 400)
+
+  const incompatible = await app.request(`/${gameId}/tmdb-preview?tmdb_id=550`)
+  assert.equal(incompatible.status, 400)
 })

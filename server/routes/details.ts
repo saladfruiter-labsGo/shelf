@@ -80,8 +80,11 @@ app.get('/:type/:external_id', async (c) => {
   const fetcher = fetchers[type]
   if (!fetcher) return c.json({ synopsis: null, creators: null, author: null })
 
-  // Séries importadas do Plex guardam um guid em external_id; usa o tmdb_id resolvido.
-  const fetchId = (type === 'series' && !/^\d+$/.test(externalId) && item?.tmdb_id) ? String(item.tmdb_id) : externalId
+  // Itens importados do Plex e identificações manuais podem manter o external_id
+  // de origem; quando há um tmdb_id explícito, ele sempre tem precedência.
+  const fetchId = (type === 'movie' || type === 'series') && item?.tmdb_id
+    ? String(item.tmdb_id)
+    : externalId
 
   let details: Details = { synopsis: null, creators: null, author: null }
   try {

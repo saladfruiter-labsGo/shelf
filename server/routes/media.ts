@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import { db } from '../db.js'
 import { notifyLibraryActivity } from '../notify.js'
 import { getSeriesView } from '../series.js'
+import { fetchTmdbMediaDetails, type TmdbMediaType } from '../tmdb.js'
 
 const app = new Hono()
 
@@ -115,6 +116,53 @@ app.post('/', async (c) => {
     if (e.message?.includes('UNIQUE')) return c.json({ error: 'Already in library' }, 409)
     throw e
   }
+})
+
+function tmdbIdFrom(value: unknown): string | null {
+  const id = typeof value === 'string' ? value.trim() : String(value ?? '').trim()
+  return /^[1-9]\d*$/.test(id) ? id : null
+}
+
+async function tmdbDetailsForItem(id: string, rawTmdbId: unknown) {
+  const item = db.prepare('SELECT id, type FROM media_items WHERE id = ?').get(id) as { id: number; type: string } | undefined
+  if (!item) return { error: 'Not found', status: 404 as const }
+  if (item.type !== 'movie' && item.type !== 'series') {
+    return { error: 'TMDB só pode identificar filmes e séries', status: 400 as const }
+  }
+
+  const tmdbId = tmdbIdFrom(rawTmdbId)
+  if (!tmdbId) return { error: 'tmdb_id deve ser um número positivo', status: 400 as const }
+
+  const details = await fetchTmdbMediaDetails(item.type as TmdbMediaType, tmdbId).catch(() => null)
+  if (!details) return { error: 'Mídia não encontrada no TMDB ou TMDB indisponível', status: 502 as const }
+  return { item, details }
+}
+
+/** Busca uma identificação manual sem alterar o item — usada para a prévia. */
+app.get('/:id/tmdb-preview', async (c) => {
+  const result = await tmdbDetailsForItem(c.req.param('id'), c.req.query('tmdb_id'))
+  if ('error' in result) return c.json({ error: result.error }, result.status)
+  return c.json(result.details)
+})
+
+/** Aplica a identificação TMDB escolhida ao item existente. */
+app.patch('/:id/tmdb-identification', async (c) => {
+  const body = await c.req.json().catch(() => ({})) as { tmdb_id?: unknown }
+  const result = await tmdbDetailsForItem(c.req.param('id'), body.tmdb_id)
+  if ('error' in result) return c.json({ error: result.error }, result.status)
+
+  const { details } = result
+  db.prepare(`
+    UPDATE media_items SET
+      tmdb_id = ?, title = ?, cover_url = ?, year = ?, genre = ?, runtime = ?,
+      synopsis = ?, creators = ?, author = ?, release_date = ?, updated_at = datetime('now')
+    WHERE id = ?
+  `).run(
+    details.tmdb_id, details.title, details.cover_url, details.year, details.genre, details.runtime,
+    details.synopsis, details.creators, details.author, details.release_date, c.req.param('id'),
+  )
+
+  return c.json(db.prepare('SELECT * FROM media_items WHERE id = ?').get(c.req.param('id')))
 })
 
 // game_status (granular de games) → status base do Shelf
