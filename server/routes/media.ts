@@ -172,6 +172,8 @@ const GAME_STATUS_TO_BASE: Record<string, 'wishlist' | 'in_progress' | 'complete
 
 /** Vagas de favorito por categoria (o banner da home mostra exatamente estas). */
 const FAVORITE_LIMIT = 5
+/** `favorite = 2` marca o destaque da categoria — a capa coroada, no centro da faixa. */
+const FAVORITE_TOP = 2
 
 app.patch('/:id', async (c) => {
   const id   = c.req.param('id')
@@ -192,8 +194,8 @@ app.patch('/:id', async (c) => {
     { status: string; rating: number; type: string; favorite: number } | undefined
 
   // Cinco favoritos por categoria — é o número de vagas do banner da home.
-  if (before && Number(body.favorite) === 1 && !before.favorite) {
-    const { n } = db.prepare('SELECT COUNT(*) n FROM media_items WHERE type = ? AND favorite = 1')
+  if (before && Number(body.favorite) > 0 && !before.favorite) {
+    const { n } = db.prepare('SELECT COUNT(*) n FROM media_items WHERE type = ? AND favorite > 0')
       .get(before.type) as { n: number }
     if (n >= FAVORITE_LIMIT) {
       return c.json({ error: `Só cabem ${FAVORITE_LIMIT} favoritos por categoria — remova um antes.` }, 409)
@@ -203,6 +205,12 @@ app.patch('/:id', async (c) => {
   const set    = fields.map(f => `${f} = ?`).join(', ')
   const values = fields.map(f => body[f])
   db.prepare(`UPDATE media_items SET ${set}, updated_at = datetime('now') WHERE id = ?`).run(...values, id)
+
+  // A coroa é uma só por categoria: promover um destaque rebaixa o anterior.
+  if (Number(body.favorite) === FAVORITE_TOP && before) {
+    db.prepare('UPDATE media_items SET favorite = 1 WHERE type = ? AND favorite = ? AND id != ?')
+      .run(before.type, FAVORITE_TOP, id)
+  }
 
   const item = db.prepare('SELECT * FROM media_items WHERE id = ?').get(id) as any
   if (!item) return c.json({ error: 'Not found' }, 404)
