@@ -31,14 +31,20 @@ app.get('/', (c) => {
   const status  = c.req.query('status')
   const library = c.req.query('library') === '1'
   const limit   = parseInt(c.req.query('limit') ?? '100')
+  // `offset` deixa quem precisa da coleção inteira — o Backlog, que monta os
+  // filtros e a ordenação por preço a partir de todos os itens — buscar em
+  // páginas em vez de torcer para caber num limite chutado.
+  const offset  = parseInt(c.req.query('offset') ?? '0')
 
   let sql = 'SELECT * FROM media_items WHERE 1=1'
   const params: (string | number)[] = []
   if (type)    { sql += ' AND type = ?';   params.push(type) }
   if (status)  { sql += ' AND status = ?'; params.push(status) }
   if (library) { sql += " AND status != 'wishlist'" }
-  sql += ' ORDER BY added_at DESC LIMIT ?'
-  params.push(limit)
+  // Desempate por id: sem ele, itens com o mesmo `added_at` — um import inteiro
+  // tem muitos — podem trocar de lugar entre páginas e sumir ou repetir.
+  sql += ' ORDER BY added_at DESC, id DESC LIMIT ? OFFSET ?'
+  params.push(limit, Number.isFinite(offset) && offset > 0 ? offset : 0)
 
   return c.json(withProgress(db.prepare(sql).all(...params) as any[]))
 })
