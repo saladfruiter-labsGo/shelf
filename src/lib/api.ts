@@ -3,6 +3,7 @@ import type {
   MediaItem, MediaStatus, MediaType,
   SearchResult, WrapData, SeriesView, SeriesPreview, DiaryEntry,
   IntegrationStatus, NowPlaying, ActivityEvent, ActivityMediaType, MusicStats, TrendingItem,
+  GamePriceBacklog, GamePriceDetails, GamePriceRange, GamePriceCandidate,
 } from '../types'
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -130,5 +131,27 @@ export const api = {
       request('/integrations/kavita/test', { method: 'POST' }),
     playniteTest: (): Promise<{ ok: boolean; error?: string }> =>
       request('/integrations/playnite/test', { method: 'POST' }),
+    itadTest: (): Promise<{ ok: boolean; shops?: number; error?: string }> =>
+      request('/integrations/itad/test', { method: 'POST' }),
+    itadSync: (): Promise<{ ok: boolean }> =>
+      request('/integrations/itad/sync', { method: 'POST' }),
+  },
+
+  prices: {
+    /** Resumo de todos os jogos do backlog numa única chamada. */
+    backlog: (): Promise<GamePriceBacklog> => request('/prices/backlog'),
+    game: (mediaItemId: number, params?: { range?: GamePriceRange; shop?: number | null }): Promise<GamePriceDetails> => {
+      const qs = new URLSearchParams()
+      if (params?.range) qs.set('range', params.range)
+      if (params?.shop)  qs.set('shop', String(params.shop))
+      const q = qs.toString()
+      return request(`/prices/games/${mediaItemId}${q ? `?${q}` : ''}`)
+    },
+    refresh: (mediaItemId: number): Promise<{ ok: boolean }> =>
+      request(`/prices/games/${mediaItemId}/refresh`, { method: 'POST' }),
+    matches: (mediaItemId: number, query: string): Promise<{ candidates: GamePriceCandidate[] }> =>
+      request(`/prices/games/${mediaItemId}/matches?q=${encodeURIComponent(query)}`),
+    setMatch: (mediaItemId: number, match: { provider_game_id?: string; title?: string; clear?: boolean }): Promise<{ ok: boolean }> =>
+      request(`/prices/games/${mediaItemId}/match`, { method: 'PATCH', body: JSON.stringify(match) }),
   },
 }

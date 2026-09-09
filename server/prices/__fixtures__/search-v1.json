@@ -1,0 +1,5 @@
+[
+  { "id": "111", "slug": "cyberpunk-2077-phantom-liberty", "title": "Cyberpunk 2077: Phantom Liberty", "type": "dlc", "mature": true },
+  { "id": "222", "slug": "cyberpunk-2077", "title": "Cyberpunk 2077", "type": "game", "mature": true },
+  { "id": "333", "slug": "cyberpunk-2077-ultimate-edition", "title": "Cyberpunk 2077: Ultimate Edition", "type": "package", "mature": true }
+]

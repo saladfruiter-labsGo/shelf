@@ -5,15 +5,22 @@ const app = new Hono()
 
 const ALLOWED_KEYS = ['TMDB_API_KEY', 'RAWG_API_KEY', 'GOOGLE_BOOKS_KEY'] as const
 
-function getAllSettings(): Record<string, string> {
-  const rows = db.prepare('SELECT key, value FROM settings').all() as { key: string; value: string }[]
+/**
+ * Só as chaves públicas desta tela saem no GET. A tabela `settings` também
+ * guarda segredos de integração (Plex, Last.fm, Kavita, ITAD...), que nunca
+ * devem chegar ao navegador — esses ficam mascarados em /api/integrations.
+ */
+function getPublicSettings(): Record<string, string> {
   const result: Record<string, string> = {}
-  for (const r of rows) result[r.key] = r.value
+  for (const key of ALLOWED_KEYS) {
+    const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value: string } | undefined
+    if (row) result[key] = row.value
+  }
   return result
 }
 
 app.get('/', (c) => {
-  return c.json(getAllSettings())
+  return c.json(getPublicSettings())
 })
 
 app.patch('/', async (c) => {
@@ -34,7 +41,7 @@ app.patch('/', async (c) => {
     }
   }
 
-  return c.json(getAllSettings())
+  return c.json(getPublicSettings())
 })
 
 export default app

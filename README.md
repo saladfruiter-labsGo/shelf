@@ -16,6 +16,7 @@ Um app de biblioteca pessoal para rastrear **filmes, séries, games e livros** e
 - **Wrap** — relatório anual ou mensal gerado como imagem (canvas 1080×1920, formato de story) com suas estatísticas do período: totais por tipo, nota média, top itens e linha do tempo de atividade.
 - **Configurações** — as chaves de API (TMDB, RAWG, Google Books) ficam salvas no próprio banco, sem depender só do ambiente.
 - **Integrações** — monitoramento automático via **Plex** (webhook: registra o que foi assistido até o fim e a nota dada) e **YouTube Music via Last.fm** (registra músicas ouvidas, com horas e gêneros). Uma barra "assistindo agora" sob a navbar mostra a reprodução do Plex em tempo real, com progresso. Notificações via **Telegram** avisam sobre atividades da biblioteca (adicionado, concluído, abandonado, nota) — apenas filmes, séries, games e livros.
+- **Preços do backlog** — jogos de PC marcados como backlog têm o preço acompanhado no [IsThereAnyDeal](https://isthereanydeal.com/) na região configurada (padrão `BR`). O card do backlog mostra a melhor oferta, o desconto e o selo de menor histórico; a página do jogo traz os indicadores (melhor preço, menor histórico, menor do mês, menor em 30 dias), gráfico do menor preço por dia — com tabela equivalente para leitores de tela —, lista de ofertas por loja e correspondência manual quando a edição é ambígua. Sincroniza a cada 6 horas.
 - **Armazenamento local** — dados em SQLite (WAL), auto-criado em `data/shelf.db`.
 
 ## 🧱 Stack
@@ -41,7 +42,8 @@ shelf/
 ├─ server/                 # Backend (Hono)
 │  ├─ index.ts             # app, rotas, serve do build estático
 │  ├─ db.ts                # conexão + schema SQLite
-│  └─ routes/              # search, media, details, wrap, settings, lists
+│  ├─ prices/              # preços do backlog (ITAD): provider, matcher, repository, stats, service, sync
+│  └─ routes/              # search, media, details, wrap, settings, lists, prices
 ├─ Dockerfile
 ├─ docker-compose.yml
 └─ .env.example
@@ -61,6 +63,7 @@ npm run dev                 # sobe cliente (Vite) + servidor (tsx watch) juntos
 - `npm run dev:server` — só o backend
 - `npm run build` — build de produção do frontend para `dist/public`
 - `npm run typecheck` — checagem de tipos
+- `npm test` — testes do backend (`node --test` com fixtures gravadas; nenhuma chamada externa real)
 
 O servidor, em produção, também serve o build estático do frontend (ver `server/index.ts`).
 
@@ -76,6 +79,9 @@ O servidor, em produção, também serve o build estático do frontend (ver `ser
 | `LASTFM_ENABLED` | `1` para ativar o Last.fm (música) |
 | `LASTFM_API_KEY` | Chave de API do Last.fm ([last.fm/api/accounts](https://www.last.fm/api/accounts)) |
 | `LASTFM_USER` | Nome de usuário do Last.fm |
+| `ITAD_ENABLED` | `1` para ativar o acompanhamento de preços do backlog |
+| `ITAD_API_KEY` | Chave do IsThereAnyDeal ([isthereanydeal.com/apps/new](https://isthereanydeal.com/apps/new/)) |
+| `ITAD_COUNTRY` | Região das ofertas, ISO de 2 letras (default `BR`) |
 
 > Todas as integrações (chaves de API, Last.fm, Plex, Kavita, …) podem ser definidas por `.env` **ou** pela tela **Settings**. Quando definidas na UI ficam gravadas no banco e **têm prioridade** sobre o `.env`; se estiverem em branco na UI, o valor do ambiente é usado.
 
@@ -102,7 +108,9 @@ Saúde: `GET /api/health` → `{ "ok": true }`
 | `GET /api/details/:type/:external_id` | Sinopse/criador/autor do item na fonte externa (cacheado no banco após a 1ª busca) |
 | `GET /api/wrap?period=&year=&month=` | Estatísticas para o Wrap (`annual`/`monthly`) |
 | `GET/PATCH /api/settings` | Lê/atualiza as chaves de API |
-| `GET/PATCH /api/integrations` | Status e configuração de Plex/Last.fm |
+| `GET/PATCH /api/integrations` | Status e configuração de Plex/Last.fm/Telegram/Kavita/Playnite/preços |
+| `POST /api/integrations/itad/test` | Testa a chave do IsThereAnyDeal na região configurada |
+| `POST /api/integrations/itad/sync` | Sincroniza os preços do backlog sob demanda |
 | `POST /api/integrations/plex/webhook?token=` | Recebe webhooks do Plex (`media.scrobble`, `media.rate`) |
 | `GET /api/integrations/now-playing` | Mídia em reprodução agora (Plex com progresso; música sem posição) |
 | `GET /api/integrations/activity` | Feed de atividade em tempo real |
@@ -118,6 +126,20 @@ Saúde: `GET /api/health` → `{ "ok": true }`
 | `DELETE /api/lists/:id` | Remove uma lista |
 | `POST /api/lists/:id/items` | Adiciona um item à lista |
 | `DELETE /api/lists/:id/items/:mediaItemId` | Remove um item da lista |
+| `GET /api/prices/backlog` | Resumo de preço de todos os jogos do backlog (uma consulta em lote) |
+| `GET /api/prices/games/:id?range=&shop=` | Indicadores, ofertas e pontos do gráfico de um jogo (`range`: `30d`, `90d`, `1y`, `all`) |
+| `POST /api/prices/games/:id/refresh` | Atualização manual, com cooldown de 5 min por jogo |
+| `GET /api/prices/games/:id/matches?q=` | Candidatos do provedor para correção manual da correspondência |
+| `PATCH /api/prices/games/:id/match` | Confirma, troca (`provider_game_id`) ou desassocia (`clear: true`) o produto |
+
+### Preços: como funciona e o que fica de fora
+
+- **Fonte:** IsThereAnyDeal. O RAWG continua sendo a identidade do jogo (é dele que sai o Steam AppID usado para casar a edição certa).
+- **Escopo:** só jogos de **PC** com `status = 'wishlist'`. PlayStation, Xbox e Nintendo ficam para uma etapa posterior — essas lojas não expõem preços públicos adequados.
+- **Correspondência:** Steam AppID → título exato → revisão manual. Na dúvida o jogo fica `ambiguous` e **nenhum preço é exibido** até a confirmação, para não mostrar o preço de uma DLC ou de uma edição Deluxe.
+- **Histórico:** ao casar o jogo, o log de mudanças de preço do último ano é importado; depois disso cada sincronização grava um snapshot diário por oferta. Sair do backlog só interrompe as consultas — o histórico é preservado e o acompanhamento retoma se o jogo voltar.
+- **Limites:** os quatro indicadores usam o histórico local; a interface informa "histórico local desde DD/MM/AAAA" para não sugerir precisão que não existe. Respostas `429` são reagendadas respeitando o `Retry-After`, e a indisponibilidade do provedor nunca apaga o último preço conhecido.
+- **Segurança:** a chave do ITAD nunca é enviada ao navegador (aparece mascarada em `/api/integrations`), as chamadas externas só vão para `api.isthereanydeal.com`, e só links de compra HTTPS são persistidos e renderizados (com `rel="noopener noreferrer sponsored"`, preservando os parâmetros de afiliado do provedor).
 
 ## 📄 Licença
 
