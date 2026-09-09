@@ -3,8 +3,11 @@ import { db } from '../db.js'
 
 const app = new Hono()
 
+/** Preparado uma vez: `apiKey` roda a cada busca, e uma importação faz milhares. */
+const readSetting = db.prepare('SELECT value FROM settings WHERE key = ?')
+
 function apiKey(name: string): string | undefined {
-  const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(name) as { value: string } | undefined
+  const row = readSetting.get(name) as { value: string } | undefined
   return row?.value?.trim() || process.env[name]
 }
 

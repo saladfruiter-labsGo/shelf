@@ -17,13 +17,13 @@ export function LibraryGames() {
 
   const { data: rawItems = [], isLoading } = useQuery({
     queryKey: ['media', 'game'],
-    queryFn: () => api.media.list({ type: 'game', limit: 500 }),
+    queryFn: () => api.media.list({ type: 'game', limit: 500, library: true }),
   })
 
   // Itens em wishlist (nunca jogado) ficam só na Wishlist, fora da biblioteca.
   // Ordena da última vez jogada mais recente para a mais antiga (sem data vai pro fim).
   const items = rawItems
-    .filter(i => i.status !== 'wishlist')
+    .slice()
     .sort((a, b) => (b.last_played_at ? Date.parse(b.last_played_at) : 0) - (a.last_played_at ? Date.parse(a.last_played_at) : 0))
 
   const countByStatus = (s: GameStatus) => items.filter(i => gameStatusOf(i) === s).length

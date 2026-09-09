@@ -4,8 +4,10 @@ import { db } from './db.js'
 const TG_BASE = process.env.TELEGRAM_API_BASE ?? 'https://api.telegram.org'
 
 /* Config lida da tabela settings (mesma usada pelas integrações). */
+const readSetting = db.prepare('SELECT value FROM settings WHERE key = ?')
+
 function cfg(key: string): string {
-  const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value: string } | undefined
+  const row = readSetting.get(key) as { value: string } | undefined
   return row?.value ?? ''
 }
 

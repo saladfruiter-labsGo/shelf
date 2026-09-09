@@ -8,6 +8,7 @@
  * 2. **Nada é apagado.** Importar é sempre aditivo: campos vazios são
  *    preenchidos, os já preenchidos só mudam em `mode: 'replace'`.
  */
+import type { Statement } from 'better-sqlite3'
 import { db } from '../db.js'
 import { tmdbMovieLookup } from '../routes/search.js'
 import {
@@ -32,6 +33,21 @@ function emptyReport(): ImportReport {
 }
 
 const findItem = db.prepare('SELECT * FROM media_items WHERE external_id = ? AND type = ?')
+
+/**
+ * `db.prepare` compila SQL toda vez que é chamado. Num import de milhares de
+ * linhas, preparar dentro do laço produz milhares de statements para o coletor
+ * — desperdício, e no Node 24 + Windows o addon nativo do better-sqlite3 chega
+ * a abortar o processo ao coletá-las (o mesmo defeito que `scripts/test.mjs`
+ * contorna). As formas de SQL aqui são poucas e repetidas, então guarda cada
+ * uma pela própria string.
+ */
+const compiled = new Map<string, Statement<unknown[]>>()
+function prep(sql: string): Statement<unknown[]> {
+  let stmt = compiled.get(sql)
+  if (!stmt) { stmt = db.prepare(sql); compiled.set(sql, stmt) }
+  return stmt
+}
 
 const insertDiary = db.prepare(`
   INSERT INTO diary_entries (media_item_id, watched_at, rating, comment, source, season_number, episode_number)
@@ -91,7 +107,7 @@ export function importShelfBackup(payload: ShelfBackup, mode: ImportMode = 'merg
       const cols = ITEM_COLUMNS.filter(c => raw[c] !== undefined)
 
       if (!existing) {
-        db.prepare(
+        prep(
           `INSERT INTO media_items (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`,
         ).run(...cols.map(c => (raw[c] as any) ?? null))
         report.created++
@@ -111,7 +127,7 @@ export function importShelfBackup(payload: ShelfBackup, mode: ImportMode = 'merg
       const fields = mode === 'replace' ? updatable : updatable.filter(fillsGap)
       if (fields.length === 0) { report.skipped++; continue }
 
-      db.prepare(
+      prep(
         `UPDATE media_items SET ${fields.map(f => `${f} = ?`).join(', ')}, updated_at = datetime('now')
           WHERE external_id = ? AND type = ?`,
       ).run(...fields.map(f => (raw[f] as any) ?? null), external_id, type)
@@ -139,7 +155,7 @@ export function importShelfBackup(payload: ShelfBackup, mode: ImportMode = 'merg
       const item = findItem.get(String(s.external_id ?? ''), String(s.type ?? 'series')) as { id: number } | undefined
       if (!item) continue
       for (const season of s.seasons ?? []) {
-        db.prepare(`
+        prep(`
           INSERT INTO series_seasons (media_item_id, season_number, title, episode_count, status, completed_at)
           VALUES (?, ?, ?, ?, ?, ?)
           ON CONFLICT(media_item_id, season_number) DO UPDATE SET
@@ -151,7 +167,7 @@ export function importShelfBackup(payload: ShelfBackup, mode: ImportMode = 'merg
                season.status ?? 'in_progress', season.completed_at ?? null)
 
         for (const ep of season.episodes ?? []) {
-          db.prepare(`
+          prep(`
             INSERT INTO series_episodes (media_item_id, season_number, episode_number, title, watched, watched_at)
             VALUES (?, ?, ?, ?, ?, ?)
             ON CONFLICT(media_item_id, season_number, episode_number) DO UPDATE SET
@@ -187,9 +203,33 @@ export function importShelfBackup(payload: ShelfBackup, mode: ImportMode = 'merg
 /* ────────────────────────────────  Letterboxd  ───────────────────────────── */
 
 const insertMovie = db.prepare(`
-  INSERT INTO media_items (external_id, type, title, cover_url, year, genre, release_date, status, rating, completed_at)
-  VALUES (@external_id, 'movie', @title, @cover_url, @year, @genre, @release_date, @status, @rating, @completed_at)
+  INSERT INTO media_items (external_id, type, title, cover_url, year, genre, release_date, status, rating, completed_at, added_at)
+  VALUES (@external_id, 'movie', @title, @cover_url, @year, @genre, @release_date, @status, @rating, @completed_at, @added_at)
 `)
+
+/**
+ * Só `diary.csv` e `reviews.csv` descrevem sessões.
+ *
+ * Em `watched.csv` e `ratings.csv` a coluna `Date` é o dia em que a linha foi
+ * criada no Letterboxd — quase sempre o dia seguinte ao da sessão, que está no
+ * `Watched Date` do diário. Tratar as duas como sessão põe o mesmo filme no
+ * diário duas vezes, em dias consecutivos.
+ */
+function writesDiary(kind: LetterboxdKind): boolean {
+  return kind === 'diary'
+}
+
+/**
+ * `added_at` = quando o filme entrou na estante. Vindo do Letterboxd, a data do
+ * arquivo é mais fiel que "agora": sem isso um import de anos de histórico
+ * carimba tudo com o dia de hoje, empurra a biblioteca inteira para o topo de
+ * "recentes" e concentra as estatísticas do Perfil num ano só.
+ *
+ * O formato acompanha o `datetime('now')` das outras linhas.
+ */
+function addedAtFrom(date: string | null): string | null {
+  return date ? `${date} 00:00:00` : null
+}
 
 /** Um filme já casado com o TMDB (ou o palpite local, quando não casou). */
 interface ResolvedMovie {
@@ -211,6 +251,13 @@ export interface LetterboxdImportOptions {
    * para cada um.
    */
   cache?: Map<string, ResolvedMovie>
+  /**
+   * Reimportação corretiva: puxa o `added_at` de um item que já existe para a
+   * data do arquivo quando ela é mais antiga. Fora daí a importação não mexe
+   * em `added_at` de card que já estava aqui, para não reescrever a ordem de
+   * uma estante montada à mão.
+   */
+  fixAddedAt?: boolean
 }
 
 export async function importLetterboxd(csv: string, opts: LetterboxdImportOptions = {}): Promise<ImportReport & { kind: LetterboxdKind; rows: number }> {
@@ -245,12 +292,16 @@ export async function importLetterboxd(csv: string, opts: LetterboxdImportOption
     const status = wantsBacklog ? 'wishlist' : 'completed'
     const completedAt = wantsBacklog ? null : (row.watchedAt ?? new Date().toISOString().slice(0, 10))
 
+    const addedAt = addedAtFrom(row.watchedAt)
+
     let mediaId: number
     if (!existing) {
       const res = insertMovie.run({
         external_id: match.external_id, title: match.title, cover_url: match.cover_url,
         year: match.year, genre: match.genre, release_date: match.release_date,
         status, rating: row.rating ?? 0, completed_at: completedAt,
+        // Sem data no arquivo, o DEFAULT da coluna (agora) vale.
+        added_at: addedAt ?? new Date().toISOString().slice(0, 19).replace('T', ' '),
       })
       mediaId = Number(res.lastInsertRowid)
       report.created++
@@ -266,17 +317,21 @@ export async function importLetterboxd(csv: string, opts: LetterboxdImportOption
       }
       if (row.rating && row.rating !== existing.rating) { sets.push('rating = ?'); vals.push(row.rating) }
       if (!existing.cover_url && match.cover_url) { sets.push('cover_url = ?'); vals.push(match.cover_url) }
+      // Só anda para trás: uma reimportação corretiva nunca "rejuvenesce" um item.
+      if (opts.fixAddedAt && addedAt && addedAt < String(existing.added_at)) {
+        sets.push('added_at = ?'); vals.push(addedAt)
+      }
 
       if (sets.length) {
-        db.prepare(`UPDATE media_items SET ${sets.join(', ')}, updated_at = datetime('now') WHERE id = ?`).run(...vals, mediaId)
+        prep(`UPDATE media_items SET ${sets.join(', ')}, updated_at = datetime('now') WHERE id = ?`).run(...vals, mediaId)
         report.updated++
       } else {
         report.skipped++
       }
     }
 
-    // Só o que foi assistido vira registro no diário; a watchlist não.
-    if (!wantsBacklog && row.watchedAt) {
+    // Só o diário registra sessões — ver `writesDiary`. A watchlist nunca.
+    if (writesDiary(kind) && row.watchedAt) {
       const comment = row.review ?? (row.rewatch ? 'Rewatch' : null)
       if (addDiary(mediaId, row.watchedAt, row.rating, comment, 'letterboxd')) report.diary++
     }
@@ -296,6 +351,32 @@ export interface LetterboxdFileReport extends ImportReport {
 export interface LetterboxdApplyResult {
   files: LetterboxdFileReport[]
   total: ImportReport & { rows: number }
+  /** Registros de diário apagados antes de importar, quando `redo` foi pedido. */
+  cleared: number
+}
+
+/** Quantos registros do diário vieram de uma importação do Letterboxd. */
+export function countLetterboxdDiary(): number {
+  const row = db.prepare("SELECT COUNT(*) n FROM diary_entries WHERE source = 'letterboxd'").get() as { n: number }
+  return row.n
+}
+
+/**
+ * Apaga só o que a importação do Letterboxd criou no diário. Registros feitos à
+ * mão, pelo Plex ou por qualquer outra origem não são tocados — é o que torna
+ * seguro reimportar o mesmo export depois de uma correção no importador.
+ */
+export function clearLetterboxdDiary(): number {
+  return db.prepare("DELETE FROM diary_entries WHERE source = 'letterboxd'").run().changes
+}
+
+export interface LetterboxdApplyOptions {
+  /**
+   * Refazer: apaga os registros de diário que vieram do Letterboxd antes de
+   * importar e recoloca o `added_at` dos filmes na data do arquivo. Serve para
+   * consertar uma importação anterior sem apagar nada que não veio dali.
+   */
+  redo?: boolean
 }
 
 /**
@@ -306,11 +387,17 @@ export interface LetterboxdApplyResult {
  * a entrar é a que fica), `watchlist` por último — que nunca rebaixa um filme
  * já assistido, seguindo a regra de que backlog e biblioteca não se misturam.
  */
-export async function applyLetterboxdPlan(sources: LetterboxdSource[], plan: LetterboxdPlan): Promise<LetterboxdApplyResult> {
+export async function applyLetterboxdPlan(
+  sources: LetterboxdSource[],
+  plan: LetterboxdPlan,
+  opts: LetterboxdApplyOptions = {},
+): Promise<LetterboxdApplyResult> {
   const byPath = new Map(sources.map(s => [s.path, s.text]))
   const cache = new Map<string, ResolvedMovie>()
   const files: LetterboxdFileReport[] = []
   const total = { ...emptyReport(), rows: 0 }
+
+  const cleared = opts.redo ? clearLetterboxdDiary() : 0
 
   for (const file of plan.files) {
     const csv = byPath.get(file.path)
@@ -320,7 +407,7 @@ export async function applyLetterboxdPlan(sources: LetterboxdSource[], plan: Let
     }
 
     try {
-      const r = await importLetterboxd(csv, { kind: file.kind, filename: file.path, cache })
+      const r = await importLetterboxd(csv, { kind: file.kind, filename: file.path, cache, fixAddedAt: opts.redo })
       files.push({ ...r, path: file.path })
       total.created += r.created
       total.updated += r.updated
@@ -336,5 +423,5 @@ export async function applyLetterboxdPlan(sources: LetterboxdSource[], plan: Let
     }
   }
 
-  return { files, total }
+  return { files, total, cleared }
 }

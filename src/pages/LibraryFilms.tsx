@@ -11,11 +11,12 @@ export function LibraryFilms() {
 
   const { data: rawItems = [], isLoading } = useQuery({
     queryKey: ['media', 'movie'],
-    queryFn: () => api.media.list({ type: 'movie', limit: 500 }),
+    queryFn: () => api.media.list({ type: 'movie', limit: 500, library: true }),
   })
 
-  // Itens em wishlist ficam só na Wishlist, fora da biblioteca.
-  const items = rawItems.filter(i => i.status !== 'wishlist')
+  // Itens em wishlist ficam só na Wishlist — excluídos no servidor (`library`),
+  // senão um backlog grande ocuparia sozinho o limite de linhas.
+  const items = rawItems
 
   const watched = items.filter(i => i.status === 'completed').length
 

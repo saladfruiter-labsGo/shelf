@@ -149,8 +149,8 @@ function ProfileOverlay({ open, onClose }: { open: boolean; onClose: () => void 
   const overlayRef = useRef<HTMLDivElement>(null)
 
   const { data: allItems = [] } = useQuery({
-    queryKey: ['media-all'],
-    queryFn: () => api.media.list({ limit: 1000 }),
+    queryKey: ['media-library'],
+    queryFn: () => api.media.list({ limit: 1000, library: true }),
     enabled: open,
   })
 
@@ -166,8 +166,8 @@ function ProfileOverlay({ open, onClose }: { open: boolean; onClose: () => void 
   const currentYear = new Date().getFullYear()
   const years = Array.from({ length: currentYear - 2021 }, (_, i) => currentYear - i)
 
-  // A prateleira é a biblioteca: wishlist não conta aqui.
-  const shelfItems = allItems.filter(i => i.status !== 'wishlist')
+  // A prateleira é a biblioteca: a wishlist já fica de fora no servidor.
+  const shelfItems = allItems
 
   const statsByYear = years.map(year => {
     const items = shelfItems.filter(item => new Date(item.added_at).getFullYear() === year)

@@ -19,8 +19,8 @@ export function Library() {
   const [search, setSearch] = useState('')
 
   const { data: rawItems = [], isLoading } = useQuery({
-    queryKey: ['media-all'],
-    queryFn: () => api.media.list({ limit: 500 }),
+    queryKey: ['media-library-page'],
+    queryFn: () => api.media.list({ limit: 500, library: true }),
   })
 
   // Música não é um item por faixa na coleção: a biblioteca de músicas é o
@@ -34,7 +34,7 @@ export function Library() {
 
   // A wishlist é separada da coleção: itens ainda não adquiridos/consumidos
   // vivem só na Wishlist e não contam para a biblioteca.
-  const allItems = rawItems.filter(i => i.status !== 'wishlist')
+  const allItems = rawItems
 
   const countByType = (key: MediaType) =>
     key === 'music' ? musicPlays : allItems.filter(i => i.type === key).length

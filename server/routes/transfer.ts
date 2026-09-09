@@ -1,7 +1,9 @@
 import { randomUUID } from 'node:crypto'
 import { Hono } from 'hono'
 import { buildExport, exportCsv, exportSummary, type ExportScope } from '../transfer/export.js'
-import { importShelfBackup, applyLetterboxdPlan, type ImportMode } from '../transfer/importer.js'
+import {
+  importShelfBackup, applyLetterboxdPlan, countLetterboxdDiary, type ImportMode,
+} from '../transfer/importer.js'
 import {
   planLetterboxd,
   type LetterboxdKind, type LetterboxdPlan, type LetterboxdSource,
@@ -146,14 +148,18 @@ app.post('/import/letterboxd/preview', async (c) => {
 
   // Sem nada a importar não há o que confirmar — a resposta vai só com a lista
   // do que ficou de fora, e nenhum plano é guardado.
+  // Quantos registros do diário já vieram de uma importação anterior — a tela
+  // usa isso para oferecer "refazer" em vez de empilhar em cima do que existe.
+  const existingDiary = countLetterboxdDiary()
+
   if (plan.files.length === 0) {
-    return c.json({ planId: null, origin, filename: file.name, plan })
+    return c.json({ planId: null, origin, filename: file.name, plan, existingDiary })
   }
 
   sweepPlans()
   const planId = randomUUID()
   plans.set(planId, { plan, sources, origin, at: Date.now() })
-  return c.json({ planId, origin, filename: file.name, plan })
+  return c.json({ planId, origin, filename: file.name, plan, existingDiary })
 })
 
 /**
@@ -185,7 +191,7 @@ app.post('/import/letterboxd/replan', async (c) => {
 /** Confirma a prévia. Uma prévia vale uma importação: depois dela o plano some. */
 app.post('/import/letterboxd/apply', async (c) => {
   sweepPlans()
-  const body = (await c.req.json().catch(() => null)) as { planId?: string } | null
+  const body = (await c.req.json().catch(() => null)) as { planId?: string; redo?: boolean } | null
 
   const planId = body?.planId ?? ''
   const stored = plans.get(planId)
@@ -194,7 +200,7 @@ app.post('/import/letterboxd/apply', async (c) => {
   plans.delete(planId)
 
   try {
-    return c.json(await applyLetterboxdPlan(stored.sources, stored.plan))
+    return c.json(await applyLetterboxdPlan(stored.sources, stored.plan, { redo: body?.redo === true }))
   } catch (e) {
     return c.json({ error: (e as Error).message }, 400)
   }

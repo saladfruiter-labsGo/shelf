@@ -106,7 +106,7 @@ export function Dashboard() {
   const navigate = useNavigate()
   const now = new Date()
 
-  const { data: allItems = [] } = useQuery({ queryKey: ['media-all'], queryFn: () => api.media.list({ limit: 1000 }) })
+  const { data: allItems = [] } = useQuery({ queryKey: ['media-library'], queryFn: () => api.media.list({ limit: 1000, library: true }) })
   const { data: diary = [] } = useQuery({ queryKey: ['diary-all'], queryFn: () => api.diary.list() })
   const { data: upcoming } = useQuery({ queryKey: ['media-upcoming'], queryFn: () => api.media.upcoming() })
   const { data: musicStats } = useQuery({ queryKey: ['music-stats'], queryFn: api.integrations.musicStats })
@@ -118,7 +118,7 @@ export function Dashboard() {
   /* ─── derivações ─── */
   // Contador da biblioteca por categoria: tudo que já foi consumido — concluído,
   // em andamento ou abandonado. Só a wishlist fica de fora (ela mora em /wishlist).
-  const libraryCount = (t: MediaType) => allItems.reduce((n, i) => n + (i.type === t && i.status !== 'wishlist' ? 1 : 0), 0)
+  const libraryCount = (t: MediaType) => allItems.reduce((n, i) => n + (i.type === t ? 1 : 0), 0)
 
   const continueItems = useMemo(
     () => allItems.filter(i => i.status === 'in_progress').sort(byRecent).slice(0, 4),

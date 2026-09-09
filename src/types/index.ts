@@ -279,6 +279,8 @@ export interface LetterboxdPreview {
   origin:   'zip' | 'csv'
   filename: string
   plan:     LetterboxdPlan
+  /** Registros de diário que já vieram de uma importação anterior do Letterboxd. */
+  existingDiary: number
 }
 
 export interface LetterboxdFileReport extends ImportReport {
@@ -288,8 +290,10 @@ export interface LetterboxdFileReport extends ImportReport {
 }
 
 export interface LetterboxdApplyResult {
-  files: LetterboxdFileReport[]
-  total: ImportReport & { rows: number }
+  files:   LetterboxdFileReport[]
+  total:   ImportReport & { rows: number }
+  /** Registros de diário apagados antes de importar, quando "refazer" foi pedido. */
+  cleared: number
 }
 
 
