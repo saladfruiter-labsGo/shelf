@@ -83,6 +83,7 @@ const newCols: [string, string][] = [
   ['publisher',     'TEXT'],    // games (Playnite): distribuidora(s)
   ['library',       'TEXT'],    // games (Playnite): biblioteca/origem (Source: Steam, GOG, Epic...)
   ['steam_appid',   'INTEGER'], // games: AppID na Steam — chave estável do conector bidirecional
+  ['favorite',      'INTEGER DEFAULT 0'], // curadoria manual: entra no banner "Favoritos" da home
 ]
 for (const [col, def] of newCols) {
   if (!cols.includes(col)) db.exec(`ALTER TABLE media_items ADD COLUMN ${col} ${def}`)
@@ -91,6 +92,7 @@ for (const [col, def] of newCols) {
 // Indexes that depend on migrated columns must be created after the ALTERs above
 db.exec(`CREATE INDEX IF NOT EXISTS idx_media_release ON media_items(release_date)`)
 db.exec(`CREATE INDEX IF NOT EXISTS idx_media_steam   ON media_items(steam_appid)`)
+db.exec(`CREATE INDEX IF NOT EXISTS idx_media_fav     ON media_items(favorite)`)
 
 // ─── Listas: modos (lista | ranking | tier), ordem manual e tiers ───
 db.exec(`
