@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../lib/api'
 import { CATEGORIES } from '../lib/categories'
-import { TYPE_LABEL, TYPE_COLOR, GAME_STATUS_LABEL, gameStatusOf, formatPlaytime, fmtRating, toISODate, daysUntil } from '../lib/utils'
+import { TYPE_LABEL, TYPE_COLOR, GAME_STATUS_LABEL, gameStatusOf, formatPlaytime, fmtRating, toISODate, todayISODate, daysUntil } from '../lib/utils'
 import type { MediaItem, MediaType, TrendingItem, DiaryEntry } from '../types'
 
 const TYPE_EMOJI: Record<MediaType, string> = { movie: '🎬', series: '📺', game: '🎮', book: '📚', music: '🎵' }
@@ -127,15 +127,13 @@ export function Dashboard() {
   )
 
   const emBreve = useMemo(() => {
+    const today = todayISODate()
     const seen = new Set<number>()
     const pool = [...(upcoming?.hype ?? []), ...(upcoming?.wishlist ?? [])]
+      .filter(it => it.release_date && toISODate(it.release_date) > today)
     const out: MediaItem[] = []
     for (const it of pool) { if (seen.has(it.id)) continue; seen.add(it.id); out.push(it) }
-    out.sort((a, b) => {
-      const ax = a.release_date ? new Date(a.release_date).getTime() : Infinity
-      const bx = b.release_date ? new Date(b.release_date).getTime() : Infinity
-      return ax - bx
-    })
+    out.sort((a, b) => new Date(a.release_date!).getTime() - new Date(b.release_date!).getTime())
     return out.slice(0, 4)
   }, [upcoming])
 
@@ -228,13 +226,13 @@ export function Dashboard() {
           ) : <Empty>Nada em andamento agora.</Empty>}
         </section>
         <section>
-          <SectionHead title="Em breve" extra={emBreve.length ? <span className="count" style={{ color: 'var(--gold)' }}>{emBreve.length} chegando</span> : undefined} action="Ver watchlist →" onAction={() => navigate('/wishlist')} />
+          <SectionHead title="Em breve" extra={emBreve.length ? <span className="count" style={{ color: 'var(--gold)' }}>{emBreve.length} chegando</span> : undefined} action="Ver backlog →" onAction={() => navigate('/wishlist')} />
           {emBreve.length ? (
             <div className="soon">
               {emBreve.map(it => {
                 const days = it.release_date ? daysUntil(it.release_date) : null
                 const cd = days == null ? 'sem data' : days <= 0 ? 'disponível' : `em ${days} dia${days > 1 ? 's' : ''}`
-                const when = it.hype ? 'marcado como hype' : it.release_date ? new Date(it.release_date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }) : 'na watchlist'
+                const when = it.hype ? 'marcado como hype' : it.release_date ? new Date(it.release_date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }) : 'no backlog'
                 return (
                   <Link to={`/media/${it.id}`} className="soon-card" key={it.id}>
                     <Cover url={it.cover_url} type={it.type} w={48} h={72} font={22} />
@@ -248,7 +246,7 @@ export function Dashboard() {
                 )
               })}
             </div>
-          ) : <Empty>Nada agendado na watchlist.</Empty>}
+          ) : <Empty>Nada agendado no backlog.</Empty>}
         </section>
       </div></div>
 
