@@ -18,15 +18,25 @@ function withProgress<T extends { id: number; type: string; pages_total?: number
   })
 }
 
+/**
+ * `library=1` tira a wishlist **no SQL**, antes do `LIMIT`.
+ *
+ * As telas de biblioteca sempre descartaram a wishlist, mas faziam isso no
+ * cliente, depois de receber as N linhas mais recentes. Bastava um backlog
+ * grande — uma watchlist do Letterboxd, por exemplo — para ocupar a janela
+ * inteira e a biblioteca aparecer vazia, com todos os contadores zerados.
+ */
 app.get('/', (c) => {
-  const type   = c.req.query('type')
-  const status = c.req.query('status')
-  const limit  = parseInt(c.req.query('limit') ?? '100')
+  const type    = c.req.query('type')
+  const status  = c.req.query('status')
+  const library = c.req.query('library') === '1'
+  const limit   = parseInt(c.req.query('limit') ?? '100')
 
   let sql = 'SELECT * FROM media_items WHERE 1=1'
   const params: (string | number)[] = []
-  if (type)   { sql += ' AND type = ?';   params.push(type) }
-  if (status) { sql += ' AND status = ?'; params.push(status) }
+  if (type)    { sql += ' AND type = ?';   params.push(type) }
+  if (status)  { sql += ' AND status = ?'; params.push(status) }
+  if (library) { sql += " AND status != 'wishlist'" }
   sql += ' ORDER BY added_at DESC LIMIT ?'
   params.push(limit)
 

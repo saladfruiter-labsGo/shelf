@@ -40,11 +40,13 @@ export const api = {
     request(`/details/${type}/${externalId}`),
 
   media: {
-    list: (params?: { type?: MediaType; status?: MediaStatus; limit?: number }): Promise<MediaItem[]> => {
+    /** `library: true` exclui a wishlist no servidor, antes do limite de linhas. */
+    list: (params?: { type?: MediaType; status?: MediaStatus; limit?: number; library?: boolean }): Promise<MediaItem[]> => {
       const qs = new URLSearchParams()
-      if (params?.type)   qs.set('type', params.type)
-      if (params?.status) qs.set('status', params.status)
-      if (params?.limit)  qs.set('limit', String(params.limit))
+      if (params?.type)    qs.set('type', params.type)
+      if (params?.status)  qs.set('status', params.status)
+      if (params?.library) qs.set('library', '1')
+      if (params?.limit)   qs.set('limit', String(params.limit))
       return request(`/media?${qs}`)
     },
     recent:   (): Promise<Record<MediaType, MediaItem[]>> => request('/media/recent'),
@@ -171,8 +173,8 @@ export const api = {
     replanLetterboxd: (planId: string, overrides: Record<string, LetterboxdKind>): Promise<{ planId: string; plan: LetterboxdPlan }> =>
       request('/transfer/import/letterboxd/replan', { method: 'POST', body: JSON.stringify({ planId, overrides }) }),
     /** Confirma o plano da prévia. Vale uma vez: depois dela o plano é descartado. */
-    applyLetterboxd: (planId: string): Promise<LetterboxdApplyResult> =>
-      request('/transfer/import/letterboxd/apply', { method: 'POST', body: JSON.stringify({ planId }) }),
+    applyLetterboxd: (planId: string, redo = false): Promise<LetterboxdApplyResult> =>
+      request('/transfer/import/letterboxd/apply', { method: 'POST', body: JSON.stringify({ planId, redo }) }),
     /** Aborta: descarta o plano no servidor sem escrever nada. */
     abortLetterboxd: (planId: string): Promise<{ ok: boolean; discarded: boolean }> =>
       request('/transfer/import/letterboxd/abort', { method: 'POST', body: JSON.stringify({ planId }) }),

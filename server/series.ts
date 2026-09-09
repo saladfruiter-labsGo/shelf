@@ -2,8 +2,10 @@ import { db } from './db.js'
 
 /* ─────────────────────────── helpers de config ─────────────────────────── */
 
+const readSetting = db.prepare('SELECT value FROM settings WHERE key = ?')
+
 function apiKey(name: string): string | undefined {
-  const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(name) as { value: string } | undefined
+  const row = readSetting.get(name) as { value: string } | undefined
   return row?.value?.trim() || process.env[name]
 }
 

@@ -135,7 +135,7 @@ const TITLE_PEEK = 24
  * executa em "Confirmar". "Cancelar" descarta o plano lá também.
  */
 function LetterboxdPlanPanel({
-  preview, overrides, onOverride, onConfirm, onCancel, busy,
+  preview, overrides, onOverride, onConfirm, onCancel, busy, redo, onRedo,
 }: {
   preview: LetterboxdPreview
   overrides: Record<string, LetterboxdKind>
@@ -143,6 +143,8 @@ function LetterboxdPlanPanel({
   onConfirm: () => void
   onCancel: () => void
   busy: boolean
+  redo: boolean
+  onRedo: (v: boolean) => void
 }) {
   const [showAll, setShowAll] = useState(false)
   const { plan } = preview
@@ -260,6 +262,22 @@ function LetterboxdPlanPanel({
         </div>
       )}
 
+      {!nothing && preview.existingDiary > 0 && (
+        <label className="flex items-start gap-2 p-3 mb-3 rounded-lg border border-border bg-card cursor-pointer">
+          <input type="checkbox" className="mt-0.5" checked={redo} onChange={e => onRedo(e.target.checked)} disabled={busy} />
+          <span className="min-w-0">
+            <span className="text-xs text-primary block">
+              Refazer — o diário já tem {num.format(preview.existingDiary)} registro(s) do Letterboxd
+            </span>
+            <span className="text-[11px] text-muted block">
+              Apaga esses {num.format(preview.existingDiary)} e escreve de novo a partir deste arquivo, e recoloca a data
+              de entrada na estante na data do Letterboxd. Registros feitos à mão, pelo Plex ou por qualquer outra
+              origem não são tocados. Marque se a importação anterior duplicou filmes no diário.
+            </span>
+          </span>
+        </label>
+      )}
+
       {!nothing && (
         <p className="text-[11px] text-muted mb-3">
           Cada título é casado com o TMDB na hora de importar — é o passo demorado. Os que não casarem entram assim
@@ -270,7 +288,7 @@ function LetterboxdPlanPanel({
       <div className="flex gap-2">
         {!nothing && (
           <button type="button" onClick={onConfirm} disabled={busy} className={btnCls + ' border-accent text-accent'}>
-            {busy ? 'Importando…' : '✓ Confirmar importação'}
+            {busy ? 'Importando…' : redo ? '✓ Refazer importação' : '✓ Confirmar importação'}
           </button>
         )}
         <button type="button" onClick={onCancel} disabled={busy} className={btnCls}>
@@ -285,12 +303,14 @@ function LetterboxdCard({ onDone }: { onDone: () => void }) {
   const [preview, setPreview] = useState<LetterboxdPreview | null>(null)
   const [overrides, setOverrides] = useState<Record<string, LetterboxdKind>>({})
   const [result, setResult] = useState<LetterboxdApplyResult | null>(null)
+  const [redo, setRedo] = useState(false)
   const [error, setError] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
 
   const clear = () => {
     setPreview(null)
     setOverrides({})
+    setRedo(false)
     // Sem isso, escolher o mesmo arquivo de novo não dispara `change`.
     if (fileRef.current) fileRef.current.value = ''
   }
@@ -308,7 +328,7 @@ function LetterboxdCard({ onDone }: { onDone: () => void }) {
   })
 
   const apply = useMutation({
-    mutationFn: () => api.transfer.applyLetterboxd(preview!.planId!),
+    mutationFn: () => api.transfer.applyLetterboxd(preview!.planId!, redo),
     onSuccess: (r) => { setResult(r); clear(); onDone() },
     onError: (e: unknown) => setError((e as Error).message),
   })
@@ -321,7 +341,7 @@ function LetterboxdCard({ onDone }: { onDone: () => void }) {
   })
 
   const pick = (file: File | undefined) => {
-    setResult(null); setError(''); setPreview(null); setOverrides({})
+    setResult(null); setError(''); setPreview(null); setOverrides({}); setRedo(false)
     if (file) read.mutate(file)
   }
 
@@ -369,6 +389,8 @@ function LetterboxdCard({ onDone }: { onDone: () => void }) {
           onConfirm={() => { setError(''); apply.mutate() }}
           onCancel={cancel}
           busy={apply.isPending || replan.isPending}
+          redo={redo}
+          onRedo={setRedo}
         />
       )}
 
@@ -377,6 +399,11 @@ function LetterboxdCard({ onDone }: { onDone: () => void }) {
       {result && (
         <>
           <ReportBox report={result.total} />
+          {result.cleared > 0 && (
+            <p className="text-[11px] text-muted mt-2">
+              {num.format(result.cleared)} registro(s) do Letterboxd foram apagados do diário antes de reimportar.
+            </p>
+          )}
           <ul className="text-[11px] text-muted mt-2 space-y-0.5">
             {result.files.map(f => (
               <li key={f.path}>

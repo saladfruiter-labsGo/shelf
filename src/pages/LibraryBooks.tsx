@@ -28,11 +28,11 @@ export function LibraryBooks() {
 
   const { data: rawItems = [], isLoading } = useQuery({
     queryKey: ['media', 'book'],
-    queryFn: () => api.media.list({ type: 'book', limit: 500 }),
+    queryFn: () => api.media.list({ type: 'book', limit: 500, library: true }),
   })
 
   // Itens em wishlist ficam só na Wishlist, fora da biblioteca.
-  const items = rawItems.filter(i => i.status !== 'wishlist')
+  const items = rawItems
 
   const countByStatus = (st: ShelfFilter) => items.filter(i => i.status === st).length
 

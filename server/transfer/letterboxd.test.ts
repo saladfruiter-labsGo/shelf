@@ -105,16 +105,16 @@ test('cada filme aparece uma vez, com a nota e as sessões somadas', () => {
   const dune = titles.find(t => t.slug === 'dune-2021')!
   assert.equal(dune.year, 2021)
   assert.equal(dune.rating, 4.5)
-  // Três noites distintas: a do watched.csv (repetida no ratings.csv) e as duas
-  // do diary.csv.
-  assert.equal(dune.sessions, 3)
+  // Só as duas noites do diary.csv: a coluna `Date` de watched.csv/ratings.csv
+  // é o dia do registro, não o da sessão, e não vira diário.
+  assert.equal(dune.sessions, 2)
   assert.equal(dune.target, 'library')
 
-  // Arrival tem a mesma data em watched.csv e reviews.csv: uma sessão só.
+  // Arrival só tem sessão em reviews.csv; Sicario, só na watchlist.
   assert.equal(titles.find(t => t.slug === 'arrival')!.sessions, 1)
   assert.equal(titles.find(t => t.slug === 'sicario')!.target, 'backlog')
 
-  assert.deepEqual(totals, { titles: 3, library: 2, backlog: 1, sessions: 4, rated: 2, discardedRows: 0 })
+  assert.deepEqual(totals, { titles: 3, library: 2, backlog: 1, sessions: 3, rated: 2, discardedRows: 0 })
 })
 
 test('filme na watchlist e já assistido conta como biblioteca, nunca backlog', () => {
@@ -174,4 +174,38 @@ test('a mesma noite em reviews.csv e diary.csv conta como uma sessão só', () =
   // Duas datas distintas, ainda que em três linhas — é o que o importador cria.
   assert.equal(plan.titles[0].sessions, 2)
   assert.equal(plan.totals.sessions, 2)
+})
+
+test('watched.csv e ratings.csv não geram sessão: a coluna Date é o dia do registro', () => {
+  // O mesmo filme, visto no dia 1 e registrado no dia 2. Contar as duas datas
+  // punha o filme no diário em dois dias seguidos — foi o bug do primeiro
+  // import de verdade.
+  const plan = planLetterboxd([
+    { path: 'watched.csv', text: `${HEAD}
+2025-06-02,Sicario,2015,${uri('sicario')}
+` },
+    { path: 'ratings.csv', text: `${HEAD},Rating
+2025-06-02,Sicario,2015,${uri('sicario')},4
+` },
+    { path: 'diary.csv',   text: `${HEAD},Rating,Rewatch,Tags,Watched Date
+2025-06-02,Sicario,2015,${uri('sicario')},4,No,,2025-06-01
+` },
+  ])
+
+  assert.equal(plan.titles.length, 1)
+  assert.equal(plan.titles[0].sessions, 1)
+  assert.equal(plan.totals.sessions, 1)
+  // A nota e o destino continuam vindo dos outros arquivos.
+  assert.equal(plan.titles[0].rating, 4)
+  assert.equal(plan.titles[0].target, 'library')
+})
+
+test('sem diary.csv, um export só de assistidos não promete nenhuma sessão', () => {
+  const plan = planLetterboxd([
+    { path: 'watched.csv', text: `${HEAD}
+2025-06-02,Sicario,2015,${uri('sicario')}
+` },
+  ])
+  assert.equal(plan.totals.sessions, 0)
+  assert.equal(plan.totals.library, 1)
 })

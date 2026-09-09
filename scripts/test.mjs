@@ -17,7 +17,7 @@ import { readdirSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
 import { join } from 'node:path'
 
-const DIRS = ['server/prices', 'server/steam', 'server/transfer']
+const DIRS = ['server/prices', 'server/routes', 'server/steam', 'server/transfer']
 const MAX_TRIES = 6
 const NATIVE_ABORT = /RemoveEnvironmentCleanupHook|Assertion failed: \(env\) != nullptr/
 

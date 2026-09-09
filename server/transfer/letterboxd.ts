@@ -298,9 +298,10 @@ export function planLetterboxd(sources: LetterboxdSource[], opts: PlanOptions = 
       // A watchlist nunca rebaixa: basta um arquivo dizer "assistido" para o
       // filme ir à biblioteca, mesmo que ainda esteja na watchlist lá.
       if (kind !== 'watchlist') t.target = 'library'
-      // Mesma condição do importador: toda linha assistida com data vira
-      // sessão, venha ela do diário, do watched.csv ou do ratings.csv.
-      if (kind !== 'watchlist' && row.watchedAt) {
+      // Mesma condição do importador (`writesDiary`): só o diário registra
+      // sessão. A coluna `Date` de watched.csv/ratings.csv é o dia em que a
+      // linha nasceu no Letterboxd, não o dia em que o filme foi visto.
+      if (kind === 'diary' && row.watchedAt) {
         const dates = sessions.get(slug) ?? new Set<string>()
         dates.add(row.watchedAt)
         sessions.set(slug, dates)
