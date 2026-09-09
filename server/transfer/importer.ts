@@ -186,13 +186,21 @@ export function importShelfBackup(payload: ShelfBackup, mode: ImportMode = 'merg
       if (!name) continue
       let list = db.prepare('SELECT id FROM lists WHERE name = ?').get(name) as { id: number } | undefined
       if (!list) {
-        const res = db.prepare('INSERT INTO lists (name, description) VALUES (?, ?)').run(name, l.description ?? null)
+        const mode = ['list', 'ranking', 'tier'].includes(l.mode) ? l.mode : 'list'
+        const res = db.prepare('INSERT INTO lists (name, description, mode) VALUES (?, ?, ?)')
+          .run(name, l.description ?? null, mode)
         list = { id: Number(res.lastInsertRowid) }
       }
+      // A ordem do arquivo é a ordem da lista — vira `position` (usada no ranking).
+      const maxPos = db.prepare('SELECT MAX(position) AS max FROM list_items WHERE list_id = ?')
+        .get(list.id) as { max: number | null }
+      let pos = (maxPos.max ?? -1) + 1
       for (const li of l.items ?? []) {
         const item = findItem.get(String(li.external_id ?? ''), String(li.type ?? '')) as { id: number } | undefined
         if (!item) continue
-        db.prepare('INSERT OR IGNORE INTO list_items (list_id, media_item_id) VALUES (?, ?)').run(list.id, item.id)
+        const res = db.prepare('INSERT OR IGNORE INTO list_items (list_id, media_item_id, position) VALUES (?, ?, ?)')
+          .run(list.id, item.id, pos)
+        if (res.changes > 0) pos++
       }
     }
   })

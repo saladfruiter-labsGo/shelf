@@ -92,6 +92,45 @@ for (const [col, def] of newCols) {
 db.exec(`CREATE INDEX IF NOT EXISTS idx_media_release ON media_items(release_date)`)
 db.exec(`CREATE INDEX IF NOT EXISTS idx_media_steam   ON media_items(steam_appid)`)
 
+// ─── Listas: modos (lista | ranking | tier), ordem manual e tiers ───
+db.exec(`
+  CREATE TABLE IF NOT EXISTS list_tiers (
+    id       INTEGER PRIMARY KEY AUTOINCREMENT,
+    list_id  INTEGER NOT NULL REFERENCES lists(id) ON DELETE CASCADE,
+    name     TEXT    NOT NULL,
+    color    TEXT    NOT NULL DEFAULT 'accent',
+    position INTEGER NOT NULL DEFAULT 0
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_list_tiers_list ON list_tiers(list_id);
+`)
+
+const listCols = (db.prepare('PRAGMA table_info(lists)').all() as { name: string }[]).map(c => c.name)
+// 'list' | 'ranking' | 'tier' — como a lista é exibida e reordenada.
+if (!listCols.includes('mode'))     db.exec("ALTER TABLE lists ADD COLUMN mode TEXT NOT NULL DEFAULT 'list'")
+// Interruptor "esmaecer o que já consumi" (0/1), guardado por lista.
+if (!listCols.includes('dim_seen')) db.exec('ALTER TABLE lists ADD COLUMN dim_seen INTEGER NOT NULL DEFAULT 0')
+
+const listItemCols = (db.prepare('PRAGMA table_info(list_items)').all() as { name: string }[]).map(c => c.name)
+if (!listItemCols.includes('position')) {
+  db.exec('ALTER TABLE list_items ADD COLUMN position INTEGER NOT NULL DEFAULT 0')
+  // Bases antigas não tinham ordem manual: a ordem de inclusão vira a posição inicial.
+  db.exec(`
+    UPDATE list_items SET position = (
+      SELECT COUNT(*) FROM list_items x
+      WHERE x.list_id = list_items.list_id
+        AND (x.added_at < list_items.added_at
+             OR (x.added_at = list_items.added_at AND x.id <= list_items.id))
+    )
+  `)
+}
+// NULL = item ainda fora dos tiers (fica na bandeja "sem tier").
+if (!listItemCols.includes('tier_id')) {
+  db.exec('ALTER TABLE list_items ADD COLUMN tier_id INTEGER REFERENCES list_tiers(id) ON DELETE SET NULL')
+}
+
+db.exec('CREATE INDEX IF NOT EXISTS idx_list_items_pos ON list_items(list_id, position)')
+
 // ─── Integrations: real-time activity log + music enrichment cache ───
 db.exec(`
   CREATE TABLE IF NOT EXISTS activity_events (

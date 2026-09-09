@@ -127,3 +127,17 @@ export function timeAgo(iso: string): string {
   if (h < 24) return `${h} h`
   return `${Math.floor(h / 24)} d`
 }
+
+/** "hoje", "há 3 dias", "há 5 meses" — versão por extenso de `timeAgo`. */
+export function timeAgoLong(iso: string): string {
+  const ms = Date.now() - new Date(iso + (iso.includes('Z') || iso.includes('+') ? '' : 'Z')).getTime()
+  if (!Number.isFinite(ms)) return '—'
+  const days = Math.floor(ms / 86_400_000)
+  if (days < 1)  return 'hoje'
+  if (days === 1) return 'ontem'
+  if (days < 30) return `há ${days} dias`
+  const months = Math.floor(days / 30)
+  if (months < 12) return `há ${months} ${months === 1 ? 'mês' : 'meses'}`
+  const years = Math.floor(days / 365)
+  return `há ${years} ${years === 1 ? 'ano' : 'anos'}`
+}

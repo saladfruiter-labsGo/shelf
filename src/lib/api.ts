@@ -1,5 +1,5 @@
 import type {
-  Details, List, ListCheck, ListDetail,
+  Details, List, ListCheck, ListDetail, ListMode, ListTier,
   MediaItem, MediaStatus, MediaType,
   SearchResult, WrapData, SeriesView, SeriesPreview, DiaryEntry, TmdbMediaPreview,
   IntegrationStatus, NowPlaying, ActivityEvent, ActivityMediaType, MusicStats, TrendingItem,
@@ -119,16 +119,27 @@ export const api = {
     list:    (): Promise<List[]>                                => request('/lists'),
     check:   (mediaItemId: number): Promise<ListCheck[]>       => request(`/lists/check/${mediaItemId}`),
     get:     (id: number): Promise<ListDetail>                 => request(`/lists/${id}`),
-    create:  (data: { name: string; description?: string }): Promise<List> =>
+    create:  (data: { name: string; description?: string; mode?: ListMode }): Promise<List> =>
       request('/lists', { method: 'POST', body: JSON.stringify(data) }),
-    update:  (id: number, data: { name?: string; description?: string }): Promise<List> =>
+    update:  (id: number, data: { name?: string; description?: string; mode?: ListMode; dim_seen?: boolean }): Promise<List> =>
       request(`/lists/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     remove:  (id: number): Promise<{ ok: boolean }> =>
       request(`/lists/${id}`, { method: 'DELETE' }),
-    addItem: (listId: number, mediaItemId: number): Promise<{ ok: boolean }> =>
-      request(`/lists/${listId}/items`, { method: 'POST', body: JSON.stringify({ media_item_id: mediaItemId }) }),
+    addItem: (listId: number, mediaItemId: number, tierId?: number | null): Promise<{ ok: boolean }> =>
+      request(`/lists/${listId}/items`, { method: 'POST', body: JSON.stringify({ media_item_id: mediaItemId, tier_id: tierId ?? null }) }),
     removeItem: (listId: number, mediaItemId: number): Promise<{ ok: boolean }> =>
       request(`/lists/${listId}/items/${mediaItemId}`, { method: 'DELETE' }),
+    /** Ordem manual completa — serve ao ranking e ao arraste entre tiers. */
+    reorder: (listId: number, items: { media_item_id: number; tier_id: number | null }[]): Promise<{ ok: boolean }> =>
+      request(`/lists/${listId}/order`, { method: 'PUT', body: JSON.stringify({ items }) }),
+    addTier: (listId: number, data: { name: string; color?: string }): Promise<ListTier> =>
+      request(`/lists/${listId}/tiers`, { method: 'POST', body: JSON.stringify(data) }),
+    updateTier: (listId: number, tierId: number, data: { name?: string; color?: string }): Promise<ListTier> =>
+      request(`/lists/${listId}/tiers/${tierId}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    reorderTiers: (listId: number, tiers: { id: number }[]): Promise<ListTier[]> =>
+      request(`/lists/${listId}/tiers/order`, { method: 'PUT', body: JSON.stringify({ tiers }) }),
+    removeTier: (listId: number, tierId: number): Promise<{ ok: boolean }> =>
+      request(`/lists/${listId}/tiers/${tierId}`, { method: 'DELETE' }),
   },
 
   wrap: (params: { period: 'monthly' | 'annual'; year: number; month?: number }): Promise<WrapData> => {

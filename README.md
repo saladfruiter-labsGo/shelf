@@ -9,7 +9,7 @@ Um app de biblioteca pessoal para rastrear **filmes, séries, games e livros** e
 - **Busca unificada** — uma busca única consulta filmes e séries (TMDB), games (RAWG) e livros (Google Books) em paralelo.
 - **Biblioteca** — adicione itens e acompanhe o status: `wishlist`, `in_progress`, `completed`, `dropped`, além de nota (estrelas, com meio-ponto) e notas próprias. Também navegável por categoria (`/library/games`, `/library/books`, `/library/films`, `/library/series`, `/library/music`).
 - **Diário** — histórico cronológico de tudo que foi concluído, com data, categoria e nota.
-- **Listas** — crie listas personalizadas para organizar a coleção (ex.: "Favoritos", "Maratona de fim de ano") e adicione/remova itens nelas.
+- **Listas** — crie listas personalizadas para organizar a coleção (ex.: "Favoritos", "Maratona de fim de ano") em três modos: **Lista** (grade de capas), **Ranking** (mesma grade, com a posição em cada capa e reordenação arrastando) e **Tierlist** (tiers que você cria, renomeia, colore e reordena, arrastando as capas entre eles ou adicionando direto em um tier). Cada lista tem filtros de década, gênero e tipo, um interruptor para **esmaecer o que você já consumiu** e a barra de progresso "já consumi X de Y".
 - **Dashboard** — itens recentes por categoria.
 - **Detalhes enriquecidos** — sinopse, diretor/desenvolvedor/autor buscados sob demanda na fonte externa (TMDB, RAWG, Google Books) e cacheados no banco.
 - **Tema claro/escuro** — alternável, com preferência salva no navegador.
@@ -138,14 +138,19 @@ Saúde: `GET /api/health` → `{ "ok": true }`
 | `POST /api/integrations/lastfm/sync` | Sincroniza o histórico do Last.fm sob demanda |
 | `POST /api/integrations/telegram/test` | Envia mensagem de teste no Telegram |
 | `GET /api/integrations/telegram/detect-chat` | Descobre o `chat_id` de quem falou com o bot |
-| `GET /api/lists` | Lista todas as listas (com contagem de itens) |
+| `GET /api/lists` | Lista todas as listas (com contagem de itens, capas da colagem e itens por tipo) |
 | `GET /api/lists/check/:mediaItemId` | Verifica em quais listas um item já está |
-| `GET /api/lists/:id` | Detalhe de uma lista com seus itens |
-| `POST /api/lists` | Cria uma lista |
-| `PATCH /api/lists/:id` | Atualiza nome/descrição de uma lista |
+| `GET /api/lists/:id` | Detalhe de uma lista com seus itens e tiers |
+| `POST /api/lists` | Cria uma lista (`mode`: `list`, `ranking` ou `tier`) |
+| `PATCH /api/lists/:id` | Atualiza nome, descrição, modo ou o interruptor de esmaecer |
 | `DELETE /api/lists/:id` | Remove uma lista |
-| `POST /api/lists/:id/items` | Adiciona um item à lista |
+| `POST /api/lists/:id/items` | Adiciona um item à lista (opcionalmente já num tier) |
 | `DELETE /api/lists/:id/items/:mediaItemId` | Remove um item da lista |
+| `PUT /api/lists/:id/order` | Grava a ordem manual inteira (ranking e arraste entre tiers) |
+| `POST /api/lists/:id/tiers` | Cria um tier |
+| `PATCH /api/lists/:id/tiers/:tierId` | Renomeia ou troca a cor de um tier |
+| `PUT /api/lists/:id/tiers/order` | Reordena os tiers |
+| `DELETE /api/lists/:id/tiers/:tierId` | Apaga um tier (as capas voltam para "sem tier") |
 | `GET /api/prices/backlog` | Resumo de preço de todos os jogos do backlog (uma consulta em lote) |
 | `GET /api/prices/games/:id?range=&shop=` | Indicadores, ofertas e pontos do gráfico de um jogo (`range`: `30d`, `90d`, `1y`, `all`) |
 | `POST /api/prices/games/:id/refresh` | Atualização manual, com cooldown de 5 min por jogo |
