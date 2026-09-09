@@ -242,17 +242,6 @@ export function getShops(productId: number): { id: number; name: string }[] {
   `).all(productId, productId) as { id: number; name: string }[]
 }
 
-/** Menor preço já observado em cada loja (para a coluna "menor da loja"). */
-export function getShopLows(productId: number): Record<number, number> {
-  const rows = db.prepare(`
-    SELECT shop_id, MIN(price_minor) AS low FROM game_price_history
-    WHERE game_price_product_id = ? GROUP BY shop_id
-  `).all(productId) as { shop_id: number; low: number }[]
-  const out: Record<number, number> = {}
-  for (const r of rows) out[r.shop_id] = r.low
-  return out
-}
-
 /* ──────────────────────────────────── Backlog ─────────────────────────────── */
 
 /** Jogos no backlog — os únicos consultados automaticamente. */

@@ -250,7 +250,11 @@ export interface WrapData {
 
 export type GamePriceMatchStatus = 'pending' | 'resolved' | 'ambiguous' | 'not_found'
 
-/** Valores monetários chegam sempre como inteiro em centavos. */
+/**
+ * Uma loja na lista de preços. Valores monetários são sempre inteiros em
+ * centavos. Lojas sem oferta ativa (`available: false`) trazem o último preço
+ * conhecido e não têm link de compra.
+ */
 export interface GamePriceOffer {
   shop_id:          number
   shop_name:        string
@@ -258,11 +262,14 @@ export interface GamePriceOffer {
   regular_minor:    number
   currency:         string
   discount_percent: number
-  url:              string
+  url:              string | null
   drm:              string | null
   voucher:          string | null
   available:        boolean
+  /** Menor preço já visto nesta loja, e quando. */
   shop_low_minor:   number | null
+  shop_low_at:      string | null
+  /** Última vez que este preço foi observado. */
   last_seen_at:     string
 }
 
