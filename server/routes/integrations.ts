@@ -2,7 +2,7 @@ import { Hono } from 'hono'
 import { randomUUID } from 'crypto'
 import { db } from '../db.js'
 import { sendTelegram, telegramDetectChats, notifyLibraryActivity } from '../notify.js'
-import { ensureSeriesStructure, setEpisodeWatched, tmdbIdFromGuid, resolveTmdbSeriesId } from '../series.js'
+import { ensureSeriesStructure, setEpisodeWatched, tmdbIdFromGuid, resolveTmdbSeriesId, resolveTmdbMovieId } from '../series.js'
 import { rawgLookup } from './search.js'
 
 const app = new Hono()
@@ -110,6 +110,32 @@ const backfillSeriesMeta = db.prepare(`
   WHERE id = @id
 `)
 
+/** Mesma ideia do dedup de série, para FILME (evita card duplicado com título localizado). */
+const findMovieByTmdb = db.prepare(
+  `SELECT id FROM media_items WHERE type = 'movie' AND (tmdb_id = @tmdb OR external_id = @tmdb) LIMIT 1`,
+)
+/** Backfill leve no filme casado, sem forçar status nem sobrescrever o que já existe. */
+const backfillMovieMeta = db.prepare(`
+  UPDATE media_items SET
+    tmdb_id    = COALESCE(tmdb_id, @tmdb),
+    cover_url  = COALESCE(cover_url, @cover_url),
+    year       = COALESCE(year, @year),
+    updated_at = datetime('now')
+  WHERE id = @id
+`)
+/** Marca um filme (por id) como concluído — usado quando ele foi casado por TMDB. */
+const completeMovieById = db.prepare(`
+  UPDATE media_items SET
+    status       = 'completed',
+    completed_at = COALESCE(completed_at, @completed_at),
+    updated_at   = datetime('now')
+  WHERE id = @id
+`)
+/** Ajusta a nota de um filme por id (branch media.rate). */
+const setMediaRatingById = db.prepare(
+  `UPDATE media_items SET rating = @rating, updated_at = datetime('now') WHERE id = @id`,
+)
+
 /** Registra no diário cada vez que um filme/episódio é assistido (scrobble) no Plex. */
 const insertDiaryEntry = db.prepare(`
   INSERT INTO diary_entries (media_item_id, watched_at, rating, comment, source)
@@ -198,6 +224,53 @@ async function handlePlexEpisode(meta: PlexMeta, occurredAt: string): Promise<vo
   // histórico, junto com filmes/livros), identificado por temporada/episódio.
   const label = `T${meta.parentIndex}E${meta.index}${meta.title ? ` – ${meta.title}` : ''}`
   insertDiaryEntry.run(mediaId, occurredAt, label)
+}
+
+/** Resolve o id TMDB de um FILME do Plex (guid → servidor Plex → busca por título). */
+async function tmdbIdForPlexMovie(meta: PlexMeta): Promise<string | null> {
+  let id = tmdbIdFromGuid(meta.guid)
+  if (!id) id = await tmdbIdFromPlexRatingKey(meta.ratingKey)
+  if (!id) id = await resolveTmdbMovieId(meta.title ?? '', meta.year ?? null)
+  return id
+}
+
+/**
+ * Encontra (por id TMDB) ou cria o card de FILME e devolve seu id — mesmo dedup
+ * das séries. Sem isso, um filme adicionado por outra via (busca manual,
+ * external_id = id do TMDB) não é reconhecido e o Plex cria um card duplicado
+ * com o título localizado. NÃO força status aqui (o chamador decide).
+ */
+async function findOrCreatePlexMovie(meta: PlexMeta, occurredAt: string): Promise<number | null> {
+  const title = meta.title ?? 'Desconhecido'
+  const thumb = meta.thumb ?? null
+  const cover_url = thumb ? `/api/integrations/plex/image?path=${encodeURIComponent(thumb)}` : null
+  const tmdb_id = await tmdbIdForPlexMovie(meta)
+
+  if (tmdb_id) {
+    const existing = findMovieByTmdb.get({ tmdb: tmdb_id }) as { id: number } | undefined
+    if (existing) {
+      backfillMovieMeta.run({ id: existing.id, tmdb: tmdb_id, cover_url, year: meta.year ?? null })
+      return existing.id
+    }
+  }
+
+  const externalId = meta.guid ?? (meta.ratingKey ? `plex:${meta.ratingKey}` : `plex-movie:${slugify(title)}`)
+  upsertMediaItem.run({
+    external_id: externalId, type: 'movie', title, cover_url,
+    year: meta.year ?? null, author: null, rating: 0, completed_at: occurredAt,
+  })
+  const row = getMediaId.get(externalId, 'movie') as { id: number } | undefined
+  if (!row) return null
+  if (tmdb_id) backfillMovieMeta.run({ id: row.id, tmdb: tmdb_id, cover_url, year: meta.year ?? null })
+  return row.id
+}
+
+/** Filme assistido no Plex: casa/cria o card, marca concluído e registra no diário. */
+async function handlePlexMovie(meta: PlexMeta, occurredAt: string): Promise<void> {
+  const mediaId = await findOrCreatePlexMovie(meta, occurredAt)
+  if (mediaId == null) return
+  completeMovieById.run({ id: mediaId, completed_at: occurredAt })
+  insertDiaryEntry.run(mediaId, occurredAt, null)
 }
 
 /* ──────────────────────────────────── Plex: webhook ────────────────────────────────── */
@@ -293,19 +366,15 @@ app.post('/plex/webhook', async (c) => {
     if (m.kind === 'episode') {
       // Episódio de série: marca só o episódio; temporada/série concluem por progresso
       await handlePlexEpisode(meta, now)
+    } else if (m.kind === 'movie') {
+      // Filme: casa com o card existente (por TMDB), marca concluído e lança no diário.
+      await handlePlexMovie(meta, now)
     } else if (m.external_ref) {
-      // Filmes e músicas entram na biblioteca como concluídos
+      // Música entra na biblioteca como concluída (sem diário, pra não inundar).
       upsertMediaItem.run({
         external_id: m.external_ref, type: m.media_type, title: m.title,
         cover_url: m.cover_url, year: meta.year ?? null, author, rating: 0, completed_at: now,
       })
-      // Cada vez que um filme é assistido vira um registro no diário (permite
-      // registrar a mesma mídia várias vezes). Música fica de fora para não
-      // inundar o diário com scrobbles.
-      if (m.kind === 'movie') {
-        const row = getMediaId.get(m.external_ref, 'movie') as { id: number } | undefined
-        if (row) insertDiaryEntry.run(row.id, now, null)
-      }
     }
   } else if (event === 'media.rate' && rating5 != null) {
     insertActivity.run({
@@ -315,12 +384,24 @@ app.post('/plex/webhook', async (c) => {
       genre: null, occurred_at: now, raw: JSON.stringify(payload).slice(0, 4000),
     })
     if (m.kind === 'episode') {
-      // Nota de um episódio → aplica à série (se já existir), sem forçar conclusão
-      const externalId = meta.grandparentGuid
-        ?? (meta.grandparentRatingKey ? `plex:${meta.grandparentRatingKey}` : null)
-      if (externalId) setMediaRating.run(rating5, externalId, 'series')
+      // Nota de um episódio → aplica à série (se já existir), sem forçar conclusão.
+      // Resolve por TMDB pra casar com o card certo mesmo quando o guid difere.
+      let tmdb = tmdbIdFromGuid(meta.grandparentGuid)
+      if (!tmdb) tmdb = await tmdbIdFromPlexRatingKey(meta.grandparentRatingKey)
+      const bySeries = tmdb ? (findSeriesByTmdb.get({ tmdb }) as { id: number } | undefined) : undefined
+      if (bySeries) {
+        setMediaRatingById.run({ id: bySeries.id, rating: rating5 })
+      } else {
+        const externalId = meta.grandparentGuid
+          ?? (meta.grandparentRatingKey ? `plex:${meta.grandparentRatingKey}` : null)
+        if (externalId) setMediaRating.run(rating5, externalId, 'series')
+      }
+    } else if (m.kind === 'movie') {
+      // Casa/cria o filme (dedup por TMDB) e só então aplica a nota — evita duplicar.
+      const mediaId = await findOrCreatePlexMovie(meta, now)
+      if (mediaId != null) setMediaRatingById.run({ id: mediaId, rating: rating5 })
     } else if (m.external_ref) {
-      // cria (se novo) ou só atualiza a nota
+      // Música: cria (se nova) ou só atualiza a nota.
       upsertMediaItem.run({
         external_id: m.external_ref, type: m.media_type, title: m.title,
         cover_url: m.cover_url, year: meta.year ?? null, author, rating: rating5, completed_at: now,
