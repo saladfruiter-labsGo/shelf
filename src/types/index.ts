@@ -21,6 +21,7 @@ export interface MediaItem {
   author:       string | null
   release_date: string | null
   hype:         number
+  favorite:     number   // 1 = marcado como favorito (banner da home)
   completed_at: string | null
   added_at:     string
   updated_at:   string

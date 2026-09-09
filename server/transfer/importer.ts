@@ -75,7 +75,7 @@ function addDiary(mediaItemId: number, watchedAt: string, rating: number | null,
 /** Colunas aceitas na importação — ignora `id` e qualquer campo desconhecido. */
 const ITEM_COLUMNS = [
   'external_id', 'type', 'title', 'cover_url', 'year', 'genre', 'runtime', 'rating',
-  'status', 'notes', 'synopsis', 'creators', 'author', 'release_date', 'hype',
+  'status', 'notes', 'synopsis', 'creators', 'author', 'release_date', 'hype', 'favorite',
   'completed_at', 'tmdb_id', 'pages_total', 'pages_read', 'playtime_seconds',
   'game_status', 'last_played_at', 'publisher', 'library', 'steam_appid',
   'original_filename',

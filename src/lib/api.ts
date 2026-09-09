@@ -70,9 +70,9 @@ export const api = {
     recent:   (): Promise<Record<MediaType, MediaItem[]>> => request('/media/recent'),
     upcoming: (): Promise<{ wishlist: MediaItem[]; hype: MediaItem[] }> => request('/media/upcoming'),
     get:      (id: number): Promise<MediaItem>            => request(`/media/${id}`),
-    add: (data: Omit<MediaItem, 'id' | 'hype' | 'added_at' | 'updated_at' | 'original_filename'> & { rating?: number }): Promise<MediaItem> =>
+    add: (data: Omit<MediaItem, 'id' | 'hype' | 'favorite' | 'added_at' | 'updated_at' | 'original_filename'> & { rating?: number }): Promise<MediaItem> =>
       request('/media', { method: 'POST', body: JSON.stringify(data) }),
-    update: (id: number, data: Partial<Pick<MediaItem, 'rating' | 'status' | 'runtime' | 'synopsis' | 'creators' | 'author' | 'release_date' | 'hype' | 'completed_at' | 'game_status' | 'last_played_at' | 'playtime_seconds'>>): Promise<MediaItem> =>
+    update: (id: number, data: Partial<Pick<MediaItem, 'rating' | 'status' | 'runtime' | 'synopsis' | 'creators' | 'author' | 'release_date' | 'hype' | 'favorite' | 'completed_at' | 'game_status' | 'last_played_at' | 'playtime_seconds'>>): Promise<MediaItem> =>
       request(`/media/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     previewTmdb: (id: number, tmdbId: string): Promise<TmdbMediaPreview> =>
       request(`/media/${id}/tmdb-preview?tmdb_id=${encodeURIComponent(tmdbId)}`),

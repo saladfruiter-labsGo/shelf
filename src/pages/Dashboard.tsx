@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../lib/api'
 import { CATEGORIES } from '../lib/categories'
-import { TYPE_LABEL, TYPE_COLOR, GAME_STATUS_LABEL, gameStatusOf, formatPlaytime, fmtRating, formatMoney, timeAgo, toISODate, todayISODate, daysUntil } from '../lib/utils'
+import { TYPE_LABEL, TYPE_COLOR, GAME_STATUS_LABEL, gameStatusOf, formatPlaytime, formatRuntime, fmtRating, formatMoney, timeAgo, toISODate, todayISODate, daysUntil } from '../lib/utils'
 import type { MediaItem, MediaType, TrendingItem, DiaryEntry, GamePriceSummary } from '../types'
 import { MediaPreviewTrigger, useMediaPreview } from '../components/MediaSummaryModal'
 
@@ -65,6 +65,138 @@ function SectionHead({ title, extra, action, onAction }: { title: React.ReactNod
 const Empty = ({ children }: { children: React.ReactNode }) => (
   <p style={{ color: 'var(--text-muted)', fontSize: 14, padding: '8px 0' }}>{children}</p>
 )
+
+/* ─── Banner "Favoritos" ─── */
+
+/** Capa em pôster (2:3) que preenche a largura do card, com o mesmo fallback do Cover. */
+function Poster({ url, type }: { url: string | null; type: MediaType }) {
+  const [broken, setBroken] = useState(false)
+  if (url && !broken) return <img className="art" src={url} alt="" onError={() => setBroken(true)} />
+  return <div className="art fb" style={{ background: coverBg(type) }}>{TYPE_EMOJI[type]}</div>
+}
+
+/** Rodapé do pôster: tempo (jogo ou duração) à esquerda, sua nota à direita. */
+function favMeta(it: MediaItem): { time: string | null; rating: string | null } {
+  const time = it.type === 'game'
+    ? ((it.playtime_seconds ?? 0) > 0 ? formatPlaytime(it.playtime_seconds!) : null)
+    : (it.runtime ? formatRuntime(it.runtime) : null)
+  return { time, rating: it.rating > 0 ? fmtRating(it.rating) : null }
+}
+
+/** Vagas de favorito por categoria — o mesmo limite que o servidor aplica. */
+const FAV_MAX = 5
+/** Qual colocação ocupa cada vaga: o 1º no centro, os seguintes alternando os lados. */
+const FAV_LAYOUT = [3, 1, 0, 2, 4]
+
+/**
+ * Uma faixa horizontal com as cinco vagas de favoritos. O primeiro colocado — a
+ * maior nota — ganha coroa, moldura dourada e um pôster maior: é o destaque da
+ * faixa. Vaga vazia é o botão de adicionar; o × de cada pôster tira dali.
+ */
+function FavRow({ label, type, items, busy, onAdd, onRemove, onSeeAll }: {
+  label: string; type: MediaType; items: MediaItem[]; busy: boolean
+  onAdd: () => void; onRemove: (item: MediaItem) => void; onSeeAll: () => void
+}) {
+  // O #1 ocupa a vaga do meio e os outros se abrem para os lados, em ordem de
+  // nota: a coroa fica no centro da faixa, não na ponta.
+  const slots = FAV_LAYOUT.map(rank => items[rank] ?? null)
+  const noun = type === 'movie' ? 'filme' : 'jogo'
+  return (
+    <section className="favrow" style={{ ['--fav' as string]: hue(type) }}>
+      <div className="fav-head">
+        <i />
+        <h2>{label}</h2>
+        <span className="n">{items.length}/{FAV_MAX}</span>
+        <button className="seeall" onClick={onSeeAll}>Ver biblioteca →</button>
+      </div>
+      <div className="fav-strip">
+        {slots.map((it, i) => it ? (
+          <MediaPreviewTrigger media={it} label={`Abrir resumo de ${it.title}`} className={`fav-card${FAV_LAYOUT[i] === 0 ? ' top' : ''}`} key={it.id}>
+            {FAV_LAYOUT[i] === 0 && <span className="crown" aria-hidden>👑</span>}
+            <div className="shot">
+              <Poster url={it.cover_url} type={it.type} />
+              <button
+                className="rm"
+                disabled={busy}
+                aria-label={`Remover ${it.title} dos favoritos`}
+                title="Remover dos favoritos"
+                onClick={e => { e.stopPropagation(); onRemove(it) }}
+              >×</button>
+              {(() => {
+                const m = favMeta(it)
+                return (m.time || m.rating) && (
+                  <div className="foot">
+                    {m.time && <span>🕘 {m.time}</span>}
+                    {m.rating && <span className="rt">★ {m.rating}</span>}
+                  </div>
+                )
+              })()}
+            </div>
+            <div className="ttl">{it.title}</div>
+          </MediaPreviewTrigger>
+        ) : (
+          <button className="fav-card fav-add" key={`empty-${i}`} onClick={onAdd} disabled={busy} aria-label={`Escolher ${noun} favorito`}>
+            <div className="shot"><span className="plus">+</span><span className="lb">Adicionar</span></div>
+            <div className="ttl" />
+          </button>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+/** Escolha de um item da biblioteca para ocupar uma vaga do banner. */
+function FavPicker({ type, items, busy, onPick, onClose }: {
+  type: MediaType; items: MediaItem[]; busy: boolean
+  onPick: (item: MediaItem) => void; onClose: () => void
+}) {
+  const [q, setQ] = useState('')
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  const term = q.trim().toLowerCase()
+  const shown = items.filter(i => !term || i.title.toLowerCase().includes(term)).slice(0, 60)
+
+  return (
+    <div className="fixed inset-0 z-[300] flex items-center justify-center px-4">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div role="dialog" aria-modal="true" className="relative w-full max-w-2xl bg-surface border border-border rounded-2xl shadow-2xl animate-scale-in p-6">
+        <h2 className="text-lg font-bold text-primary mb-1">
+          Escolher {type === 'movie' ? 'filme' : 'jogo'} favorito
+        </h2>
+        <p className="text-sm text-muted mb-4">Da sua biblioteca. São {FAV_MAX} vagas por categoria.</p>
+        <input
+          autoFocus
+          value={q}
+          onChange={e => setQ(e.target.value)}
+          placeholder="Buscar pelo título..."
+          className="w-full bg-card border border-border rounded-lg px-3 py-2 text-sm text-primary outline-none focus:border-accent mb-4"
+        />
+        <div className="fav-pick-grid">
+          {shown.map(it => (
+            <button className="fav-pick" key={it.id} disabled={busy} onClick={() => onPick(it)}>
+              <Poster url={it.cover_url} type={it.type} />
+              <span className="nm">{it.title}</span>
+            </button>
+          ))}
+          {shown.length === 0 && (
+            <p className="text-sm text-muted col-span-full">
+              {items.length ? 'Nenhum título com esse nome.' : 'Nada disponível na biblioteca ainda.'}
+            </p>
+          )}
+        </div>
+        <div className="flex justify-end mt-5">
+          <button onClick={onClose} className="px-4 py-2 rounded-lg text-sm font-medium text-muted hover:text-primary border border-border hover:border-border-strong transition-colors">
+            Fechar
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 /* ─── Carrossel "Em alta no público" ─── */
 function TrendingCarousel({ items }: { items: TrendingItem[] }) {
@@ -131,7 +263,9 @@ function TrendingCarousel({ items }: { items: TrendingItem[] }) {
 
 export function Dashboard() {
   const navigate = useNavigate()
+  const qc = useQueryClient()
   const now = new Date()
+  const [picking, setPicking] = useState<MediaType | null>(null)
 
   const { data: allItems = [] } = useQuery({ queryKey: ['media-library'], queryFn: () => api.media.listAll({ library: true }) })
   const { data: diary = [] } = useQuery({ queryKey: ['diary-all'], queryFn: () => api.diary.list() })
@@ -146,6 +280,31 @@ export function Dashboard() {
   // Contador da biblioteca por categoria: tudo que já foi consumido — concluído,
   // em andamento ou abandonado. Só a wishlist fica de fora (ela mora em /wishlist).
   const libraryCount = (t: MediaType) => allItems.reduce((n, i) => n + (i.type === t ? 1 : 0), 0)
+
+  /**
+   * Favoritos marcados à mão (coluna `favorite`), maior nota primeiro. O tempo
+   * jogado desempata jogos com a mesma nota; o resto cai na ordem de atualização.
+   */
+  const favorites = useMemo(() => {
+    const pick = (t: MediaType) => allItems
+      .filter(i => i.type === t && i.favorite === 1)
+      .sort((a, b) => b.rating - a.rating || (b.playtime_seconds ?? 0) - (a.playtime_seconds ?? 0) || byRecent(a, b))
+      .slice(0, FAV_MAX)
+    return { movie: pick('movie'), game: pick('game') }
+  }, [allItems])
+
+  const favMutation = useMutation({
+    mutationFn: ({ id, favorite }: { id: number; favorite: 0 | 1 }) => api.media.update(id, { favorite }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['media-library'] }),
+  })
+
+  /** Candidatos do seletor: a biblioteca daquele tipo que ainda não é favorita. */
+  const pickable = useMemo(() => {
+    if (!picking) return []
+    return allItems
+      .filter(i => i.type === picking && i.favorite !== 1)
+      .sort((a, b) => b.rating - a.rating || a.title.localeCompare(b.title, 'pt-BR'))
+  }, [allItems, picking])
 
   const continueItems = useMemo(
     () => allItems.filter(i => i.status === 'in_progress').sort(byRecent).slice(0, 4),
@@ -248,6 +407,38 @@ export function Dashboard() {
           ))}
         </div>
       </div>
+
+      {/* ── Favoritos: o destaque da home, e o único lugar onde se edita a lista ── */}
+      {(libraryCount('movie') > 0 || libraryCount('game') > 0) && (
+        <div className="favband">
+          {(favorites.movie.length > 0 || libraryCount('movie') > 0) && (
+            <FavRow
+              label="Filmes Favoritos" type="movie" items={favorites.movie} busy={favMutation.isPending}
+              onAdd={() => setPicking('movie')}
+              onRemove={it => favMutation.mutate({ id: it.id, favorite: 0 })}
+              onSeeAll={() => navigate('/library/films')}
+            />
+          )}
+          {(favorites.game.length > 0 || libraryCount('game') > 0) && (
+            <FavRow
+              label="Jogos Favoritos" type="game" items={favorites.game} busy={favMutation.isPending}
+              onAdd={() => setPicking('game')}
+              onRemove={it => favMutation.mutate({ id: it.id, favorite: 0 })}
+              onSeeAll={() => navigate('/library/games')}
+            />
+          )}
+        </div>
+      )}
+
+      {picking && (
+        <FavPicker
+          type={picking}
+          items={pickable}
+          busy={favMutation.isPending}
+          onClose={() => setPicking(null)}
+          onPick={it => favMutation.mutate({ id: it.id, favorite: 1 }, { onSuccess: () => setPicking(null) })}
+        />
+      )}
 
       {/* ── Promoções no backlog ── */}
       {deals.length > 0 && (
@@ -509,6 +700,54 @@ const HOME_CSS = `
 .home .cat-chip .lb{font-weight:600;font-size:14px}
 .home .cat-chip .ct{font-size:13px;font-weight:600;color:var(--text-secondary);font-variant-numeric:tabular-nums;background:var(--card);border-radius:9999px;padding:2px 10px}
 
+/* Banner de favoritos: faixa larga, pôsteres grandes, #1 com coroa e moldura dourada. */
+.home .favband{margin-top:28px;padding:28px var(--page-x) 32px;border-block:1px solid var(--border);background:radial-gradient(70% 130% at 8% 0%,color-mix(in srgb,var(--movies) 14%,transparent),transparent 62%),radial-gradient(70% 130% at 92% 100%,color-mix(in srgb,var(--games) 14%,transparent),transparent 62%),var(--surface)}
+.home .favband .favrow+.favrow{margin-top:28px;padding-top:28px;border-top:1px solid var(--border)}
+.home .fav-head{display:flex;align-items:center;gap:12px}
+.home .fav-head i{width:4px;height:24px;border-radius:2px;background:var(--fav);flex-shrink:0}
+.home .fav-head h2{margin:0;font-size:clamp(19px,2vw,24px);font-weight:700;letter-spacing:-.02em}
+.home .fav-head .n{font-size:12px;font-weight:700;color:var(--text-secondary);background:var(--card);border:1px solid var(--border);border-radius:9999px;padding:2px 9px;font-variant-numeric:tabular-nums}
+.home .fav-head .seeall{margin-left:auto}
+/* padding no topo: a coroa do #1 escapa do pôster e não pode ser cortada pelo scroll. */
+.home .fav-strip{display:flex;align-items:flex-end;justify-content:safe center;gap:18px;overflow-x:auto;padding:24px 4px 8px;scrollbar-width:thin}
+.home .fav-card{position:relative;flex:0 0 auto;width:158px;cursor:pointer;transition:transform .25s var(--ease)}
+.home .fav-card:hover{transform:translateY(-6px)}
+.home .fav-card .shot{position:relative;border-radius:12px;overflow:hidden;box-shadow:0 10px 26px rgba(0,0,0,.38)}
+.home .fav-card .art{display:block;width:100%;aspect-ratio:2/3;object-fit:cover}
+.home .fav-card .art.fb{display:grid;place-items:center;font-size:38px;color:#fff}
+.home .fav-card.top{width:186px}
+.home .fav-card.top .shot{outline:3px solid var(--gold);outline-offset:-1px;box-shadow:0 0 0 6px color-mix(in srgb,var(--gold) 18%,transparent),0 14px 34px color-mix(in srgb,var(--gold) 30%,transparent)}
+.home .fav-card .crown{position:absolute;top:-20px;left:50%;transform:translateX(-50%);font-size:20px;line-height:1;z-index:2;filter:drop-shadow(0 2px 5px rgba(0,0,0,.55))}
+.home .fav-card .foot{position:absolute;left:0;right:0;bottom:0;display:flex;justify-content:center;gap:12px;padding:22px 8px 8px;font-size:11px;font-weight:600;color:#fff;font-variant-numeric:tabular-nums;background:linear-gradient(transparent,rgba(0,0,0,.88))}
+.home .fav-card .foot .rt{color:var(--gold)}
+/* Altura fixa de duas linhas + strip alinhado embaixo: os pôsteres encostam na
+   mesma linha de base, então o #1 cresce só para cima, como na referência. */
+.home .fav-card .ttl{margin-top:10px;height:34px;font-size:13px;font-weight:600;line-height:1.3;color:var(--text-secondary);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.home .fav-card.top .ttl{color:var(--text-primary)}
+/* Botão × de cada pôster: discreto até o card receber o mouse ou o foco. */
+.home .fav-card .rm{position:absolute;top:6px;right:6px;z-index:3;width:26px;height:26px;padding:0;border-radius:50%;border:1px solid rgba(255,255,255,.24);background:rgba(10,10,20,.72);color:#fff;font-size:15px;line-height:1;display:grid;place-items:center;cursor:pointer;opacity:0;backdrop-filter:blur(4px);transition:opacity .18s,background .18s}
+.home .fav-card:hover .rm,.home .fav-card:focus-within .rm{opacity:1}
+.home .fav-card .rm:hover{background:#e0245e;border-color:#e0245e}
+.home .fav-card .rm:disabled{cursor:default;opacity:.4}
+@media(hover:none){.home .fav-card .rm{opacity:1}}
+
+/* Vaga vazia: o único jeito de entrar no banner é por aqui. */
+.home .fav-add{background:none;border:none;padding:0;font:inherit;text-align:left;color:inherit}
+.home .fav-add .shot{display:grid;place-items:center;align-content:center;gap:6px;aspect-ratio:2/3;border:2px dashed var(--border-strong);background:color-mix(in srgb,var(--card) 55%,transparent);color:var(--text-muted);box-shadow:none;transition:border-color .2s,color .2s}
+.home .fav-add:hover .shot{border-color:var(--fav);color:var(--fav)}
+.home .fav-add .plus{font-size:28px;line-height:1;font-weight:300}
+.home .fav-add .lb{font-size:11px;font-weight:600;letter-spacing:.4px}
+.home .fav-add:disabled{opacity:.5}
+
+/* Seletor da vaga (modal) */
+.fav-pick-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:12px;max-height:46vh;overflow-y:auto;padding-right:4px}
+.fav-pick{background:none;border:none;padding:0;text-align:left;cursor:pointer;color:inherit}
+.fav-pick .art{display:block;width:100%;aspect-ratio:2/3;object-fit:cover;border-radius:8px;border:1px solid var(--border);transition:border-color .2s,transform .2s}
+.fav-pick .art.fb{display:grid;place-items:center;font-size:26px;color:#fff}
+.fav-pick:hover .art{border-color:var(--accent);transform:translateY(-3px)}
+.fav-pick .nm{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;margin-top:6px;font-size:12px;font-weight:600;line-height:1.25;color:var(--text-secondary)}
+.fav-pick:disabled{opacity:.5;cursor:default}
+
 .home .two-col{display:grid;grid-template-columns:1fr 1fr;gap:32px;align-items:stretch}
 .home .two-col>.quad,.home .two-col>.col-stack{display:flex;flex-direction:column;min-width:0}
 
@@ -647,6 +886,9 @@ html:not(.dark) .home .quad{background:radial-gradient(120% 110% at 100% 0%,colo
   .home .cats{grid-template-columns:repeat(3,1fr)}
 }
 @media(max-width:560px){
+  .home .fav-card{width:124px}
+  .home .fav-card.top{width:146px}
+  .home .fav-card .ttl{font-size:12px;height:32px}
   .home .continue,.home .soon{grid-template-columns:1fr}
   .home .cats{grid-template-columns:repeat(2,1fr)}
   .home .deals{grid-template-columns:1fr;grid-auto-rows:auto}

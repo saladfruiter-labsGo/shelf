@@ -170,6 +170,9 @@ const GAME_STATUS_TO_BASE: Record<string, 'wishlist' | 'in_progress' | 'complete
   jogando: 'in_progress', zerado: 'completed', platinado: 'completed', abandonado: 'dropped', nunca_jogado: 'wishlist',
 }
 
+/** Vagas de favorito por categoria (o banner da home mostra exatamente estas). */
+const FAVORITE_LIMIT = 5
+
 app.patch('/:id', async (c) => {
   const id   = c.req.param('id')
   const body = await c.req.json()
@@ -181,11 +184,21 @@ app.patch('/:id', async (c) => {
     if (base === 'completed' && body.completed_at == null) body.completed_at = new Date().toISOString()
   }
 
-  const allowed = ['rating', 'status', 'notes', 'runtime', 'synopsis', 'creators', 'author', 'release_date', 'hype', 'completed_at', 'game_status', 'last_played_at', 'playtime_seconds']
+  const allowed = ['rating', 'status', 'notes', 'runtime', 'synopsis', 'creators', 'author', 'release_date', 'hype', 'favorite', 'completed_at', 'game_status', 'last_played_at', 'playtime_seconds']
   const fields  = Object.keys(body).filter(k => allowed.includes(k))
   if (fields.length === 0) return c.json({ error: 'No valid fields' }, 400)
 
-  const before = db.prepare('SELECT status, rating FROM media_items WHERE id = ?').get(id) as { status: string; rating: number } | undefined
+  const before = db.prepare('SELECT status, rating, type, favorite FROM media_items WHERE id = ?').get(id) as
+    { status: string; rating: number; type: string; favorite: number } | undefined
+
+  // Cinco favoritos por categoria — é o número de vagas do banner da home.
+  if (before && Number(body.favorite) === 1 && !before.favorite) {
+    const { n } = db.prepare('SELECT COUNT(*) n FROM media_items WHERE type = ? AND favorite = 1')
+      .get(before.type) as { n: number }
+    if (n >= FAVORITE_LIMIT) {
+      return c.json({ error: `Só cabem ${FAVORITE_LIMIT} favoritos por categoria — remova um antes.` }, 409)
+    }
+  }
 
   const set    = fields.map(f => `${f} = ?`).join(', ')
   const values = fields.map(f => body[f])
