@@ -1,7 +1,12 @@
+import { randomUUID } from 'node:crypto'
 import { Hono } from 'hono'
 import { buildExport, exportCsv, exportSummary, type ExportScope } from '../transfer/export.js'
-import { importShelfBackup, importLetterboxd, type ImportMode } from '../transfer/importer.js'
-import { detectKind, type LetterboxdKind } from '../transfer/letterboxd.js'
+import { importShelfBackup, applyLetterboxdPlan, type ImportMode } from '../transfer/importer.js'
+import {
+  planLetterboxd,
+  type LetterboxdKind, type LetterboxdPlan, type LetterboxdSource,
+} from '../transfer/letterboxd.js'
+import { readZip, looksLikeZip, stripRoot } from '../transfer/zip.js'
 import { importSteamWishlist } from '../steam/sync.js'
 import * as steam from '../steam/client.js'
 
@@ -56,28 +61,151 @@ app.post('/import/shelf', async (c) => {
   return c.json(importShelfBackup(body.payload as any, mode))
 })
 
-app.post('/import/letterboxd', async (c) => {
-  const body = (await c.req.json().catch(() => null)) as
-    | { csv?: string; kind?: LetterboxdKind; filename?: string }
-    | null
-  const csv = body?.csv
-  if (!csv?.trim()) return c.json({ error: 'Envie o CSV do Letterboxd em "csv".' }, 400)
+/* ── Letterboxd: prévia → confirmar ou abortar ── */
 
-  const kind = KINDS.includes(body?.kind as LetterboxdKind) ? body!.kind : undefined
+/**
+ * A importação do Letterboxd tem dois passos de propósito. O `.zip` do export
+ * traz onze arquivos, dos quais o Shelf usa cinco; escrever tudo direto seria
+ * um salto no escuro. Então `preview` lê o zip, monta o plano e **não toca no
+ * banco**; `apply` executa aquele plano; `abort` joga fora.
+ *
+ * O plano fica em memória entre os dois passos porque re-ler o upload a cada
+ * confirmação obrigaria o navegador a enviar o arquivo duas vezes.
+ */
+const MAX_UPLOAD  = 64 * 1024 * 1024
+const PLAN_TTL_MS = 30 * 60_000
+const MAX_PLANS   = 4
+
+interface StoredPlan {
+  plan: LetterboxdPlan
+  sources: LetterboxdSource[]
+  origin: 'zip' | 'csv'
+  at: number
+}
+
+const plans = new Map<string, StoredPlan>()
+
+/** Prévia é rascunho: a que expirou e as antigas demais são lixo. */
+function sweepPlans(): void {
+  const cutoff = Date.now() - PLAN_TTL_MS
+  for (const [id, p] of plans) if (p.at < cutoff) plans.delete(id)
+  while (plans.size > MAX_PLANS) plans.delete(plans.keys().next().value as string)
+}
+
+const isCsv = (path: string) => path.toLowerCase().endsWith('.csv')
+
+/** Ruído que o Finder e alguns descompactadores enfiam no zip. */
+const isJunk = (path: string) =>
+  path.startsWith('__MACOSX/') || path.split('/').some(part => part.startsWith('.'))
+
+/**
+ * Só os CSVs são descompactados: o resto do export entra no plano só pelo nome,
+ * para aparecer na lista do que ficou de fora sem custar memória.
+ */
+function zipSources(buf: Buffer): LetterboxdSource[] {
+  const entries = readZip(buf).filter(e => !isJunk(e.path))
+  const rel = stripRoot(entries.map(e => e.path))
+
+  return entries.map(e => {
+    const path = rel(e.path)
+    if (!isCsv(path)) return { path, text: '' }
+    try {
+      return { path, text: e.text() }
+    } catch {
+      // Entrada corrompida: sem texto ela cai como "não identificada" no plano,
+      // em vez de derrubar a leitura do zip inteiro.
+      return { path: `${path} (ilegível)`, text: '' }
+    }
+  })
+}
+
+app.post('/import/letterboxd/preview', async (c) => {
+  const body = await c.req.parseBody().catch(() => null)
+  const file = body?.file
+  if (!(file instanceof File)) return c.json({ error: 'Envie o .zip ou o .csv do Letterboxd no campo "file".' }, 400)
+  if (file.size === 0)         return c.json({ error: 'O arquivo enviado está vazio.' }, 400)
+  if (file.size > MAX_UPLOAD)  return c.json({ error: `Arquivo grande demais (máximo ${MAX_UPLOAD / 1024 / 1024} MB).` }, 400)
+
+  const buf = Buffer.from(await file.arrayBuffer())
+
+  let sources: LetterboxdSource[]
+  let origin: 'zip' | 'csv'
   try {
-    const report = await importLetterboxd(csv, { kind, filename: body?.filename })
-    return c.json(report)
+    if (looksLikeZip(buf)) {
+      origin = 'zip'
+      sources = zipSources(buf)
+    } else {
+      origin = 'csv'
+      sources = [{ path: file.name || 'arquivo.csv', text: buf.toString('utf-8').replace(/^﻿/, '') }]
+    }
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, 400)
+  }
+
+  const plan = planLetterboxd(sources, { origin })
+
+  // Sem nada a importar não há o que confirmar — a resposta vai só com a lista
+  // do que ficou de fora, e nenhum plano é guardado.
+  if (plan.files.length === 0) {
+    return c.json({ planId: null, origin, filename: file.name, plan })
+  }
+
+  sweepPlans()
+  const planId = randomUUID()
+  plans.set(planId, { plan, sources, origin, at: Date.now() })
+  return c.json({ planId, origin, filename: file.name, plan })
+})
+
+/**
+ * Refaz o plano com o tipo corrigido na tela — `watched.csv` × `watchlist.csv`
+ * num CSV avulso, onde o cabeçalho não distingue os dois. Usa o conteúdo já
+ * guardado, sem novo upload, e substitui o plano no mesmo `planId` para os
+ * números da prévia baterem com o que vai ser importado.
+ */
+app.post('/import/letterboxd/replan', async (c) => {
+  sweepPlans()
+  const body = (await c.req.json().catch(() => null)) as
+    | { planId?: string; overrides?: Record<string, string> }
+    | null
+
+  const planId = body?.planId ?? ''
+  const stored = plans.get(planId)
+  if (!stored) return c.json({ error: 'A prévia expirou. Envie o arquivo de novo.' }, 404)
+
+  const overrides: Record<string, LetterboxdKind> = {}
+  for (const [path, kind] of Object.entries(body?.overrides ?? {})) {
+    if (KINDS.includes(kind as LetterboxdKind)) overrides[path] = kind as LetterboxdKind
+  }
+
+  const plan = planLetterboxd(stored.sources, { origin: stored.origin, overrides })
+  plans.set(planId, { ...stored, plan, at: Date.now() })
+  return c.json({ planId, origin: stored.origin, plan })
+})
+
+/** Confirma a prévia. Uma prévia vale uma importação: depois dela o plano some. */
+app.post('/import/letterboxd/apply', async (c) => {
+  sweepPlans()
+  const body = (await c.req.json().catch(() => null)) as { planId?: string } | null
+
+  const planId = body?.planId ?? ''
+  const stored = plans.get(planId)
+  if (!stored) return c.json({ error: 'A prévia expirou ou já foi usada. Envie o arquivo de novo.' }, 404)
+
+  plans.delete(planId)
+
+  try {
+    return c.json(await applyLetterboxdPlan(stored.sources, stored.plan))
   } catch (e) {
     return c.json({ error: (e as Error).message }, 400)
   }
 })
 
-/** Detecta o tipo do CSV sem importar — a UI mostra e deixa corrigir. */
-app.post('/import/letterboxd/detect', async (c) => {
-  const body = (await c.req.json().catch(() => null)) as { csv?: string; filename?: string } | null
-  const header = (body?.csv ?? '').split('\n')[0] ?? ''
-  const headers = header.split(',').map(h => h.replace(/^"|"$/g, '').trim())
-  return c.json({ kind: detectKind(headers, body?.filename ?? ''), headers })
+/** Aborta: descarta o plano e o conteúdo do upload sem escrever nada. */
+app.post('/import/letterboxd/abort', async (c) => {
+  const body = (await c.req.json().catch(() => null)) as { planId?: string } | null
+  const discarded = body?.planId ? plans.delete(body.planId) : false
+  sweepPlans()
+  return c.json({ ok: true, discarded })
 })
 
 /**
