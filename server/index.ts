@@ -15,7 +15,9 @@ import diaryRoutes    from './routes/diary.js'
 import imgRoutes      from './routes/img.js'
 import integrationsRoutes from './routes/integrations.js'
 import pricesRoutes    from './routes/prices.js'
+import transferRoutes  from './routes/transfer.js'
 import { startPriceSync } from './prices/sync.js'
+import { startSteamSync } from './steam/sync.js'
 
 const app = new Hono()
 
@@ -33,6 +35,7 @@ app.route('/api/diary',    diaryRoutes)
 app.route('/api/img',      imgRoutes)
 app.route('/api/integrations', integrationsRoutes)
 app.route('/api/prices',  pricesRoutes)
+app.route('/api/transfer', transferRoutes)
 
 app.get('/api/health', (c) => c.json({ ok: true }))
 
@@ -46,3 +49,6 @@ serve({ fetch: app.fetch, port })
 
 // Preços do backlog: primeira passada logo após o boot, depois a cada 6 h.
 startPriceSync()
+
+// Backlog ↔ wishlist da Steam: mesma cadência (6 h), quando o conector está ativo.
+startSteamSync()

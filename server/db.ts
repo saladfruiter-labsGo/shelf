@@ -80,6 +80,7 @@ const newCols: [string, string][] = [
   ['last_played_at','TEXT'],    // games (Playnite): última vez jogado (ISO), do LastActivity
   ['publisher',     'TEXT'],    // games (Playnite): distribuidora(s)
   ['library',       'TEXT'],    // games (Playnite): biblioteca/origem (Source: Steam, GOG, Epic...)
+  ['steam_appid',   'INTEGER'], // games: AppID na Steam — chave estável do conector bidirecional
 ]
 for (const [col, def] of newCols) {
   if (!cols.includes(col)) db.exec(`ALTER TABLE media_items ADD COLUMN ${col} ${def}`)
@@ -87,6 +88,7 @@ for (const [col, def] of newCols) {
 
 // Indexes that depend on migrated columns must be created after the ALTERs above
 db.exec(`CREATE INDEX IF NOT EXISTS idx_media_release ON media_items(release_date)`)
+db.exec(`CREATE INDEX IF NOT EXISTS idx_media_steam   ON media_items(steam_appid)`)
 
 // ─── Integrations: real-time activity log + music enrichment cache ───
 db.exec(`

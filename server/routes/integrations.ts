@@ -7,6 +7,8 @@ import { rawgLookup } from './search.js'
 import { fetchShops } from '../prices/providers/isthereanydeal.js'
 import { backlogGames } from '../prices/repository.js'
 import { syncBacklog, syncState } from '../prices/sync.js'
+import * as steamClient from '../steam/client.js'
+import { syncSteamBacklog, lastSync as steamLastSync, syncRunning as steamSyncRunning } from '../steam/sync.js'
 
 const app = new Hono()
 
@@ -1030,6 +1032,43 @@ app.post('/itad/sync', async (c) => {
   return c.json({ ok: true, sync: syncState() })
 })
 
+/* ────────────────────────────────── Steam (conector) ──────────────────────────────── */
+
+// Testa as duas superfícies de uma vez: a Web API (biblioteca/wishlist) e, se o
+// usuário colou os cookies da loja, informa que a escrita está disponível.
+app.post('/steam/test', async (c) => {
+  try {
+    const steamid = cfg('STEAM_ID')
+    if (!steamid) return c.json({ ok: false, error: 'Informe o SteamID (ou o link do perfil) e salve.' }, 400)
+
+    const wishlist = await steamClient.fetchWishlist()
+    let owned: number | null = null
+    if (cfg('STEAM_API_KEY')) {
+      owned = (await steamClient.fetchOwnedGames().catch(() => [])).length || null
+    }
+    return c.json({ ok: true, wishlist: wishlist.length, owned, can_write: steamClient.steamCanWrite() })
+  } catch (e) {
+    return c.json({ ok: false, error: (e as Error).message }, 400)
+  }
+})
+
+app.post('/steam/sync', async (c) => {
+  const result = await syncSteamBacklog()
+  return c.json(result)
+})
+
+/** Converte um link de perfil ou vanity em SteamID64 (a UI preenche o campo). */
+app.post('/steam/resolve', async (c) => {
+  const body = (await c.req.json().catch(() => ({}))) as { input?: string }
+  try {
+    const id = await steamClient.normalizeSteamId(body.input ?? '')
+    if (!id) return c.json({ ok: false, error: 'Não consegui resolver esse perfil. Cole o SteamID64 (17 dígitos) ou configure a API key.' }, 400)
+    return c.json({ ok: true, steam_id: id })
+  } catch (e) {
+    return c.json({ ok: false, error: (e as Error).message }, 400)
+  }
+})
+
 /* ─────────────────────────────────────── Loops ────────────────────────────────────── */
 
 let plexBusy = false
@@ -1078,6 +1117,18 @@ app.get('/', (c) => {
       enabled: cfg('PLAYNITE_ENABLED') === '1',
       webhook_secret: ensurePlayniteSecret(),
     },
+    steam: {
+      enabled:          cfg('STEAM_ENABLED') === '1',
+      steam_id:         cfg('STEAM_ID'),
+      api_key_set:      !!cfg('STEAM_API_KEY'),
+      api_key_masked:   mask(cfg('STEAM_API_KEY')),
+      cookie_set:       steamClient.steamCanWrite(),
+      session_id:       cfg('STEAM_SESSION_ID'),
+      sync_mode:        (cfg('STEAM_SYNC_MODE') || 'both') as 'pull' | 'push' | 'both',
+      sync_removals:    cfg('STEAM_SYNC_REMOVALS') === '1',
+      running:          steamSyncRunning(),
+      last_sync:        steamLastSync(),
+    },
     prices: {
       enabled:        cfg('ITAD_ENABLED') === '1',
       api_key_set:    !!cfg('ITAD_API_KEY'),
@@ -1112,6 +1163,11 @@ app.patch('/', async (c) => {
     ['PLAYNITE_ENABLED', bool(b.playnite_enabled)],
     ['ITAD_ENABLED', bool(b.itad_enabled)],
     ['ITAD_COUNTRY', str(b.itad_country)?.toUpperCase().slice(0, 2)],
+    ['STEAM_ENABLED', bool(b.steam_enabled)],
+    ['STEAM_ID', str(b.steam_id)],
+    ['STEAM_SESSION_ID', str(b.steam_session_id)],
+    ['STEAM_SYNC_MODE', ['pull', 'push', 'both'].includes(String(b.steam_sync_mode)) ? String(b.steam_sync_mode) : undefined],
+    ['STEAM_SYNC_REMOVALS', bool(b.steam_sync_removals)],
   ]
   for (const [k, v] of map) if (v !== undefined) setCfg(k, v)
   // Tokens/segredos só são sobrescritos quando um valor novo é enviado (não apagar ao salvar mascarado)
@@ -1126,6 +1182,12 @@ app.patch('/', async (c) => {
   const itadKey = str(b.itad_api_key)
   if (itadKey !== undefined && itadKey !== '') setCfg('ITAD_API_KEY', itadKey)
   if (b.itad_api_key_clear === true) setCfg('ITAD_API_KEY', '')
+  const steamKey = str(b.steam_api_key)
+  if (steamKey !== undefined && steamKey !== '') setCfg('STEAM_API_KEY', steamKey)
+  if (b.steam_api_key_clear === true) setCfg('STEAM_API_KEY', '')
+  const steamCookie = str(b.steam_login_secure)
+  if (steamCookie !== undefined && steamCookie !== '') setCfg('STEAM_LOGIN_SECURE', steamCookie)
+  if (b.steam_login_secure_clear === true) setCfg('STEAM_LOGIN_SECURE', '')
   // credenciais do Kavita podem ter mudado → força re-autenticação no próximo ciclo
   kavitaToken = null
 
