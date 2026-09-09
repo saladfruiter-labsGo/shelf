@@ -5,7 +5,7 @@ import type {
   IntegrationStatus, NowPlaying, ActivityEvent, ActivityMediaType, MusicStats, TrendingItem,
   GamePriceBacklog, GamePriceDetails, GamePriceRange, GamePriceCandidate,
   SteamSyncResult, ExportScope, ExportSummary, ImportReport,
-  LetterboxdKind, LetterboxdImportReport,
+  LetterboxdKind, LetterboxdPlan, LetterboxdPreview, LetterboxdApplyResult,
 } from '../types'
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -13,6 +13,18 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     headers: { 'Content-Type': 'application/json' },
     ...init,
   })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }))
+    throw new Error((err as { error: string }).error ?? res.statusText)
+  }
+  return res.json()
+}
+
+/** Upload de arquivo. Sem `Content-Type`: quem escreve o boundary é o navegador. */
+async function upload<T>(path: string, file: File): Promise<T> {
+  const form = new FormData()
+  form.append('file', file)
+  const res = await fetch(`/api${path}`, { method: 'POST', body: form })
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }))
     throw new Error((err as { error: string }).error ?? res.statusText)
@@ -152,10 +164,18 @@ export const api = {
       `/api/transfer/export?scope=${scope}&format=${format}`,
     importShelf: (payload: unknown, mode: 'merge' | 'replace' = 'merge'): Promise<ImportReport> =>
       request('/transfer/import/shelf', { method: 'POST', body: JSON.stringify({ payload, mode }) }),
-    detectLetterboxd: (csv: string, filename?: string): Promise<{ kind: LetterboxdKind; headers: string[] }> =>
-      request('/transfer/import/letterboxd/detect', { method: 'POST', body: JSON.stringify({ csv: csv.slice(0, 4096), filename }) }),
-    importLetterboxd: (csv: string, kind: LetterboxdKind, filename?: string): Promise<LetterboxdImportReport> =>
-      request('/transfer/import/letterboxd', { method: 'POST', body: JSON.stringify({ csv, kind, filename }) }),
+    /** Lê o .zip (ou um .csv solto) e devolve o plano — sem escrever nada ainda. */
+    previewLetterboxd: (file: File): Promise<LetterboxdPreview> =>
+      upload('/transfer/import/letterboxd/preview', file),
+    /** Refaz o plano com o tipo corrigido na tela, no mesmo `planId`. */
+    replanLetterboxd: (planId: string, overrides: Record<string, LetterboxdKind>): Promise<{ planId: string; plan: LetterboxdPlan }> =>
+      request('/transfer/import/letterboxd/replan', { method: 'POST', body: JSON.stringify({ planId, overrides }) }),
+    /** Confirma o plano da prévia. Vale uma vez: depois dela o plano é descartado. */
+    applyLetterboxd: (planId: string): Promise<LetterboxdApplyResult> =>
+      request('/transfer/import/letterboxd/apply', { method: 'POST', body: JSON.stringify({ planId }) }),
+    /** Aborta: descarta o plano no servidor sem escrever nada. */
+    abortLetterboxd: (planId: string): Promise<{ ok: boolean; discarded: boolean }> =>
+      request('/transfer/import/letterboxd/abort', { method: 'POST', body: JSON.stringify({ planId }) }),
     /** Traz a wishlist da Steam para o backlog, uma vez. */
     importSteam: (): Promise<SteamSyncResult> =>
       request('/transfer/import/steam', { method: 'POST' }),

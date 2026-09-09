@@ -10,7 +10,10 @@
  */
 import { db } from '../db.js'
 import { tmdbMovieLookup } from '../routes/search.js'
-import { parseLetterboxd, letterboxdSlug, type LetterboxdKind } from './letterboxd.js'
+import {
+  parseLetterboxd, letterboxdSlug,
+  type LetterboxdKind, type LetterboxdPlan, type LetterboxdSource,
+} from './letterboxd.js'
 
 export type ImportMode = 'merge' | 'replace'
 
@@ -188,10 +191,26 @@ const insertMovie = db.prepare(`
   VALUES (@external_id, 'movie', @title, @cover_url, @year, @genre, @release_date, @status, @rating, @completed_at)
 `)
 
+/** Um filme já casado com o TMDB (ou o palpite local, quando não casou). */
+interface ResolvedMovie {
+  external_id: string
+  cover_url: string | null
+  year: number | null
+  genre: string | null
+  release_date: string | null
+  title: string
+}
+
 export interface LetterboxdImportOptions {
   /** Sobrepõe o tipo detectado pelo cabeçalho/nome do arquivo. */
   kind?: LetterboxdKind
   filename?: string
+  /**
+   * Cache de resolução compartilhado entre chamadas. No zip os mesmos filmes
+   * aparecem em quatro arquivos; sem isso o TMDB seria consultado quatro vezes
+   * para cada um.
+   */
+  cache?: Map<string, ResolvedMovie>
 }
 
 export async function importLetterboxd(csv: string, opts: LetterboxdImportOptions = {}): Promise<ImportReport & { kind: LetterboxdKind; rows: number }> {
@@ -200,7 +219,7 @@ export async function importLetterboxd(csv: string, opts: LetterboxdImportOption
   const report = emptyReport()
 
   // Uma resolução por título+ano por execução: o diário repete o mesmo filme.
-  const resolved = new Map<string, { external_id: string; cover_url: string | null; year: number | null; genre: string | null; release_date: string | null; title: string }>()
+  const resolved = opts.cache ?? new Map<string, ResolvedMovie>()
 
   for (const row of file.rows) {
     const cacheKey = `${row.name.toLowerCase()}::${row.year ?? ''}`
@@ -264,4 +283,58 @@ export async function importLetterboxd(csv: string, opts: LetterboxdImportOption
   }
 
   return { ...report, kind, rows: file.rows.length }
+}
+
+/* ─────────────── Letterboxd: aplicar o plano do export inteiro ───────────── */
+
+export interface LetterboxdFileReport extends ImportReport {
+  path: string
+  kind: LetterboxdKind
+  rows: number
+}
+
+export interface LetterboxdApplyResult {
+  files: LetterboxdFileReport[]
+  total: ImportReport & { rows: number }
+}
+
+/**
+ * Importa, na ordem do plano, os arquivos que a prévia marcou como aceitos.
+ *
+ * A ordem importa: `watched`/`ratings` primeiro para o card já nascer com nota,
+ * `reviews.csv` antes de `diary.csv` (só ele traz o texto, e a primeira sessão
+ * a entrar é a que fica), `watchlist` por último — que nunca rebaixa um filme
+ * já assistido, seguindo a regra de que backlog e biblioteca não se misturam.
+ */
+export async function applyLetterboxdPlan(sources: LetterboxdSource[], plan: LetterboxdPlan): Promise<LetterboxdApplyResult> {
+  const byPath = new Map(sources.map(s => [s.path, s.text]))
+  const cache = new Map<string, ResolvedMovie>()
+  const files: LetterboxdFileReport[] = []
+  const total = { ...emptyReport(), rows: 0 }
+
+  for (const file of plan.files) {
+    const csv = byPath.get(file.path)
+    if (csv === undefined) {
+      total.errors.push(`"${file.path}" não estava no arquivo enviado.`)
+      continue
+    }
+
+    try {
+      const r = await importLetterboxd(csv, { kind: file.kind, filename: file.path, cache })
+      files.push({ ...r, path: file.path })
+      total.created += r.created
+      total.updated += r.updated
+      total.skipped += r.skipped
+      total.diary   += r.diary
+      total.rows    += r.rows
+      // Com o cache compartilhado, cada título é resolvido (e reportado) uma
+      // única vez na rodada inteira — a soma não repete nomes.
+      total.unresolved.push(...r.unresolved)
+      total.errors.push(...r.errors)
+    } catch (e) {
+      total.errors.push(`${file.path}: ${(e as Error).message}`)
+    }
+  }
+
+  return { files, total }
 }

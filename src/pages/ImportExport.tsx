@@ -1,9 +1,9 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../lib/api'
 import type {
-  ExportScope, ImportReport, LetterboxdImportReport, LetterboxdKind, SteamSyncResult,
+  ExportScope, ImportReport, LetterboxdKind, LetterboxdPreview, LetterboxdApplyResult, SteamSyncResult,
 } from '../types'
 
 const SCOPES: { key: ExportScope; label: string; hint: string }[] = [
@@ -21,6 +21,8 @@ const LETTERBOXD_KINDS: { key: LetterboxdKind; label: string; hint: string }[] =
 
 const cardCls = 'bg-surface border border-border rounded-xl p-5 mb-4'
 const btnCls = 'text-xs px-3 py-2 bg-card border border-border rounded-lg text-primary hover:border-accent transition-colors disabled:opacity-50'
+
+const num = new Intl.NumberFormat('pt-BR')
 
 /** Linha de resultado de uma importação — mesma leitura para os três caminhos. */
 function ReportBox({ report }: { report: ImportReport & { rows?: number } }) {
@@ -123,32 +125,218 @@ export function ImportExport() {
 
 /* ────────────────────────────────  Letterboxd  ───────────────────────────── */
 
-function LetterboxdCard({ onDone }: { onDone: () => void }) {
-  const [csv, setCsv] = useState('')
-  const [filename, setFilename] = useState('')
-  const [kind, setKind] = useState<LetterboxdKind>('diary')
-  const [report, setReport] = useState<LetterboxdImportReport | null>(null)
-  const [error, setError] = useState('')
+/** Quantos filmes da lista aparecem antes do "mostrar todos". */
+const TITLE_PEEK = 24
 
-  const pick = async (file: File | undefined) => {
-    setReport(null); setError('')
-    if (!file) return
-    try {
-      const text = await readFile(file)
-      setCsv(text)
-      setFilename(file.name)
-      const detected = await api.transfer.detectLetterboxd(text, file.name)
-      setKind(detected.kind)
-    } catch (e) {
-      setError((e as Error).message)
-    }
+/**
+ * A prévia do export: o que entra, o que ficou de fora, e os dois botões.
+ *
+ * Nada disso escreveu no banco ainda — o servidor guardou o plano e só o
+ * executa em "Confirmar". "Cancelar" descarta o plano lá também.
+ */
+function LetterboxdPlanPanel({
+  preview, overrides, onOverride, onConfirm, onCancel, busy,
+}: {
+  preview: LetterboxdPreview
+  overrides: Record<string, LetterboxdKind>
+  onOverride: (path: string, kind: LetterboxdKind) => void
+  onConfirm: () => void
+  onCancel: () => void
+  busy: boolean
+}) {
+  const [showAll, setShowAll] = useState(false)
+  const { plan } = preview
+  const t = plan.totals
+  const nothing = plan.files.length === 0
+
+  const stats = [
+    { label: 'Filmes',     value: t.titles },
+    { label: 'Biblioteca', value: t.library },
+    { label: 'Backlog',    value: t.backlog },
+    { label: 'No diário',  value: t.sessions },
+    { label: 'Com nota',   value: t.rated },
+  ]
+
+  const shown = showAll ? plan.titles : plan.titles.slice(0, TITLE_PEEK)
+
+  return (
+    <div className="mt-4 border-t border-border pt-4">
+      <p className="text-xs text-primary mb-1">
+        {nothing ? 'Não achei nada para importar' : 'Confira antes de importar'}
+        <span className="text-muted"> — {preview.filename}</span>
+      </p>
+      <p className="text-[11px] text-muted mb-4">
+        {nothing
+          ? 'Nenhum arquivo enviado é um dos que o Shelf lê. Nada foi alterado.'
+          : 'Ainda não escrevi nada. Só o que está aqui embaixo vai entrar na prateleira.'}
+      </p>
+
+      {!nothing && (
+        <div className="grid grid-cols-5 gap-2 mb-4">
+          {stats.map(s => (
+            <div key={s.label} className="bg-card rounded-lg p-3">
+              <p className="text-[10px] uppercase tracking-wide text-muted">{s.label}</p>
+              <p className="font-display text-xl font-bold text-primary">{num.format(s.value)}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {plan.files.length > 0 && (
+        <div className="mb-4">
+          <p className="text-[11px] uppercase tracking-wide text-muted mb-2">Arquivos que serão lidos</p>
+          <ul className="space-y-2">
+            {plan.files.map(f => (
+              <li key={f.path} className="bg-card rounded-lg p-3">
+                <div className="flex items-baseline justify-between gap-3">
+                  <span className="text-xs text-primary truncate">{f.path}</span>
+                  <span className="text-[11px] text-muted whitespace-nowrap">{num.format(f.rows)} linha(s)</span>
+                </div>
+                <p className="text-[11px] text-muted mt-0.5">{f.does}</p>
+                {f.discarded > 0 && (
+                  <p className="text-[11px] text-muted mt-0.5">
+                    {num.format(f.discarded)} linha(s) sem título, descartadas.
+                  </p>
+                )}
+                {f.ambiguous && (
+                  <>
+                    <select
+                      className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-xs text-primary outline-none focus:border-accent transition-colors mt-2"
+                      value={overrides[f.path] ?? f.kind}
+                      onChange={e => onOverride(f.path, e.target.value as LetterboxdKind)}
+                      disabled={busy}
+                    >
+                      {LETTERBOXD_KINDS.map(k => <option key={k.key} value={k.key}>{k.label} — {k.hint}</option>)}
+                    </select>
+                    <p className="text-[11px] text-muted mt-1">
+                      Nome fora do padrão do export: o tipo veio do cabeçalho. Como watched e watchlist têm cabeçalho
+                      idêntico, confira antes de confirmar.
+                    </p>
+                  </>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {plan.ignored.length > 0 && (
+        <div className="mb-4">
+          <p className="text-[11px] uppercase tracking-wide text-muted mb-2">
+            Não identificado ({plan.ignored.length}) — fica de fora
+          </p>
+          <ul className="space-y-1 max-h-40 overflow-y-auto pr-1">
+            {plan.ignored.map(i => (
+              <li key={i.path} className="text-[11px] text-muted flex gap-2">
+                <span className="text-secondary truncate max-w-[45%]">{i.path}</span>
+                <span className="truncate">{i.reason}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {plan.titles.length > 0 && (
+        <div className="mb-4">
+          <p className="text-[11px] uppercase tracking-wide text-muted mb-2">
+            Filmes que serão migrados ({num.format(plan.titles.length)})
+          </p>
+          <ul className="text-[11px] text-muted space-y-1 max-h-64 overflow-y-auto pr-1">
+            {shown.map(title => (
+              <li key={title.slug} className="flex gap-2">
+                <span className="text-primary truncate">{title.name}</span>
+                {title.year && <span>({title.year})</span>}
+                {title.rating != null && <span className="text-accent whitespace-nowrap">★ {title.rating}</span>}
+                {title.sessions > 0 && <span className="whitespace-nowrap">{title.sessions}× no diário</span>}
+                {title.target === 'backlog' && <span className="whitespace-nowrap">· backlog</span>}
+              </li>
+            ))}
+          </ul>
+          {plan.titles.length > TITLE_PEEK && (
+            <button type="button" onClick={() => setShowAll(v => !v)} className="text-[11px] text-accent hover:underline mt-2">
+              {showAll ? 'Mostrar menos' : `Mostrar todos os ${num.format(plan.titles.length)}`}
+            </button>
+          )}
+        </div>
+      )}
+
+      {!nothing && (
+        <p className="text-[11px] text-muted mb-3">
+          Cada título é casado com o TMDB na hora de importar — é o passo demorado. Os que não casarem entram assim
+          mesmo, com os dados do próprio arquivo, e aparecem no relatório. Repetir a importação não duplica nada.
+        </p>
+      )}
+
+      <div className="flex gap-2">
+        {!nothing && (
+          <button type="button" onClick={onConfirm} disabled={busy} className={btnCls + ' border-accent text-accent'}>
+            {busy ? 'Importando…' : '✓ Confirmar importação'}
+          </button>
+        )}
+        <button type="button" onClick={onCancel} disabled={busy} className={btnCls}>
+          {nothing ? 'Fechar' : '✕ Cancelar'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function LetterboxdCard({ onDone }: { onDone: () => void }) {
+  const [preview, setPreview] = useState<LetterboxdPreview | null>(null)
+  const [overrides, setOverrides] = useState<Record<string, LetterboxdKind>>({})
+  const [result, setResult] = useState<LetterboxdApplyResult | null>(null)
+  const [error, setError] = useState('')
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  const clear = () => {
+    setPreview(null)
+    setOverrides({})
+    // Sem isso, escolher o mesmo arquivo de novo não dispara `change`.
+    if (fileRef.current) fileRef.current.value = ''
   }
 
-  const run = useMutation({
-    mutationFn: () => api.transfer.importLetterboxd(csv, kind, filename),
-    onSuccess: (r) => { setReport(r); onDone() },
+  const read = useMutation({
+    mutationFn: (file: File) => api.transfer.previewLetterboxd(file),
+    onSuccess: (p) => setPreview(p),
     onError: (e: unknown) => setError((e as Error).message),
   })
+
+  const replan = useMutation({
+    mutationFn: (next: Record<string, LetterboxdKind>) => api.transfer.replanLetterboxd(preview!.planId!, next),
+    onSuccess: (r) => setPreview(p => (p ? { ...p, plan: r.plan } : p)),
+    onError: (e: unknown) => setError((e as Error).message),
+  })
+
+  const apply = useMutation({
+    mutationFn: () => api.transfer.applyLetterboxd(preview!.planId!),
+    onSuccess: (r) => { setResult(r); clear(); onDone() },
+    onError: (e: unknown) => setError((e as Error).message),
+  })
+
+  const abort = useMutation({
+    mutationFn: (planId: string) => api.transfer.abortLetterboxd(planId),
+    // Abortar não trava a tela: sai daqui mesmo se o servidor reclamar — o
+    // plano expira sozinho em meia hora de qualquer jeito.
+    onSettled: clear,
+  })
+
+  const pick = (file: File | undefined) => {
+    setResult(null); setError(''); setPreview(null); setOverrides({})
+    if (file) read.mutate(file)
+  }
+
+  const override = (path: string, kind: LetterboxdKind) => {
+    const next = { ...overrides, [path]: kind }
+    setOverrides(next)
+    setError('')
+    replan.mutate(next)
+  }
+
+  const cancel = () => {
+    setError('')
+    if (preview?.planId) abort.mutate(preview.planId)
+    else clear()
+  }
 
   return (
     <div className={cardCls}>
@@ -158,38 +346,47 @@ function LetterboxdCard({ onDone }: { onDone: () => void }) {
       </div>
       <p className="text-xs text-muted mb-4">
         Em <span className="text-secondary">Letterboxd → Settings → Data → Export your data</span> você baixa um .zip.
-        Descompacte e envie um CSV por vez. Cada filme é casado com o TMDB, então o card importado é o mesmo que o Plex
-        e a busca manual usam. Repetir a importação não duplica nada.
+        Mande o .zip inteiro, do jeito que veio: eu leio o que dá, mostro a lista do que vai entrar e do que ficou de
+        fora, e só escrevo depois que você confirmar. Um CSV solto também serve.
       </p>
 
       <input
+        ref={fileRef}
         type="file"
-        accept=".csv,text/csv"
+        accept=".zip,.csv,application/zip,text/csv"
         onChange={e => pick(e.target.files?.[0])}
+        disabled={read.isPending || apply.isPending}
         className="text-xs text-muted mb-3 block w-full file:mr-3 file:px-3 file:py-2 file:rounded-lg file:border file:border-border file:bg-card file:text-primary file:text-xs file:cursor-pointer"
       />
 
-      {csv && (
-        <>
-          <label className="text-xs text-secondary mb-1 block">Tipo do arquivo</label>
-          <select className="w-full bg-card border border-border rounded-lg px-3 py-2.5 text-sm text-primary outline-none focus:border-accent transition-colors"
-            value={kind} onChange={e => setKind(e.target.value as LetterboxdKind)}>
-            {LETTERBOXD_KINDS.map(k => <option key={k.key} value={k.key}>{k.label} — {k.hint}</option>)}
-          </select>
-          <p className="text-[11px] text-muted mt-1">
-            Detectado pelo cabeçalho de <span className="text-secondary">{filename}</span>. `watched.csv` e `watchlist.csv`
-            têm o mesmo cabeçalho — confira antes de importar.
-          </p>
+      {read.isPending && <p className="text-[11px] text-muted">Lendo o arquivo…</p>}
 
-          <button type="button" onClick={() => { setReport(null); setError(''); run.mutate() }}
-            disabled={run.isPending} className={btnCls + ' mt-4'}>
-            {run.isPending ? 'Importando…' : '↧ Importar'}
-          </button>
-        </>
+      {preview && (
+        <LetterboxdPlanPanel
+          preview={preview}
+          overrides={overrides}
+          onOverride={override}
+          onConfirm={() => { setError(''); apply.mutate() }}
+          onCancel={cancel}
+          busy={apply.isPending || replan.isPending}
+        />
       )}
 
       {error && <p className="text-[11px] text-movies mt-2">{error}</p>}
-      {report && <ReportBox report={report} />}
+
+      {result && (
+        <>
+          <ReportBox report={result.total} />
+          <ul className="text-[11px] text-muted mt-2 space-y-0.5">
+            {result.files.map(f => (
+              <li key={f.path}>
+                <span className="text-secondary">{f.path}</span> — {num.format(f.rows)} linha(s):{' '}
+                {f.created} criado(s), {f.updated} atualizado(s), {f.diary} no diário
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
     </div>
   )
 }

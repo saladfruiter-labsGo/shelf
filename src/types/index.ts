@@ -233,9 +233,63 @@ export interface ImportReport {
   errors:     string[]
 }
 
-export interface LetterboxdImportReport extends ImportReport {
+/* ── Letterboxd: prévia antes de escrever, e o resultado depois ── */
+
+export interface LetterboxdPlanFile {
+  path:      string
+  kind:      LetterboxdKind
+  does:      string
+  rows:      number
+  discarded: number
+  /** Tipo é palpite do cabeçalho: a tela deixa corrigir antes de confirmar. */
+  ambiguous: boolean
+}
+
+export interface LetterboxdPlanIgnored {
+  path:   string
+  reason: string
+}
+
+export interface LetterboxdPlanTitle {
+  name:     string
+  year:     number | null
+  slug:     string
+  rating:   number | null
+  sessions: number
+  target:   'library' | 'backlog'
+}
+
+export interface LetterboxdPlan {
+  files:   LetterboxdPlanFile[]
+  ignored: LetterboxdPlanIgnored[]
+  titles:  LetterboxdPlanTitle[]
+  totals: {
+    titles:        number
+    library:       number
+    backlog:       number
+    sessions:      number
+    rated:         number
+    discardedRows: number
+  }
+}
+
+export interface LetterboxdPreview {
+  /** `null` quando não há nada a importar — não há plano a confirmar. */
+  planId:   string | null
+  origin:   'zip' | 'csv'
+  filename: string
+  plan:     LetterboxdPlan
+}
+
+export interface LetterboxdFileReport extends ImportReport {
+  path: string
   kind: LetterboxdKind
   rows: number
+}
+
+export interface LetterboxdApplyResult {
+  files: LetterboxdFileReport[]
+  total: ImportReport & { rows: number }
 }
 
 
