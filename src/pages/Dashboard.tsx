@@ -85,17 +85,20 @@ function favMeta(it: MediaItem): { time: string | null; rating: string | null } 
 
 /** Vagas de favorito por categoria — o mesmo limite que o servidor aplica. */
 const FAV_MAX = 5
-/** Qual colocação ocupa cada vaga: o 1º no centro, os seguintes alternando os lados. */
+/** Qual colocação ocupa cada vaga: o destaque no centro, os seguintes alternando os lados. */
 const FAV_LAYOUT = [3, 1, 0, 2, 4]
+/** `favorite = 2` é o destaque escolhido à mão — a capa coroada do centro. */
+const FAV_TOP = 2
 
 /**
- * Uma faixa horizontal com as cinco vagas de favoritos. O primeiro colocado — a
- * maior nota — ganha coroa, moldura dourada e um pôster maior: é o destaque da
- * faixa. Vaga vazia é o botão de adicionar; o × de cada pôster tira dali.
+ * Uma faixa horizontal com as cinco vagas de favoritos. O destaque — escolhido
+ * na coroa de cada capa, ou, enquanto ninguém escolheu, o de maior nota — ganha
+ * moldura dourada e um pôster maior no centro. Vaga vazia é o botão de
+ * adicionar; o × de cada pôster tira dali.
  */
-function FavRow({ label, type, items, busy, onAdd, onRemove, onSeeAll }: {
+function FavRow({ label, type, items, busy, onAdd, onRemove, onCrown, onSeeAll }: {
   label: string; type: MediaType; items: MediaItem[]; busy: boolean
-  onAdd: () => void; onRemove: (item: MediaItem) => void; onSeeAll: () => void
+  onAdd: () => void; onRemove: (item: MediaItem) => void; onCrown: (item: MediaItem) => void; onSeeAll: () => void
 }) {
   // O #1 ocupa a vaga do meio e os outros se abrem para os lados, em ordem de
   // nota: a coroa fica no centro da faixa, não na ponta.
@@ -115,13 +118,24 @@ function FavRow({ label, type, items, busy, onAdd, onRemove, onSeeAll }: {
             {FAV_LAYOUT[i] === 0 && <span className="crown" aria-hidden>👑</span>}
             <div className="shot">
               <Poster url={it.cover_url} type={it.type} />
-              <button
-                className="rm"
-                disabled={busy}
-                aria-label={`Remover ${it.title} dos favoritos`}
-                title="Remover dos favoritos"
-                onClick={e => { e.stopPropagation(); onRemove(it) }}
-              >×</button>
+              <div className="acts">
+                {FAV_LAYOUT[i] !== 0 && (
+                  <button
+                    className="mk"
+                    disabled={busy}
+                    aria-label={`Definir ${it.title} como destaque`}
+                    title="Definir como destaque"
+                    onClick={e => { e.stopPropagation(); onCrown(it) }}
+                  >👑</button>
+                )}
+                <button
+                  className="rm"
+                  disabled={busy}
+                  aria-label={`Remover ${it.title} dos favoritos`}
+                  title="Remover dos favoritos"
+                  onClick={e => { e.stopPropagation(); onRemove(it) }}
+                >×</button>
+              </div>
               {(() => {
                 const m = favMeta(it)
                 return (m.time || m.rating) && (
@@ -282,19 +296,24 @@ export function Dashboard() {
   const libraryCount = (t: MediaType) => allItems.reduce((n, i) => n + (i.type === t ? 1 : 0), 0)
 
   /**
-   * Favoritos marcados à mão (coluna `favorite`), maior nota primeiro. O tempo
-   * jogado desempata jogos com a mesma nota; o resto cai na ordem de atualização.
+   * Favoritos marcados à mão (coluna `favorite`). O destaque coroado vem sempre
+   * primeiro; enquanto ninguém escolheu um, a maior nota assume o centro. O
+   * tempo jogado desempata jogos com a mesma nota; o resto cai na atualização.
    */
   const favorites = useMemo(() => {
     const pick = (t: MediaType) => allItems
-      .filter(i => i.type === t && i.favorite === 1)
-      .sort((a, b) => b.rating - a.rating || (b.playtime_seconds ?? 0) - (a.playtime_seconds ?? 0) || byRecent(a, b))
+      .filter(i => i.type === t && (i.favorite ?? 0) > 0)
+      .sort((a, b) =>
+        (b.favorite ?? 0) - (a.favorite ?? 0) ||
+        b.rating - a.rating ||
+        (b.playtime_seconds ?? 0) - (a.playtime_seconds ?? 0) ||
+        byRecent(a, b))
       .slice(0, FAV_MAX)
     return { movie: pick('movie'), game: pick('game') }
   }, [allItems])
 
   const favMutation = useMutation({
-    mutationFn: ({ id, favorite }: { id: number; favorite: 0 | 1 }) => api.media.update(id, { favorite }),
+    mutationFn: ({ id, favorite }: { id: number; favorite: 0 | 1 | 2 }) => api.media.update(id, { favorite }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['media-library'] }),
   })
 
@@ -302,7 +321,7 @@ export function Dashboard() {
   const pickable = useMemo(() => {
     if (!picking) return []
     return allItems
-      .filter(i => i.type === picking && i.favorite !== 1)
+      .filter(i => i.type === picking && !i.favorite)
       .sort((a, b) => b.rating - a.rating || a.title.localeCompare(b.title, 'pt-BR'))
   }, [allItems, picking])
 
@@ -416,6 +435,7 @@ export function Dashboard() {
               label="Filmes Favoritos" type="movie" items={favorites.movie} busy={favMutation.isPending}
               onAdd={() => setPicking('movie')}
               onRemove={it => favMutation.mutate({ id: it.id, favorite: 0 })}
+              onCrown={it => favMutation.mutate({ id: it.id, favorite: FAV_TOP })}
               onSeeAll={() => navigate('/library/films')}
             />
           )}
@@ -424,6 +444,7 @@ export function Dashboard() {
               label="Jogos Favoritos" type="game" items={favorites.game} busy={favMutation.isPending}
               onAdd={() => setPicking('game')}
               onRemove={it => favMutation.mutate({ id: it.id, favorite: 0 })}
+              onCrown={it => favMutation.mutate({ id: it.id, favorite: FAV_TOP })}
               onSeeAll={() => navigate('/library/games')}
             />
           )}
@@ -724,12 +745,15 @@ const HOME_CSS = `
    mesma linha de base, então o #1 cresce só para cima, como na referência. */
 .home .fav-card .ttl{margin-top:10px;height:34px;font-size:13px;font-weight:600;line-height:1.3;color:var(--text-secondary);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .home .fav-card.top .ttl{color:var(--text-primary)}
-/* Botão × de cada pôster: discreto até o card receber o mouse ou o foco. */
-.home .fav-card .rm{position:absolute;top:6px;right:6px;z-index:3;width:26px;height:26px;padding:0;border-radius:50%;border:1px solid rgba(255,255,255,.24);background:rgba(10,10,20,.72);color:#fff;font-size:15px;line-height:1;display:grid;place-items:center;cursor:pointer;opacity:0;backdrop-filter:blur(4px);transition:opacity .18s,background .18s}
-.home .fav-card:hover .rm,.home .fav-card:focus-within .rm{opacity:1}
+/* Ações do pôster (coroar, remover): discretas até o card receber mouse ou foco. */
+.home .fav-card .acts{position:absolute;top:6px;right:6px;z-index:3;display:flex;gap:6px;opacity:0;transition:opacity .18s}
+.home .fav-card:hover .acts,.home .fav-card:focus-within .acts{opacity:1}
+@media(hover:none){.home .fav-card .acts{opacity:1}}
+.home .fav-card .acts button{width:26px;height:26px;padding:0;border-radius:50%;border:1px solid rgba(255,255,255,.24);background:rgba(10,10,20,.72);color:#fff;font-size:13px;line-height:1;display:grid;place-items:center;cursor:pointer;backdrop-filter:blur(4px);transition:background .18s,border-color .18s}
+.home .fav-card .acts button:disabled{cursor:default;opacity:.4}
+.home .fav-card .mk:hover{background:var(--gold);border-color:var(--gold)}
+.home .fav-card .rm{font-size:15px}
 .home .fav-card .rm:hover{background:#e0245e;border-color:#e0245e}
-.home .fav-card .rm:disabled{cursor:default;opacity:.4}
-@media(hover:none){.home .fav-card .rm{opacity:1}}
 
 /* Vaga vazia: o único jeito de entrar no banner é por aqui. */
 .home .fav-add{background:none;border:none;padding:0;font:inherit;text-align:left;color:inherit}
