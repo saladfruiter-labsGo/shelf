@@ -214,18 +214,22 @@ function ConfirmPanel({ result, onBack, onAdd, isPending }: ConfirmProps) {
   const btnBusy = (a: AddAction) => isPending && pending === a
 
   return (
-    <div className="p-4 max-h-[70vh] overflow-y-auto">
-      {/* Selected item preview — imagem grande + sinopse/diretor para confirmar a escolha */}
-      <div className="flex gap-3 mb-4 p-3 bg-card rounded-lg border border-border">
-        <div className="w-20 h-28 flex-shrink-0 rounded overflow-hidden bg-surface border border-border">
+    <div className="add-media-confirm">
+      {/* Capa em destaque — segue a composição do modal-resumo global. */}
+      <div className="add-media-confirm-cover">
+        <div className="add-media-confirm-art">
           {result.cover_url
             ? <img src={result.cover_url} alt="" className="w-full h-full object-cover" />
-            : <div className="w-full h-full flex items-center justify-center text-3xl text-muted">{emoji}</div>}
+            : <div className="w-full h-full flex items-center justify-center text-7xl text-muted">{emoji}</div>}
         </div>
-        <div className="flex-1 min-w-0">
+      </div>
+
+      <div className="add-media-confirm-content">
+        {/* As mesmas informações de confirmação, agora na coluna de conteúdo. */}
+        <div className="mb-5 pb-5 border-b border-border">
           <div className="flex items-start justify-between gap-2">
-            <p className="text-sm font-semibold text-primary leading-snug">{result.title}</p>
-            <button onClick={onBack} className="text-muted hover:text-primary text-lg leading-none flex-shrink-0">←</button>
+            <p className="font-display text-2xl md:text-3xl font-bold text-primary leading-tight">{result.title}</p>
+            <button onClick={onBack} className="add-media-confirm-back" aria-label="Voltar aos resultados">←</button>
           </div>
           <p className="text-xs text-muted mt-0.5">
             {[result.year, details?.creators ? `${CREATOR_LABEL[result.type]}: ${details.creators}` : (result.author ? `${CREATOR_LABEL.book}: ${result.author}` : null)]
@@ -235,107 +239,107 @@ function ConfirmPanel({ result, onBack, onAdd, isPending }: ConfirmProps) {
             <p className="text-xs text-secondary mt-2 leading-relaxed line-clamp-4">{details.synopsis}</p>
           )}
         </div>
-      </div>
 
-      {/* Rating */}
-      <div className="mb-4">
-        <p className="text-xs text-muted uppercase tracking-wide mb-2">Avaliação <span className="text-dim normal-case">(opcional)</span></p>
-        <StarRating value={rating} onChange={setRating} size="lg" />
-      </div>
-
-      {/* Data (conclusão / registro no diário — editável, permite dias anteriores) */}
-      <div className="mb-4">
-        <p className="text-xs text-muted uppercase tracking-wide mb-2">Data</p>
-        <input
-          type="date"
-          value={date}
-          max={todayISODate()}
-          onChange={e => setDate(e.target.value)}
-          className="bg-card border border-border rounded-md px-3 py-1.5 text-sm text-primary outline-none focus:border-accent w-full"
-        />
-      </div>
-
-      {/* Comentário (vai para o registro no diário) */}
-      <div className="mb-4">
-        <p className="text-xs text-muted uppercase tracking-wide mb-2">Comentário <span className="text-dim normal-case">(opcional)</span></p>
-        <textarea
-          value={comment}
-          onChange={e => setComment(e.target.value)}
-          rows={2}
-          placeholder="O que você achou?"
-          className="bg-card border border-border rounded-md px-3 py-1.5 text-sm text-primary placeholder:text-muted outline-none focus:border-accent w-full resize-none"
-        />
-      </div>
-
-      {/* Séries: seletor de temporadas/episódios */}
-      {isSeries && (
+        {/* Rating */}
         <div className="mb-4">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-xs text-muted uppercase tracking-wide">Episódios</p>
-            {selected.size > 0 && <span className="text-xs text-accent">{selected.size} selecionado{selected.size !== 1 ? 's' : ''}</span>}
-          </div>
-          {loadingPreview ? (
-            <div className="space-y-2">
-              {[0, 1, 2].map(i => <div key={i} className="h-11 bg-card rounded-lg animate-pulse" />)}
-            </div>
-          ) : seasons.length === 0 ? (
-            <p className="text-xs text-muted py-2">Não foi possível carregar as temporadas (verifique a chave do TMDB). Você ainda pode adicionar ao Backlog.</p>
-          ) : (
-            <>
-              <SeasonPicker seasons={seasons} selected={selected} onToggleEp={toggleEp} onToggleSeason={toggleSeason} />
-              <p className="text-[11px] text-dim mt-2">No diário, cada episódio marcado vira um registro próprio.</p>
-            </>
-          )}
+          <p className="text-xs text-muted uppercase tracking-wide mb-2">Avaliação <span className="text-dim normal-case">(opcional)</span></p>
+          <StarRating value={rating} onChange={setRating} size="lg" />
         </div>
-      )}
 
-      {/* Games: horas jogadas (opcional) */}
-      {isGame && (
+        {/* Data (conclusão / registro no diário — editável, permite dias anteriores) */}
         <div className="mb-4">
-          <p className="text-xs text-muted uppercase tracking-wide mb-2">Horas jogadas <span className="text-dim normal-case">(opcional)</span></p>
+          <p className="text-xs text-muted uppercase tracking-wide mb-2">Data</p>
           <input
-            type="number"
-            min={0}
-            step="0.5"
-            inputMode="decimal"
-            value={hours}
-            onChange={e => setHours(e.target.value)}
-            placeholder="Ex.: 12"
-            className="bg-card border border-border rounded-md px-3 py-1.5 text-sm text-primary placeholder:text-muted outline-none focus:border-accent w-full"
+            type="date"
+            value={date}
+            max={todayISODate()}
+            onChange={e => setDate(e.target.value)}
+            className="bg-card border border-border rounded-md px-3 py-1.5 text-sm text-primary outline-none focus:border-accent w-full"
           />
         </div>
-      )}
 
-      {/* Ações */}
-      <div className="flex gap-2 mb-2">
+        {/* Comentário (vai para o registro no diário) */}
+        <div className="mb-4">
+          <p className="text-xs text-muted uppercase tracking-wide mb-2">Comentário <span className="text-dim normal-case">(opcional)</span></p>
+          <textarea
+            value={comment}
+            onChange={e => setComment(e.target.value)}
+            rows={2}
+            placeholder="O que você achou?"
+            className="bg-card border border-border rounded-md px-3 py-1.5 text-sm text-primary placeholder:text-muted outline-none focus:border-accent w-full resize-none"
+          />
+        </div>
+
+        {/* Séries: seletor de temporadas/episódios */}
+        {isSeries && (
+          <div className="mb-4">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs text-muted uppercase tracking-wide">Episódios</p>
+              {selected.size > 0 && <span className="text-xs text-accent">{selected.size} selecionado{selected.size !== 1 ? 's' : ''}</span>}
+            </div>
+            {loadingPreview ? (
+              <div className="space-y-2">
+                {[0, 1, 2].map(i => <div key={i} className="h-11 bg-card rounded-lg animate-pulse" />)}
+              </div>
+            ) : seasons.length === 0 ? (
+              <p className="text-xs text-muted py-2">Não foi possível carregar as temporadas (verifique a chave do TMDB). Você ainda pode adicionar ao Backlog.</p>
+            ) : (
+              <>
+                <SeasonPicker seasons={seasons} selected={selected} onToggleEp={toggleEp} onToggleSeason={toggleSeason} />
+                <p className="text-[11px] text-dim mt-2">No diário, cada episódio marcado vira um registro próprio.</p>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Games: horas jogadas (opcional) */}
+        {isGame && (
+          <div className="mb-4">
+            <p className="text-xs text-muted uppercase tracking-wide mb-2">Horas jogadas <span className="text-dim normal-case">(opcional)</span></p>
+            <input
+              type="number"
+              min={0}
+              step="0.5"
+              inputMode="decimal"
+              value={hours}
+              onChange={e => setHours(e.target.value)}
+              placeholder="Ex.: 12"
+              className="bg-card border border-border rounded-md px-3 py-1.5 text-sm text-primary placeholder:text-muted outline-none focus:border-accent w-full"
+            />
+          </div>
+        )}
+
+        {/* Ações */}
+        <div className="flex gap-2 mb-2">
+          <button
+            onClick={() => submit('seen')}
+            disabled={isPending || needsEpisodes}
+            className="flex-1 py-2 rounded-lg text-sm font-semibold border border-border text-primary bg-card hover:border-border-strong transition-colors disabled:opacity-50"
+            title={isSeries ? 'Marca os episódios como vistos na biblioteca, sem entrar no diário' : 'Adiciona à biblioteca sem registrar no diário'}
+          >
+            {btnBusy('seen') ? '...' : '✓ Visto'}
+          </button>
+          <button
+            onClick={() => submit('watchlist')}
+            disabled={isPending}
+            className="flex-1 py-2 rounded-lg text-sm font-semibold border border-border text-primary bg-card hover:border-border-strong transition-colors disabled:opacity-50"
+            title="Envia para o Backlog (quero ver/ouvir/ler/jogar depois)"
+          >
+            {btnBusy('watchlist') ? '...' : '♡ Backlog'}
+          </button>
+        </div>
         <button
-          onClick={() => submit('seen')}
+          onClick={() => submit('diary')}
           disabled={isPending || needsEpisodes}
-          className="flex-1 py-2 rounded-lg text-sm font-semibold border border-border text-primary bg-card hover:border-border-strong transition-colors disabled:opacity-50"
-          title={isSeries ? 'Marca os episódios como vistos na biblioteca, sem entrar no diário' : 'Adiciona à biblioteca sem registrar no diário'}
+          className="w-full py-2 bg-accent text-bg rounded-lg text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-50"
+          title="Registra no diário e adiciona à biblioteca"
         >
-          {btnBusy('seen') ? '...' : '✓ Visto'}
+          {btnBusy('diary') ? 'Registrando...' : '✎ Registrar no Diário'}
         </button>
-        <button
-          onClick={() => submit('watchlist')}
-          disabled={isPending}
-          className="flex-1 py-2 rounded-lg text-sm font-semibold border border-border text-primary bg-card hover:border-border-strong transition-colors disabled:opacity-50"
-          title="Envia para o Backlog (quero ver/ouvir/ler/jogar depois)"
-        >
-          {btnBusy('watchlist') ? '...' : '♡ Backlog'}
-        </button>
+        {needsEpisodes && seasons.length > 0 && (
+          <p className="text-[11px] text-dim mt-2 text-center">Selecione ao menos um episódio para "Visto" ou "Registrar no Diário".</p>
+        )}
       </div>
-      <button
-        onClick={() => submit('diary')}
-        disabled={isPending || needsEpisodes}
-        className="w-full py-2 bg-accent text-bg rounded-lg text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-50"
-        title="Registra no diário e adiciona à biblioteca"
-      >
-        {btnBusy('diary') ? 'Registrando...' : '✎ Registrar no Diário'}
-      </button>
-      {needsEpisodes && seasons.length > 0 && (
-        <p className="text-[11px] text-dim mt-2 text-center">Selecione ao menos um episódio para "Visto" ou "Registrar no Diário".</p>
-      )}
     </div>
   )
 }
@@ -474,9 +478,9 @@ export function SearchModal({ open, onClose }: Props) {
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center pt-24 px-4">
+    <div className={`fixed inset-0 z-[200] flex justify-center px-4 ${confirming ? 'items-center py-6' : 'items-start pt-24'}`}>
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-xl bg-surface border border-border rounded-xl shadow-2xl animate-scale-in overflow-hidden">
+      <div className={`relative w-full bg-surface border border-border shadow-2xl animate-scale-in overflow-hidden ${confirming ? 'max-w-4xl rounded-2xl' : 'max-w-xl rounded-xl'}`}>
 
         {/* Confirmation panel — replaces results */}
         {confirming ? (

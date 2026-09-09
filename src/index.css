@@ -299,6 +299,39 @@ body {
 .backlog-category-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .backlog-category-button strong { min-width: 25px; padding: 2px 7px; border-radius: 999px; background: color-mix(in srgb, currentColor 12%, transparent); font-size: 11px; text-align: center; }
 
+/* ─── Confirmação de nova mídia: capa grande + formulário ─── */
+.add-media-confirm {
+  display: grid;
+  grid-template-columns: minmax(250px, 34%) 1fr;
+  min-height: min(560px, calc(100vh - 48px));
+  max-height: 720px;
+}
+.add-media-confirm-cover {
+  min-width: 0;
+  overflow: hidden;
+  background: var(--card);
+  border-right: 1px solid var(--border);
+}
+.add-media-confirm-art { width: 100%; height: 100%; }
+.add-media-confirm-content { min-width: 0; max-height: 720px; overflow-y: auto; padding: 32px; }
+.add-media-confirm-back {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 auto;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--text-muted);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  transition: color .2s, border-color .2s;
+}
+.add-media-confirm-back:hover { color: var(--text-primary); border-color: var(--text-muted); }
+.add-media-confirm-back:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
 /* Home hero poster */
 .hero-poster { transition: transform .3s var(--ease); }
 .hero-poster:hover { transform: scale(1.03); }
@@ -374,6 +407,16 @@ body {
   .media-summary-loading { display: block; min-height: 360px; }
   .media-summary-loading-cover { height: 190px; }
   .media-summary-loading-lines { padding: 28px 20px; }
+  .add-media-confirm {
+    display: block;
+    min-height: 0;
+    height: auto;
+    max-height: calc(92vh - env(safe-area-inset-bottom, 0px));
+    overflow-y: auto;
+  }
+  .add-media-confirm-cover { height: 210px; border-right: 0; border-bottom: 1px solid var(--border); }
+  .add-media-confirm-art img { object-position: center 28%; }
+  .add-media-confirm-content { overflow-y: visible; padding: 22px 18px calc(22px + env(safe-area-inset-bottom, 0px)); }
 }
 
 /* Small phone */
