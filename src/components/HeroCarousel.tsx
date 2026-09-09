@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { CATEGORIES } from '../lib/categories'
 import { fmtRating, formatDate } from '../lib/utils'
 import { StarRating } from './StarRating'
+import { useMediaPreview } from './MediaSummaryModal'
 import type { MediaItem } from '../types'
 
 interface Props {
@@ -17,6 +18,7 @@ interface Props {
  */
 export function HeroCarousel({ items }: Props) {
   const navigate = useNavigate()
+  const { openMedia } = useMediaPreview()
   const slides = items.slice(0, 8)
   const [i, setI] = useState(0)
   const pausedRef = useRef(false)
@@ -76,11 +78,11 @@ export function HeroCarousel({ items }: Props) {
                   </div>
                   <div style={{ display: 'flex', gap: 12 }}>
                     <button
-                      onClick={() => navigate(`/media/${item.id}`)}
+                      onClick={() => openMedia(item)}
                       className="btn-accent"
                       style={{ padding: '12px 28px', background: 'var(--accent)', border: 'none', borderRadius: 9999, color: '#000', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
                     >
-                      Ver detalhes →
+                      Ver resumo →
                     </button>
                     <button
                       onClick={() => navigate('/diary')}
@@ -93,7 +95,16 @@ export function HeroCarousel({ items }: Props) {
 
                 {/* sharp poster */}
                 <div
-                  onClick={() => navigate(`/media/${item.id}`)}
+                  onClick={() => openMedia(item)}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Abrir resumo de ${item.title}`}
+                  onKeyDown={event => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault()
+                      openMedia(item)
+                    }
+                  }}
                   className="hero-poster"
                   style={{ flex: '0 0 auto', width: 'clamp(200px, 22vw, 320px)', aspectRatio: '2 / 3', borderRadius: 16, overflow: 'hidden', cursor: 'pointer', boxShadow: '0 30px 70px rgba(0,0,0,.6)', border: '1px solid rgba(255,255,255,.14)', background: 'var(--card)' }}
                 >

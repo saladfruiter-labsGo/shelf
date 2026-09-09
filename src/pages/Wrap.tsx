@@ -2,6 +2,7 @@ import { useState, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../lib/api'
 import { StarRating } from '../components/StarRating'
+import { MediaPreviewTrigger } from '../components/MediaSummaryModal'
 import type { MediaType } from '../types'
 import { TYPE_LABEL, formatRuntime } from '../lib/utils'
 
@@ -327,7 +328,12 @@ export function Wrap() {
                   </div>
                   <div className="space-y-2">
                     {items.map((item, i) => (
-                      <div key={item.id} className="flex items-center gap-3 bg-surface rounded-lg p-2.5">
+                      <MediaPreviewTrigger
+                        key={item.id}
+                        media={item}
+                        label={`Abrir resumo de ${item.title}`}
+                        className="flex items-center gap-3 bg-surface rounded-lg p-2.5 cursor-pointer"
+                      >
                         <span className="text-muted text-sm w-5">{i + 1}</span>
                         {item.cover_url && (
                           <img src={item.cover_url} alt="" className="w-8 h-12 object-cover rounded" />
@@ -337,7 +343,7 @@ export function Wrap() {
                           {item.year && <p className="text-xs text-muted">{item.year}</p>}
                         </div>
                         {item.rating > 0 && <StarRating value={item.rating} readonly size="sm" />}
-                      </div>
+                      </MediaPreviewTrigger>
                     ))}
                   </div>
                 </div>

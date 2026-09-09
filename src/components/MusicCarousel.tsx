@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
-import { Link } from 'react-router-dom'
+import { useMediaPreview } from './MediaSummaryModal'
 
 export interface MusicTile {
   /** Stable key for the tile (external_ref or title|artist). */
@@ -21,14 +21,17 @@ interface Props {
 /** A single square album cover; the whole shelf links to the music library. */
 function Cover({ tile }: { tile: MusicTile }) {
   const [broken, setBroken] = useState(false)
+  const { openMedia } = useMediaPreview()
   const showImg = tile.cover_url && !broken
 
   return (
-    <Link
-      to="/library/music"
+    <button
+      type="button"
+      onClick={() => openMedia({ type: 'music', title: tile.title, subtitle: tile.artist, cover_url: tile.cover_url })}
+      aria-label={`Abrir resumo de ${tile.title}`}
       className="group"
       draggable={false}
-      style={{ flex: '0 0 auto', width: 'var(--cs)', textDecoration: 'none' }}
+      style={{ flex: '0 0 auto', width: 'var(--cs)', border: 0, padding: 0, background: 'transparent', textAlign: 'left', cursor: 'pointer' }}
     >
       <div
         className="poster-frame"
@@ -80,7 +83,7 @@ function Cover({ tile }: { tile: MusicTile }) {
           )}
         </div>
       </div>
-    </Link>
+    </button>
   )
 }
 

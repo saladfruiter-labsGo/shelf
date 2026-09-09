@@ -1,12 +1,12 @@
 import { useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../lib/api'
 import { DiaryEntryModal, type DiaryEntryValues } from '../components/DiaryEntryModal'
 import { CategoryTag } from '../components/CategoryTag'
 import { PriceBadge } from '../components/PriceBadge'
 import { Pager, usePagination } from '../components/Pager'
-import { TYPE_LABEL, formatDate } from '../lib/utils'
+import { useMediaPreview } from '../components/MediaSummaryModal'
+import { TYPE_LABEL, TYPE_COLOR, formatDate } from '../lib/utils'
 import type { MediaItem, MediaType } from '../types'
 
 /* ─── Ordenações disponíveis ─── */
@@ -23,6 +23,7 @@ const SORTS: { value: SortKey; label: string }[] = [
 const TYPE_EMOJI: Record<MediaType, string> = {
   movie: '🎬', series: '📺', game: '🎮', book: '📚', music: '🎵',
 }
+const TYPE_ORDER: MediaType[] = ['movie', 'series', 'game', 'book', 'music']
 
 /** Mês (YYYY-MM) de added_at. */
 function addedMonthKey(iso: string): string {
@@ -70,8 +71,8 @@ function FilterSelect({
 }
 
 export function Wishlist() {
-  const navigate = useNavigate()
   const qc = useQueryClient()
+  const { openMedia } = useMediaPreview()
 
   const { data: items = [], isLoading } = useQuery({
     queryKey: ['media', 'wishlist'],
@@ -90,7 +91,7 @@ export function Wishlist() {
   )
 
   /* ─── filtros ─── */
-  const [fType, setFType]         = useState('')
+  const [fType, setFType]         = useState<MediaType | ''>('')
   const [fGenre, setFGenre]       = useState('')
   const [fYear, setFYear]         = useState('')
   const [fDecade, setFDecade]     = useState('')
@@ -125,7 +126,6 @@ export function Wishlist() {
   /* ─── opções de filtro derivadas dos itens ─── */
   const opts = useMemo(() => {
     const uniq = <T,>(arr: T[]) => Array.from(new Set(arr))
-    const types    = uniq(items.map(i => i.type))
     const genres   = uniq(items.map(i => i.genre).filter((g): g is string => !!g)).sort()
     const years    = uniq(items.map(i => i.year).filter((y): y is number => !!y).map(String))
       .sort((a, b) => Number(b) - Number(a))
@@ -136,7 +136,6 @@ export function Wishlist() {
     const shops    = uniq([...priceBy.values()].map(p => p.best?.shop_name).filter((n): n is string => !!n)).sort()
     return {
       shops:     shops.map(sh => ({ value: sh, label: sh })),
-      types:     types.map(t => ({ value: t, label: `${TYPE_EMOJI[t]} ${TYPE_LABEL[t]}` })),
       genres:    genres.map(g => ({ value: g, label: g })),
       years:     years.map(y => ({ value: y, label: y })),
       decades:   decades.map(d => ({ value: d, label: `Anos ${d}` })),
@@ -144,6 +143,12 @@ export function Wishlist() {
       months:    months.map(m => ({ value: m, label: monthLabel(m) })),
     }
   }, [items, priceBy])
+
+  const typeCounts = useMemo(() => {
+    const counts = new Map<MediaType, number>()
+    for (const item of items) counts.set(item.type, (counts.get(item.type) ?? 0) + 1)
+    return counts
+  }, [items])
 
   /* ─── aplica filtros + ordenação ─── */
   const filtered = useMemo(() => {
@@ -205,58 +210,100 @@ export function Wishlist() {
 
         {/* Barra de filtros + ordenação */}
         {items.length > 0 && (
-          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', gap: 12, marginBottom: 40 }}>
-            <FilterSelect label="Tipo"      value={fType}     onChange={setFType}     options={opts.types} />
-            <FilterSelect label="Gênero"    value={fGenre}    onChange={setFGenre}    options={opts.genres} />
-            <FilterSelect label="Ano"       value={fYear}     onChange={setFYear}     options={opts.years} />
-            <FilterSelect label="Década"    value={fDecade}   onChange={setFDecade}   options={opts.decades} />
-            <FilterSelect label="Diretor"   value={fDirector} onChange={setFDirector} options={opts.directors} />
-            <FilterSelect label="Mês adic." value={fMonth}    onChange={setFMonth}    options={opts.months} />
-            <FilterSelect label="Loja"      value={fShop}     onChange={setFShop}     options={opts.shops} />
-
-            {opts.shops.length > 0 && (
-              <button
-                onClick={() => setFOnSale(v => !v)}
-                aria-pressed={fOnSale}
-                style={{
-                  background: fOnSale ? 'var(--games-bg)' : 'var(--card)',
-                  border: `1px solid ${fOnSale ? 'var(--games)' : 'var(--border-strong)'}`,
-                  color: fOnSale ? 'var(--games)' : 'var(--text-secondary)',
-                  borderRadius: 9999, padding: '7px 14px', fontSize: 13, fontWeight: 500,
-                  cursor: 'pointer', outline: 'none', fontFamily: 'inherit',
-                }}
-              >
-                🏷️ Em promoção
-              </button>
-            )}
-
-            {/* Ordenação */}
-            <label style={{ display: 'flex', flexDirection: 'column', gap: 4, marginLeft: 'auto' }}>
-              <span style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '1.5px', color: 'var(--text-muted)' }}>
-                Ordenar
+          <div style={{ marginBottom: 40 }}>
+            <div style={{ marginBottom: 20 }}>
+              <span style={{ display: 'block', fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '1.5px', color: 'var(--text-muted)', marginBottom: 8 }}>
+                Categorias
               </span>
-              <select
-                value={sort}
-                onChange={e => setSort(e.target.value as SortKey)}
-                style={{
-                  background: 'var(--card)', border: '1px solid var(--border-strong)',
-                  color: 'var(--text-secondary)', borderRadius: 9999, padding: '7px 14px',
-                  fontSize: 13, fontWeight: 500, cursor: 'pointer', outline: 'none', fontFamily: 'inherit',
-                }}
-              >
-                {SORTS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-              </select>
-            </label>
+              <div className="backlog-category-filters" role="group" aria-label="Filtrar backlog por categoria">
+                <button
+                  type="button"
+                  onClick={() => setFType('')}
+                  aria-pressed={!fType}
+                  className="backlog-category-button"
+                  style={{
+                    background: !fType ? 'var(--accent-bg)' : 'var(--card)',
+                    borderColor: !fType ? 'var(--accent)' : 'var(--border-strong)',
+                    color: !fType ? 'var(--accent)' : 'var(--text-secondary)',
+                  }}
+                >
+                  <span>Todos</span><strong>{items.length}</strong>
+                </button>
+                {TYPE_ORDER.filter(type => typeCounts.has(type)).map(type => {
+                  const active = fType === type
+                  const color = `var(--${TYPE_COLOR[type]})`
+                  return (
+                    <button
+                      key={type}
+                      type="button"
+                      onClick={() => setFType(active ? '' : type)}
+                      aria-pressed={active}
+                      className="backlog-category-button"
+                      style={{
+                        background: active ? `var(--${TYPE_COLOR[type]}-bg)` : 'var(--card)',
+                        borderColor: active ? color : 'var(--border-strong)',
+                        color: active ? color : 'var(--text-secondary)',
+                      }}
+                    >
+                      <span>{TYPE_EMOJI[type]} {TYPE_LABEL[type]}</span><strong>{typeCounts.get(type)}</strong>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
 
-            {anyFilter && (
-              <button
-                onClick={clearAll}
-                className="link-accent"
-                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 12, paddingBottom: 8 }}
-              >
-                Limpar filtros
-              </button>
-            )}
+            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', gap: 12 }}>
+              <FilterSelect label="Gênero"    value={fGenre}    onChange={setFGenre}    options={opts.genres} />
+              <FilterSelect label="Ano"       value={fYear}     onChange={setFYear}     options={opts.years} />
+              <FilterSelect label="Década"    value={fDecade}   onChange={setFDecade}   options={opts.decades} />
+              <FilterSelect label="Diretor"   value={fDirector} onChange={setFDirector} options={opts.directors} />
+              <FilterSelect label="Mês adic." value={fMonth}    onChange={setFMonth}    options={opts.months} />
+              <FilterSelect label="Loja"      value={fShop}     onChange={setFShop}     options={opts.shops} />
+
+              {opts.shops.length > 0 && (
+                <button
+                  onClick={() => setFOnSale(v => !v)}
+                  aria-pressed={fOnSale}
+                  style={{
+                    background: fOnSale ? 'var(--games-bg)' : 'var(--card)',
+                    border: `1px solid ${fOnSale ? 'var(--games)' : 'var(--border-strong)'}`,
+                    color: fOnSale ? 'var(--games)' : 'var(--text-secondary)',
+                    borderRadius: 9999, padding: '7px 14px', fontSize: 13, fontWeight: 500,
+                    cursor: 'pointer', outline: 'none', fontFamily: 'inherit',
+                  }}
+                >
+                  🏷️ Em promoção
+                </button>
+              )}
+
+              {/* Ordenação */}
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 4, marginLeft: 'auto' }}>
+                <span style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '1.5px', color: 'var(--text-muted)' }}>
+                  Ordenar
+                </span>
+                <select
+                  value={sort}
+                  onChange={e => setSort(e.target.value as SortKey)}
+                  style={{
+                    background: 'var(--card)', border: '1px solid var(--border-strong)',
+                    color: 'var(--text-secondary)', borderRadius: 9999, padding: '7px 14px',
+                    fontSize: 13, fontWeight: 500, cursor: 'pointer', outline: 'none', fontFamily: 'inherit',
+                  }}
+                >
+                  {SORTS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                </select>
+              </label>
+
+              {anyFilter && (
+                <button
+                  onClick={clearAll}
+                  className="link-accent"
+                  style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 12, paddingBottom: 8 }}
+                >
+                  Limpar filtros
+                </button>
+              )}
+            </div>
           </div>
         )}
 
@@ -273,10 +320,23 @@ export function Wishlist() {
         ) : filtered.length > 0 ? (
           <div style={{ display: 'grid', gridTemplateColumns: 'var(--grid-poster)', gap: 16 }}>
             {pageItems.map(item => (
-              <div key={item.id} className="group" style={{ display: 'flex', flexDirection: 'column' }}>
-                {/* Poster → detalhe */}
+              <div
+                key={item.id}
+                className="group media-preview-card"
+                role="button"
+                tabIndex={0}
+                aria-label={`Abrir resumo de ${item.title}`}
+                onClick={() => openMedia(item)}
+                onKeyDown={event => {
+                  if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) {
+                    event.preventDefault()
+                    openMedia(item)
+                  }
+                }}
+                style={{ display: 'flex', flexDirection: 'column', cursor: 'pointer', borderRadius: 12 }}
+              >
+                {/* Poster */}
                 <div
-                  onClick={() => navigate(`/media/${item.id}`)}
                   className="media-pop"
                   style={{
                     aspectRatio: '2/3', background: 'var(--card)', borderRadius: 12,
@@ -319,7 +379,7 @@ export function Wishlist() {
 
                 {/* Ação: adicionar ao diário */}
                 <button
-                  onClick={() => setDiaryFor(item)}
+                  onClick={event => { event.stopPropagation(); setDiaryFor(item) }}
                   className="btn-accent"
                   style={{
                     marginTop: 'auto', width: '100%', padding: '8px 12px',

@@ -1,12 +1,12 @@
 import { useMemo, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
 import type { DiaryEntry } from '../types'
 import { StoryModal } from '../components/StoryModal'
 import { DiaryEntryModal, type DiaryEntryValues } from '../components/DiaryEntryModal'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { useIsMobile } from '../hooks/useIsMobile'
+import { useMediaPreview } from '../components/MediaSummaryModal'
 import type { StorySubject } from '../lib/story'
 
 const TYPE_EMOJI: Record<string, string> = {
@@ -72,7 +72,7 @@ function subjectOf(e: DiaryEntry): StorySubject {
 }
 
 export function Diary() {
-  const navigate = useNavigate()
+  const { openMedia } = useMediaPreview()
   const qc = useQueryClient()
   const isMobile = useIsMobile()
 
@@ -271,14 +271,29 @@ export function Diary() {
                     <div key={entry.id} className="row-fade diary-item">
                       <div
                         className="diary-item-cover"
-                        onClick={() => navigate(`/media/${entry.media_item_id}`)}
+                        onClick={() => openMedia(entry.media_item_id)}
+                        role="button"
+                        tabIndex={0}
+                        aria-label={`Abrir resumo de ${entry.title}`}
+                        onKeyDown={event => {
+                          if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openMedia(entry.media_item_id) }
+                        }}
                       >
                         {entry.cover_url
                           ? <img src={entry.cover_url} alt="" loading="lazy" />
                           : <span>{TYPE_EMOJI[entry.type] ?? '📌'}</span>}
                       </div>
 
-                      <div className="diary-item-main" onClick={() => navigate(`/media/${entry.media_item_id}`)}>
+                      <div
+                        className="diary-item-main"
+                        onClick={() => openMedia(entry.media_item_id)}
+                        role="button"
+                        tabIndex={0}
+                        aria-label={`Abrir resumo de ${entry.title}`}
+                        onKeyDown={event => {
+                          if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openMedia(entry.media_item_id) }
+                        }}
+                      >
                         <p className="diary-item-title">
                           {entry.title}
                           {entry.season_number != null && entry.episode_number != null && (

@@ -17,6 +17,7 @@ import { Integrations } from './pages/Integrations'
 import { ImportExport } from './pages/ImportExport'
 import { Lists }        from './pages/Lists'
 import { ListDetail }   from './pages/ListDetail'
+import { MediaPreviewProvider } from './components/MediaSummaryModal'
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 60_000, retry: 1 } },
@@ -26,26 +27,28 @@ export function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        <Routes>
-          <Route element={<Layout />}>
-            <Route index              element={<Dashboard />} />
-            <Route path="library"    element={<Library />} />
-            <Route path="library/games"  element={<LibraryGames />} />
-            <Route path="library/books"  element={<LibraryBooks />} />
-            <Route path="library/films"  element={<LibraryFilms />} />
-            <Route path="library/series" element={<LibrarySeries />} />
-            <Route path="library/music"  element={<LibraryMusic />} />
-            <Route path="diary"      element={<Diary />} />
-            <Route path="wishlist"   element={<Wishlist />} />
-            <Route path="media/:id"  element={<MediaDetail />} />
-            <Route path="wrap"       element={<Wrap />} />
-            <Route path="settings"   element={<Settings />} />
-            <Route path="integrations"  element={<Integrations />} />
-            <Route path="import-export" element={<ImportExport />} />
-            <Route path="lists"      element={<Lists />} />
-            <Route path="lists/:id"  element={<ListDetail />} />
-          </Route>
-        </Routes>
+        <MediaPreviewProvider>
+          <Routes>
+            <Route element={<Layout />}>
+              <Route index              element={<Dashboard />} />
+              <Route path="library"    element={<Library />} />
+              <Route path="library/games"  element={<LibraryGames />} />
+              <Route path="library/books"  element={<LibraryBooks />} />
+              <Route path="library/films"  element={<LibraryFilms />} />
+              <Route path="library/series" element={<LibrarySeries />} />
+              <Route path="library/music"  element={<LibraryMusic />} />
+              <Route path="diary"      element={<Diary />} />
+              <Route path="wishlist"   element={<Wishlist />} />
+              <Route path="media/:id"  element={<MediaDetail />} />
+              <Route path="wrap"       element={<Wrap />} />
+              <Route path="settings"   element={<Settings />} />
+              <Route path="integrations"  element={<Integrations />} />
+              <Route path="import-export" element={<ImportExport />} />
+              <Route path="lists"      element={<Lists />} />
+              <Route path="lists/:id"  element={<ListDetail />} />
+            </Route>
+          </Routes>
+        </MediaPreviewProvider>
       </BrowserRouter>
     </QueryClientProvider>
   )

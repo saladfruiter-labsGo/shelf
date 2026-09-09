@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../lib/api'
 import type { NowPlayingItem } from '../types'
+import { useMediaPreview } from './MediaSummaryModal'
 
 const COLOR: Record<string, string> = {
   movie:  'var(--movies)',
@@ -22,6 +23,7 @@ function fmt(ms: number): string {
 
 /** Uma linha da barra — extrapola a posição entre polls quando há duração/posição (Plex). */
 function NowPlayingRow({ item, source }: { item: NowPlayingItem; source: 'plex' | 'music' }) {
+  const { openMedia } = useMediaPreview()
   const color = COLOR[item.media_type] ?? 'var(--accent)'
   const hasProgress = item.duration_ms != null && item.position_ms != null
 
@@ -53,12 +55,37 @@ function NowPlayingRow({ item, source }: { item: NowPlayingItem; source: 'plex' 
 
   return (
     <div
+      role="button"
+      tabIndex={0}
+      aria-label={`Abrir resumo de ${item.title}`}
+      className="media-preview-card"
+      onClick={() => openMedia({
+        type: item.media_type,
+        title: item.title,
+        subtitle: item.subtitle,
+        cover_url: item.cover_url,
+        duration_ms: item.duration_ms,
+        statusLabel: label,
+      })}
+      onKeyDown={event => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault()
+          openMedia({
+            type: item.media_type,
+            title: item.title,
+            subtitle: item.subtitle,
+            cover_url: item.cover_url,
+            duration_ms: item.duration_ms,
+            statusLabel: label,
+          })
+        }
+      }}
       style={{
         position: 'relative',
         height: ROW_H, display: 'flex', alignItems: 'center', gap: 12,
         padding: '0 var(--page-x)',
         borderBottom: '1px solid var(--border)',
-        overflow: 'hidden',
+        overflow: 'hidden', cursor: 'pointer',
       }}
     >
       {/* Indicador de estado */}

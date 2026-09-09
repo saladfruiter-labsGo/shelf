@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
-import { Link } from 'react-router-dom'
 import type { MediaItem } from '../types'
 import { fmtRating } from '../lib/utils'
 import { StarRating } from './StarRating'
+import { useMediaPreview } from './MediaSummaryModal'
 
 interface Props {
   items: MediaItem[]
@@ -16,14 +16,17 @@ interface Props {
 /** A single uniform poster: cover always fills the frame (object-cover). */
 function Poster({ item }: { item: MediaItem }) {
   const [broken, setBroken] = useState(false)
+  const { openMedia } = useMediaPreview()
   const showImg = item.cover_url && !broken
 
   return (
-    <Link
-      to={`/media/${item.id}`}
+    <button
+      type="button"
+      onClick={() => openMedia(item)}
+      aria-label={`Abrir resumo de ${item.title}`}
       className="group"
       draggable={false}
-      style={{ flex: '0 0 auto', width: 'calc(var(--ph) * 2 / 3)', textDecoration: 'none' }}
+      style={{ flex: '0 0 auto', width: 'calc(var(--ph) * 2 / 3)', border: 0, padding: 0, background: 'transparent', textAlign: 'left', cursor: 'pointer' }}
     >
       <div
         className="poster-frame"
@@ -80,7 +83,7 @@ function Poster({ item }: { item: MediaItem }) {
           </div>
         </div>
       </div>
-    </Link>
+    </button>
   )
 }
 

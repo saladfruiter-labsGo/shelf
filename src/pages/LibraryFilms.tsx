@@ -4,10 +4,12 @@ import { useQuery } from '@tanstack/react-query'
 import { api } from '../lib/api'
 import { LibrarySearch } from '../components/LibrarySearch'
 import { Pager, usePagination } from '../components/Pager'
+import { useMediaPreview } from '../components/MediaSummaryModal'
 import { norm } from '../lib/utils'
 
 export function LibraryFilms() {
   const navigate = useNavigate()
+  const { openMedia } = useMediaPreview()
   const [search, setSearch] = useState('')
 
   const { data: rawItems = [], isLoading } = useQuery({
@@ -71,8 +73,14 @@ export function LibraryFilms() {
           : pageItems.map(item => (
               <div
                 key={item.id}
-                onClick={() => navigate(`/media/${item.id}`)}
-                className="media-pop group"
+                onClick={() => openMedia(item)}
+                onKeyDown={event => {
+                  if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openMedia(item) }
+                }}
+                role="button"
+                tabIndex={0}
+                aria-label={`Abrir resumo de ${item.title}`}
+                className="media-pop media-preview-card group"
                 style={{ cursor: 'pointer' }}
               >
                 {/* Poster */}
