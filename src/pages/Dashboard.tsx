@@ -115,7 +115,9 @@ export function Dashboard() {
   const { data: wrap } = useQuery({ queryKey: ['wrap-month', now.getFullYear(), now.getMonth() + 1], queryFn: () => api.wrap({ period: 'monthly', year: now.getFullYear(), month: now.getMonth() + 1 }) })
 
   /* ─── derivações ─── */
-  const completedCount = (t: MediaType) => allItems.reduce((n, i) => n + (i.type === t && i.status === 'completed' ? 1 : 0), 0)
+  // Contador da biblioteca por categoria: tudo que já foi consumido — concluído,
+  // em andamento ou abandonado. Só a wishlist fica de fora (ela mora em /wishlist).
+  const libraryCount = (t: MediaType) => allItems.reduce((n, i) => n + (i.type === t && i.status !== 'wishlist' ? 1 : 0), 0)
 
   const continueItems = useMemo(
     () => allItems.filter(i => i.status === 'in_progress').sort(byRecent).slice(0, 4),
@@ -193,7 +195,7 @@ export function Dashboard() {
               <span className="dot" style={{ background: `var(${cat.colorVar})` }} />
               <span className="e">{cat.emoji}</span>
               <span className="lb">{cat.label}</span>
-              <span className="ct">{cat.key === 'music' ? (musicStats?.plays ?? 0).toLocaleString('pt-BR') : completedCount(cat.key)}</span>
+              <span className="ct">{cat.key === 'music' ? (musicStats?.plays ?? 0).toLocaleString('pt-BR') : libraryCount(cat.key)}</span>
             </Link>
           ))}
         </div>

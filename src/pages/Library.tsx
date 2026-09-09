@@ -1,7 +1,9 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../lib/api'
 import { MediaCard } from '../components/MediaCard'
+import { norm } from '../lib/utils'
 import type { MediaType } from '../types'
 
 const CATS = [
@@ -14,6 +16,7 @@ const CATS = [
 
 export function Library() {
   const navigate = useNavigate()
+  const [search, setSearch] = useState('')
 
   const { data: rawItems = [], isLoading } = useQuery({
     queryKey: ['media-all'],
@@ -35,6 +38,10 @@ export function Library() {
 
   const countByType = (key: MediaType) =>
     key === 'music' ? musicPlays : allItems.filter(i => i.type === key).length
+
+  // Busca por nome sobre "Todos os itens" (instantânea).
+  const q = norm(search)
+  const visible = q ? allItems.filter(i => norm(i.title).includes(q)) : allItems
 
   return (
     <div style={{ background: 'var(--bg)', minHeight: '100vh' }}>
@@ -83,8 +90,28 @@ export function Library() {
               Todos os itens
             </p>
             <span style={{ fontFamily: 'Space Grotesk, monospace', fontSize: 12, color: 'var(--dim)' }}>
-              {allItems.length}
+              {q ? `${visible.length}/${allItems.length}` : allItems.length}
             </span>
+          </div>
+
+          {/* Busca por nome (filtra instantaneamente) */}
+          <div style={{ position: 'relative', maxWidth: 420, marginBottom: 24 }}>
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Buscar por nome…"
+              aria-label="Buscar item por nome"
+              style={{
+                width: '100%', boxSizing: 'border-box', padding: '10px 34px 10px 14px', borderRadius: 10,
+                border: '1px solid var(--border)', background: 'var(--card)', color: 'var(--text-primary)', fontSize: 14, outline: 'none',
+              }}
+            />
+            {search && (
+              <button onClick={() => setSearch('')} title="Limpar" aria-label="Limpar busca"
+                style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 18, lineHeight: 1 }}>
+                ×
+              </button>
+            )}
           </div>
 
           {isLoading ? (
@@ -96,16 +123,18 @@ export function Library() {
                 </div>
               ))}
             </div>
-          ) : allItems.length > 0 ? (
+          ) : visible.length > 0 ? (
             <div style={{ display: 'grid', gridTemplateColumns: 'var(--grid-lib)', gap: '16px 16px' }}>
-              {allItems.map(item => (
+              {visible.map(item => (
                 <MediaCard key={item.id} item={item} compact />
               ))}
             </div>
           ) : (
             <div style={{ textAlign: 'center', padding: '80px 0' }}>
               <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '3rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--border)', marginBottom: 12 }}>Vazio</p>
-              <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>Pressione ⌘K para adicionar algo</p>
+              <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>
+                {allItems.length === 0 ? 'Pressione ⌘K para adicionar algo' : 'Nenhum item encontrado'}
+              </p>
             </div>
           )}
         </div>

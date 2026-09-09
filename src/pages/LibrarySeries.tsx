@@ -3,6 +3,9 @@ import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../lib/api'
 import { SeriesModal } from '../components/SeriesModal'
+import { LibraryStats } from '../components/LibraryStats'
+import { LibrarySearch } from '../components/LibrarySearch'
+import { norm } from '../lib/utils'
 
 const STATUS_LABEL: Record<string, string> = {
   completed:   'Finalizada',
@@ -11,9 +14,18 @@ const STATUS_LABEL: Record<string, string> = {
   dropped:     'Abandonada',
 }
 
+// Estados com contador próprio no cabeçalho (como na biblioteca de jogos).
+type ShelfFilter = 'in_progress' | 'completed'
+const HEADER_STATES: { key: ShelfFilter; label: string; color: string }[] = [
+  { key: 'in_progress', label: 'Em andamento', color: 'var(--series)' },
+  { key: 'completed',   label: 'Finalizadas',  color: 'var(--accent)' },
+]
+
 export function LibrarySeries() {
   const navigate = useNavigate()
   const [openId, setOpenId] = useState<number | null>(null)
+  const [statusFilter, setStatusFilter] = useState<ShelfFilter | null>(null)
+  const [search, setSearch] = useState('')
 
   const { data: rawItems = [], isLoading } = useQuery({
     queryKey: ['media', 'series'],
@@ -23,12 +35,20 @@ export function LibrarySeries() {
   // Itens em wishlist ficam só na Wishlist, fora da biblioteca.
   const items = rawItems.filter(i => i.status !== 'wishlist')
 
-  const done     = items.filter(i => i.status === 'completed').length
+  const countByStatus = (st: ShelfFilter) => items.filter(i => i.status === st).length
+
+  // Grid filtrado pelo contador clicado + busca por nome (instantânea).
+  const q = norm(search)
+  const visible = items.filter(i => {
+    if (statusFilter && i.status !== statusFilter) return false
+    if (q && !norm(i.title).includes(q)) return false
+    return true
+  })
 
   return (
     <div style={{ background: 'var(--bg)', color: 'var(--text-primary)', minHeight: '100vh' }}>
       {/* Header */}
-      <div style={{ padding: '64px var(--page-x) 48px', maxWidth: 1280, margin: '0 auto', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between' }}>
+      <div className="lib-header" style={{ padding: '64px var(--page-x) 48px', maxWidth: 1280, margin: '0 auto' }}>
         <div>
           <button
             onClick={() => navigate('/library')}
@@ -44,10 +64,25 @@ export function LibrarySeries() {
             Minhas séries
           </h1>
         </div>
-        <p style={{ fontFamily: 'Space Grotesk, monospace', fontSize: 13, color: 'var(--text-muted)', paddingBottom: 8 }}>
-          {items.length} séries · {done} finalizadas
-        </p>
+        <LibraryStats
+          stats={[
+            { key: null, n: items.length, label: 'Total', color: 'var(--text-primary)' },
+            ...HEADER_STATES.map(st => ({ key: st.key, n: countByStatus(st.key), label: st.label, color: st.color })),
+          ]}
+          active={statusFilter}
+          onChange={setStatusFilter}
+        />
       </div>
+
+      {/* Busca por nome (filtra instantaneamente) */}
+      <LibrarySearch
+        value={search}
+        onChange={setSearch}
+        ariaLabel="Buscar série por nome"
+        count={visible.length}
+        showCount={Boolean(statusFilter || q)}
+        countSuffix={statusFilter ? ` · ${HEADER_STATES.find(h => h.key === statusFilter)!.label}` : undefined}
+      />
 
       {/* Grid — 3 columns banner cards */}
       <div style={{ maxWidth: 1280, margin: '0 auto', padding: '0 var(--page-x) 80px', display: 'grid', gridTemplateColumns: 'var(--grid-games)', gap: 16 }}>
@@ -55,7 +90,7 @@ export function LibrarySeries() {
           ? Array.from({ length: 8 }).map((_, i) => (
               <div key={i} style={{ background: 'var(--card)', borderRadius: 16, overflow: 'hidden', aspectRatio: '2/3.6' }} />
             ))
-          : items.map(item => (
+          : visible.map(item => (
               <div
                 key={item.id}
                 onClick={() => setOpenId(item.id)}
@@ -113,10 +148,10 @@ export function LibrarySeries() {
         }
       </div>
 
-      {items.length === 0 && !isLoading && (
+      {visible.length === 0 && !isLoading && (
         <div style={{ textAlign: 'center', padding: '80px 0' }}>
           <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '3rem', fontWeight: 800, color: 'var(--border-strong)', marginBottom: 12 }}>Vazio</p>
-          <p style={{ color: 'var(--text-muted)' }}>Nenhuma série na biblioteca ainda</p>
+          <p style={{ color: 'var(--text-muted)' }}>{items.length === 0 ? 'Nenhuma série na biblioteca ainda' : 'Nenhuma série encontrada'}</p>
         </div>
       )}
 

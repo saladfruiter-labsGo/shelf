@@ -101,3 +101,8 @@ export function daysUntil(dateStr: string): number {
   const ms = new Date(dateStr).getTime() - Date.now()
   return Math.ceil(ms / 86_400_000)
 }
+
+/** Normaliza para busca por nome: sem acento, sem caixa, sem espaço nas pontas. */
+export function norm(s: string): string {
+  return s.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase().trim()
+}
