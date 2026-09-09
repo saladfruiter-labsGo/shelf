@@ -33,6 +33,9 @@ export interface MediaItem {
   publisher?:        string | null     // games (Playnite): distribuidora(s)
   library?:          string | null     // games (Playnite): biblioteca/origem (Steam, GOG...)
   tmdb_id?:          string | null     // filmes/séries: identificação explícita no TMDB
+  list_added_at?:    string            // só em /lists/:id — quando o item entrou na lista
+  list_position?:    number            // só em /lists/:id — ordem manual (ranking)
+  tier_id?:          number | null     // só em /lists/:id — tier em que a capa está
 }
 
 /* ─── Diário: registros de "visto/concluído" (N por mídia) ─── */
@@ -133,17 +136,36 @@ export interface TmdbMediaPreview {
   release_date: string | null
 }
 
+/** Como a lista é exibida: grade simples, ranking numerado ou tierlist. */
+export type ListMode = 'list' | 'ranking' | 'tier'
+
+export interface ListTier {
+  id:       number
+  name:     string
+  /** Chave de token de cor (movies, books, gold, games, series, music, accent). */
+  color:    string
+  position: number
+}
+
 export interface List {
   id:          number
   name:        string
   description: string | null
+  mode:        ListMode
+  /** 1 = esmaecer o que já foi consumido. */
+  dim_seen:    number
   created_at:  string
   updated_at:  string
   item_count?: number
+  /** Até 6 capas na ordem da lista — alimentam a colagem do card. */
+  covers?:      string[]
+  /** Quantos itens de cada tipo a lista tem. */
+  type_counts?: Partial<Record<MediaType, number>>
 }
 
 export interface ListDetail extends List {
   items: MediaItem[]
+  tiers: ListTier[]
 }
 
 export interface ListCheck {

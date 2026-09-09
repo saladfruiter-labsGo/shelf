@@ -93,15 +93,17 @@ export function buildExport(scope: ExportScope): ShelfExport {
   // Listas só entram com os itens dentro do escopo exportado (uma lista mista
   // exportada como "backlog" traz apenas a parte que está no backlog).
   const exported = new Set(items.map(i => `${i.type}::${i.external_id}`))
-  const listRows = db.prepare('SELECT id, name, description, created_at FROM lists ORDER BY name').all() as any[]
+  const listRows = db.prepare('SELECT id, name, description, mode, created_at FROM lists ORDER BY name').all() as any[]
   const lists = listRows.map(l => ({
     name: l.name,
     description: l.description,
+    mode: l.mode,
     created_at: l.created_at,
+    // A ordem exportada é a ordem manual da lista (importa para rankings).
     items: (db.prepare(
       `SELECT m.external_id, m.type FROM list_items li
          JOIN media_items m ON m.id = li.media_item_id
-        WHERE li.list_id = ? ORDER BY li.added_at`,
+        WHERE li.list_id = ? ORDER BY li.position, li.id`,
     ).all(l.id) as { external_id: string; type: string }[])
       .filter(i => exported.has(`${i.type}::${i.external_id}`)),
   })).filter(l => l.items.length > 0)
