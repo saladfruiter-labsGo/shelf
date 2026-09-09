@@ -21,7 +21,8 @@ function AddItemPicker({ listId, listItemIds, onClose }: {
 
   const { data: allItems = [] } = useQuery({
     queryKey: ['media-all-picker'],
-    queryFn: () => api.media.list({ limit: 500 }),
+    // Inclui backlog: dá para pôr numa lista o que ainda não foi consumido.
+    queryFn: () => api.media.listAll(),
   })
 
   const toggleMutation = useMutation({

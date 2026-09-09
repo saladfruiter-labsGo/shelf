@@ -425,7 +425,7 @@ function SteamImportCard({ onDone }: { onDone: () => void }) {
   const [report, setReport] = useState<SteamSyncResult | null>(null)
   const [error, setError] = useState('')
 
-  const ready = !!status?.steam.steam_id
+  const ready = !!status?.steam?.steam_id
 
   const run = useMutation({
     mutationFn: api.transfer.importSteam,

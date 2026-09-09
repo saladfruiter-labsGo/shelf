@@ -150,7 +150,9 @@ function ProfileOverlay({ open, onClose }: { open: boolean; onClose: () => void 
 
   const { data: allItems = [] } = useQuery({
     queryKey: ['media-library'],
-    queryFn: () => api.media.list({ limit: 1000, library: true }),
+    // A coleção inteira: os contadores por ano precisam de tudo, e um limite
+    // chutado faria o Perfil mentir depois de um import grande.
+    queryFn: () => api.media.listAll({ library: true }),
     enabled: open,
   })
 

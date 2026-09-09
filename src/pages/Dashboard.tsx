@@ -106,7 +106,7 @@ export function Dashboard() {
   const navigate = useNavigate()
   const now = new Date()
 
-  const { data: allItems = [] } = useQuery({ queryKey: ['media-library'], queryFn: () => api.media.list({ limit: 1000, library: true }) })
+  const { data: allItems = [] } = useQuery({ queryKey: ['media-library'], queryFn: () => api.media.listAll({ library: true }) })
   const { data: diary = [] } = useQuery({ queryKey: ['diary-all'], queryFn: () => api.diary.list() })
   const { data: upcoming } = useQuery({ queryKey: ['media-upcoming'], queryFn: () => api.media.upcoming() })
   const { data: musicStats } = useQuery({ queryKey: ['music-stats'], queryFn: api.integrations.musicStats })

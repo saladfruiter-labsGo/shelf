@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../lib/api'
 import { MediaCard } from '../components/MediaCard'
+import { Pager, usePagination } from '../components/Pager'
 import { norm } from '../lib/utils'
 import type { MediaType } from '../types'
 
@@ -20,7 +21,7 @@ export function Library() {
 
   const { data: rawItems = [], isLoading } = useQuery({
     queryKey: ['media-library-page'],
-    queryFn: () => api.media.list({ limit: 500, library: true }),
+    queryFn: () => api.media.listAll({ library: true }),
   })
 
   // Música não é um item por faixa na coleção: a biblioteca de músicas é o
@@ -42,6 +43,8 @@ export function Library() {
   // Busca por nome sobre "Todos os itens" (instantânea).
   const q = norm(search)
   const visible = q ? allItems.filter(i => norm(i.title).includes(q)) : allItems
+
+  const { page, totalPages, pageItems, goTo, anchor } = usePagination(visible, [allItems.length, search])
 
   return (
     <div style={{ background: 'var(--bg)', minHeight: '100vh' }}>
@@ -124,11 +127,15 @@ export function Library() {
               ))}
             </div>
           ) : visible.length > 0 ? (
-            <div style={{ display: 'grid', gridTemplateColumns: 'var(--grid-lib)', gap: '16px 16px' }}>
-              {visible.map(item => (
-                <MediaCard key={item.id} item={item} compact />
-              ))}
-            </div>
+            <>
+              <div ref={anchor} style={{ scrollMarginTop: 24 }} />
+              <div style={{ display: 'grid', gridTemplateColumns: 'var(--grid-lib)', gap: '16px 16px' }}>
+                {pageItems.map(item => (
+                  <MediaCard key={item.id} item={item} compact />
+                ))}
+              </div>
+              <Pager page={page} total={totalPages} count={visible.length} onGo={goTo} label="Paginação da coleção" />
+            </>
           ) : (
             <div style={{ textAlign: 'center', padding: '80px 0' }}>
               <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '3rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--border)', marginBottom: 12 }}>Vazio</p>
