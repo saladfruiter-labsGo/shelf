@@ -1,7 +1,7 @@
 import type {
   Details, List, ListCheck, ListDetail,
   MediaItem, MediaStatus, MediaType,
-  SearchResult, WrapData, SeriesView, SeriesPreview, DiaryEntry,
+  SearchResult, WrapData, SeriesView, SeriesPreview, DiaryEntry, TmdbMediaPreview,
   IntegrationStatus, NowPlaying, ActivityEvent, ActivityMediaType, MusicStats, TrendingItem,
   GamePriceBacklog, GamePriceDetails, GamePriceRange, GamePriceCandidate,
   SteamSyncResult, ExportScope, ExportSummary, ImportReport,
@@ -73,6 +73,10 @@ export const api = {
       request('/media', { method: 'POST', body: JSON.stringify(data) }),
     update: (id: number, data: Partial<Pick<MediaItem, 'rating' | 'status' | 'runtime' | 'synopsis' | 'creators' | 'author' | 'release_date' | 'hype' | 'completed_at' | 'game_status' | 'last_played_at' | 'playtime_seconds'>>): Promise<MediaItem> =>
       request(`/media/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    previewTmdb: (id: number, tmdbId: string): Promise<TmdbMediaPreview> =>
+      request(`/media/${id}/tmdb-preview?tmdb_id=${encodeURIComponent(tmdbId)}`),
+    identifyTmdb: (id: number, tmdbId: string): Promise<MediaItem> =>
+      request(`/media/${id}/tmdb-identification`, { method: 'PATCH', body: JSON.stringify({ tmdb_id: tmdbId }) }),
     remove: (id: number): Promise<{ ok: boolean }> =>
       request(`/media/${id}`, { method: 'DELETE' }),
   },

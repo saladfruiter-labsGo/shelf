@@ -31,6 +31,7 @@ export interface MediaItem {
   last_played_at?:   string | null     // games (Playnite): última vez jogado (ISO)
   publisher?:        string | null     // games (Playnite): distribuidora(s)
   library?:          string | null     // games (Playnite): biblioteca/origem (Steam, GOG...)
+  tmdb_id?:          string | null     // filmes/séries: identificação explícita no TMDB
 }
 
 /* ─── Diário: registros de "visto/concluído" (N por mídia) ─── */
@@ -115,6 +116,20 @@ export interface Details {
   synopsis: string | null
   creators: string | null
   author:   string | null
+}
+
+export interface TmdbMediaPreview {
+  tmdb_id:      string
+  type:         'movie' | 'series'
+  title:        string
+  cover_url:    string | null
+  year:         number | null
+  genre:        string | null
+  runtime:      number | null
+  synopsis:     string | null
+  creators:     string | null
+  author:       null
+  release_date: string | null
 }
 
 export interface List {

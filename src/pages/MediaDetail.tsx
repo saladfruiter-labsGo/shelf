@@ -8,7 +8,7 @@ import { SeriesSeasons } from '../components/SeriesSeasons'
 import { DiaryEntryModal, type DiaryEntryValues } from '../components/DiaryEntryModal'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { PricePanel } from '../components/PricePanel'
-import type { MediaStatus } from '../types'
+import type { MediaStatus, TmdbMediaPreview } from '../types'
 import { STATUS_LABEL, GAME_STATUSES, GAME_STATUS_LABEL, gameStatusOf, formatRuntime, formatPlaytime, formatDate, fmtRating } from '../lib/utils'
 
 const STATUSES: MediaStatus[] = ['wishlist', 'in_progress', 'completed', 'dropped']
@@ -75,6 +75,118 @@ function AddToListDropdown({ itemId }: { itemId: number }) {
   )
 }
 
+function TmdbIdentificationDialog({
+  open, currentTitle, tmdbId, preview, previewError, previewBusy, applyBusy,
+  onTmdbIdChange, onPreview, onApply, onCancel,
+}: {
+  open: boolean
+  currentTitle: string
+  tmdbId: string
+  preview: TmdbMediaPreview | null
+  previewError: string | null
+  previewBusy: boolean
+  applyBusy: boolean
+  onTmdbIdChange: (value: string) => void
+  onPreview: () => void
+  onApply: () => void
+  onCancel: () => void
+}) {
+  useEffect(() => {
+    if (!open) return
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') onCancel() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [open, onCancel])
+
+  if (!open) return null
+
+  const validId = /^[1-9]\d*$/.test(tmdbId.trim())
+
+  return (
+    <div className="fixed inset-0 z-[300] flex items-center justify-center px-4">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onCancel} />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="tmdb-identification-title"
+        className="relative w-full max-w-md bg-surface border border-border rounded-2xl shadow-2xl animate-scale-in p-6"
+      >
+        <p className="text-xs text-muted uppercase tracking-wide mb-1">Identificação manual</p>
+        <h2 id="tmdb-identification-title" className="text-lg font-bold text-primary mb-2">Corrigir no TMDB</h2>
+        <p className="text-sm text-secondary leading-relaxed mb-5">
+          Informe o código da mídia no TMDB para substituir os dados atuais de “{currentTitle}”.
+        </p>
+
+        <label className="block text-xs text-muted uppercase tracking-wide mb-2" htmlFor="tmdb-id-input">
+          ID do TMDB
+        </label>
+        <div className="flex gap-2 mb-3">
+          <input
+            id="tmdb-id-input"
+            inputMode="numeric"
+            value={tmdbId}
+            onChange={event => onTmdbIdChange(event.target.value)}
+            onKeyDown={event => { if (event.key === 'Enter' && validId) onPreview() }}
+            placeholder="Ex.: 550"
+            autoFocus
+            className="flex-1 min-w-0 bg-card border border-border rounded-lg px-3 py-2 text-sm text-primary placeholder:text-muted outline-none focus:border-accent"
+          />
+          <button
+            onClick={onPreview}
+            disabled={!validId || previewBusy || applyBusy}
+            className="px-4 py-2 rounded-lg text-sm font-semibold bg-accent text-bg hover:opacity-90 transition-opacity disabled:opacity-50"
+          >
+            {previewBusy ? 'Buscando…' : 'Prévia'}
+          </button>
+        </div>
+
+        {previewError && <p className="text-sm text-red-400 mb-4">{previewError}</p>}
+
+        {preview && (
+          <div className="flex gap-3 p-3 mb-5 rounded-xl bg-card border border-border">
+            <div className="w-16 h-24 flex-shrink-0 rounded-md overflow-hidden bg-surface">
+              {preview.cover_url
+                ? <img src={preview.cover_url} alt="" className="w-full h-full object-cover" />
+                : <div className="w-full h-full flex items-center justify-center text-2xl">{preview.type === 'movie' ? '🎬' : '📺'}</div>}
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs text-muted uppercase tracking-wide mb-1">
+                {preview.type === 'movie' ? 'Filme' : 'Série'} · TMDB #{preview.tmdb_id}
+              </p>
+              <h3 className="font-semibold text-primary leading-tight">{preview.title}</h3>
+              <p className="text-xs text-muted mt-1">
+                {[preview.year, preview.genre].filter(Boolean).join(' · ') || 'Sem metadados adicionais'}
+              </p>
+              {preview.synopsis && <p className="text-xs text-secondary leading-relaxed mt-2 line-clamp-3">{preview.synopsis}</p>}
+            </div>
+          </div>
+        )}
+
+        <p className="text-xs text-muted leading-relaxed mb-6">
+          A confirmação substitui título, capa e metadados desta mídia. Sua avaliação, status e histórico permanecem.
+        </p>
+
+        <div className="flex justify-end gap-2">
+          <button
+            onClick={onCancel}
+            disabled={applyBusy}
+            className="px-4 py-2 rounded-lg text-sm font-medium text-muted hover:text-primary border border-border hover:border-border-strong transition-colors disabled:opacity-60"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={onApply}
+            disabled={!preview || previewBusy || applyBusy}
+            className="px-4 py-2 rounded-lg text-sm font-semibold bg-accent text-bg hover:opacity-90 transition-opacity disabled:opacity-50"
+          >
+            {applyBusy ? 'Salvando…' : 'Aplicar identificação'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Main component ─────────────────────────────────────────────────
 export function MediaDetail() {
   const { id } = useParams<{ id: string }>()
@@ -91,6 +203,11 @@ export function MediaDetail() {
   const [editRelease, setEditRelease] = useState(false)
   const [completionOpen, setCompletionOpen] = useState(false)
   const [confirmRemove, setConfirmRemove] = useState(false)
+  const [identificationOpen, setIdentificationOpen] = useState(false)
+  const [tmdbIdInput, setTmdbIdInput] = useState('')
+  const [tmdbPreview, setTmdbPreview] = useState<TmdbMediaPreview | null>(null)
+  const [tmdbPreviewId, setTmdbPreviewId] = useState('')
+  const [tmdbPreviewError, setTmdbPreviewError] = useState<string | null>(null)
 
   const { data: history = [] } = useQuery({
     queryKey: ['diary', 'media', id],
@@ -121,6 +238,28 @@ export function MediaDetail() {
       qc.invalidateQueries({ queryKey: ['recent'] })
       qc.invalidateQueries({ queryKey: ['upcoming'] })
     },
+  })
+
+  const previewTmdbMutation = useMutation({
+    mutationFn: (tmdbId: string) => api.media.previewTmdb(parseInt(id!), tmdbId),
+    onSuccess: (preview, requestedId) => { setTmdbPreview(preview); setTmdbPreviewId(requestedId); setTmdbPreviewError(null) },
+    onError: error => { setTmdbPreview(null); setTmdbPreviewError(error instanceof Error ? error.message : 'Não foi possível consultar o TMDB') },
+  })
+
+  const identifyTmdbMutation = useMutation({
+    mutationFn: (tmdbId: string) => api.media.identifyTmdb(parseInt(id!), tmdbId),
+    onSuccess: updated => {
+      qc.setQueryData(['media', id], updated)
+      qc.invalidateQueries({ queryKey: ['media', id] })
+      qc.invalidateQueries({ queryKey: ['details', updated.type, updated.external_id] })
+      qc.invalidateQueries({ queryKey: ['recent'] })
+      qc.invalidateQueries({ queryKey: ['upcoming'] })
+      if (updated.type === 'series') qc.invalidateQueries({ queryKey: ['series', updated.id] })
+      setIdentificationOpen(false)
+      setTmdbPreview(null)
+      setTmdbPreviewId('')
+    },
+    onError: error => setTmdbPreviewError(error instanceof Error ? error.message : 'Não foi possível salvar a identificação'),
   })
 
   // Registrar conclusão → cria um registro no diário (que também marca a mídia
@@ -156,6 +295,18 @@ export function MediaDetail() {
   const onStatusClick = (s: MediaStatus) => {
     if (s === 'completed') setCompletionOpen(true)
     else updateMutation.mutate({ status: s })
+  }
+
+  const openIdentification = () => {
+    if (!item || (item.type !== 'movie' && item.type !== 'series')) return
+    const currentId = item.tmdb_id ?? (/^\d+$/.test(item.external_id) ? item.external_id : '')
+    setTmdbIdInput(currentId)
+    setTmdbPreview(null)
+    setTmdbPreviewId('')
+    setTmdbPreviewError(null)
+    previewTmdbMutation.reset()
+    identifyTmdbMutation.reset()
+    setIdentificationOpen(true)
   }
 
   if (isLoading) return (
@@ -416,6 +567,15 @@ export function MediaDetail() {
       <div className="flex flex-wrap items-center gap-3 pt-4 border-t border-border">
         <AddToListDropdown itemId={item.id} />
 
+        {(item.type === 'movie' || item.type === 'series') && (
+          <button
+            onClick={openIdentification}
+            className="px-4 py-2 rounded-lg text-sm text-secondary border border-border hover:border-border-strong hover:text-primary transition-colors"
+          >
+            ⚑ Corrigir identificação
+          </button>
+        )}
+
         <button
           onClick={() => setConfirmRemove(true)}
           className="ml-auto text-xs text-muted hover:text-red-400 transition-colors"
@@ -447,6 +607,32 @@ export function MediaDetail() {
         busy={deleteMutation.isPending}
         onCancel={() => setConfirmRemove(false)}
         onConfirm={() => deleteMutation.mutate()}
+      />
+
+      <TmdbIdentificationDialog
+        open={identificationOpen}
+        currentTitle={item.title}
+        tmdbId={tmdbIdInput}
+        preview={tmdbPreviewId === tmdbIdInput.trim() ? tmdbPreview : null}
+        previewError={tmdbPreviewError}
+        previewBusy={previewTmdbMutation.isPending}
+        applyBusy={identifyTmdbMutation.isPending}
+        onTmdbIdChange={value => {
+          setTmdbIdInput(value)
+          setTmdbPreview(null)
+          setTmdbPreviewId('')
+          setTmdbPreviewError(null)
+          previewTmdbMutation.reset()
+        }}
+        onPreview={() => previewTmdbMutation.mutate(tmdbIdInput.trim())}
+        onApply={() => identifyTmdbMutation.mutate(tmdbPreview!.tmdb_id)}
+        onCancel={() => {
+          if (identifyTmdbMutation.isPending) return
+          setIdentificationOpen(false)
+          setTmdbPreview(null)
+          setTmdbPreviewId('')
+          setTmdbPreviewError(null)
+        }}
       />
     </div>
   )
