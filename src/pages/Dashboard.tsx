@@ -201,7 +201,7 @@ export function Dashboard() {
 
       {/* ── Continuar | Em breve ── */}
       <div className="band"><div className="two-col">
-        <section>
+        <div className="quad quad-continue">
           <SectionHead title="Continuar de onde parou" action="Ver diário →" onAction={() => navigate('/diary')} />
           {continueItems.length ? (
             <div className="continue">
@@ -224,8 +224,8 @@ export function Dashboard() {
               })}
             </div>
           ) : <Empty>Nada em andamento agora.</Empty>}
-        </section>
-        <section>
+        </div>
+        <div className="quad quad-soon">
           <SectionHead title="Em breve" extra={emBreve.length ? <span className="count" style={{ color: 'var(--gold)' }}>{emBreve.length} chegando</span> : undefined} action="Ver backlog →" onAction={() => navigate('/wishlist')} />
           {emBreve.length ? (
             <div className="soon">
@@ -247,7 +247,7 @@ export function Dashboard() {
               })}
             </div>
           ) : <Empty>Nada agendado no backlog.</Empty>}
-        </section>
+        </div>
       </div></div>
 
       {/* ── Em alta no público ── */}
@@ -408,12 +408,21 @@ const HOME_CSS = `
 .home .cat-chip .ct{font-size:13px;font-weight:600;color:var(--text-secondary);font-variant-numeric:tabular-nums;background:var(--card);border-radius:9999px;padding:2px 10px}
 
 .home .two-col{display:grid;grid-template-columns:1fr 1fr;gap:32px;align-items:stretch}
-.home .two-col .sec-head{margin-top:40px}
-.home .two-col>section,.home .two-col>.col-stack{display:flex;flex-direction:column;min-width:0}
+.home .two-col>.quad,.home .two-col>.col-stack{display:flex;flex-direction:column;min-width:0}
+
+/* Bloco colorido: --a fundo profundo, --b cor viva, --c brilho do canto. */
+.home .quad{--tint:var(--b);position:relative;margin-top:40px;padding:24px 24px 28px;border-radius:20px;overflow:hidden;border:1px solid color-mix(in srgb,var(--b) 45%,transparent);background:radial-gradient(120% 110% at 100% 0%,color-mix(in srgb,var(--c) 42%,transparent),transparent 62%),linear-gradient(125deg,var(--a) 0%,color-mix(in srgb,var(--b) 70%,var(--a)) 68%,var(--b) 100%)}
+/* No claro o mesmo gradiente é lavado com branco para o texto escuro continuar legível. */
+html:not(.dark) .home .quad{background:radial-gradient(120% 110% at 100% 0%,color-mix(in srgb,var(--c) 60%,transparent),transparent 62%),linear-gradient(125deg,color-mix(in srgb,var(--a) 16%,#fff) 0%,color-mix(in srgb,var(--b) 58%,#fff) 100%)}
+.home .quad .sec-head{margin-top:0}
+.home .quad .seeall{color:color-mix(in srgb,var(--text-primary) 75%,transparent)}
+.home .quad .seeall:hover{color:var(--text-primary)}
+.home .quad-continue{--a:#07331F;--b:#12A85C;--c:var(--accent)}
+.home .quad-soon{--a:#3D1B06;--b:#D9791B;--c:var(--gold)}
 
 .home .continue,.home .soon{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;flex:1;grid-auto-rows:1fr;min-height:0}
-.home .cont-card{display:flex;gap:16px;padding:16px;background:var(--surface);border:1px solid var(--border);border-radius:16px;transition:border-color .2s,transform .2s}
-.home .cont-card:hover{border-color:var(--border-strong);transform:translateY(-4px)}
+.home .cont-card{display:flex;gap:16px;padding:16px;background:color-mix(in srgb,var(--card) 92%,transparent);border:1px solid rgba(0,0,0,.28);border-radius:16px;backdrop-filter:blur(2px);transition:border-color .2s,transform .2s}
+.home .cont-card:hover{border-color:color-mix(in srgb,var(--tint) 55%,#fff);transform:translateY(-4px)}
 .home .cont-card .body{display:flex;flex-direction:column;min-width:0;flex:1;gap:8px}
 .home .cont-card .kind{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.6px}
 .home .cont-card .name{font-weight:600;line-height:1.25}
@@ -423,12 +432,12 @@ const HOME_CSS = `
 .home .prog .track>i{display:block;height:100%;border-radius:8px}
 .home .prog .lbl{display:flex;justify-content:space-between;font-size:12px;color:var(--text-muted);margin-top:8px;font-variant-numeric:tabular-nums}
 
-.home .soon-card{display:flex;gap:16px;padding:16px;background:var(--surface);border:1px solid var(--border);border-radius:16px;align-items:center;transition:border-color .2s,transform .2s}
-.home .soon-card:hover{border-color:var(--border-strong);transform:translateY(-4px)}
+.home .soon-card{display:flex;gap:16px;padding:16px;background:color-mix(in srgb,var(--card) 92%,transparent);border:1px solid rgba(0,0,0,.28);border-radius:16px;align-items:center;backdrop-filter:blur(2px);transition:border-color .2s,transform .2s}
+.home .soon-card:hover{border-color:color-mix(in srgb,var(--tint) 55%,#fff);transform:translateY(-4px)}
 .home .soon-card .body{min-width:0;flex:1}
 .home .soon-card .kind{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.6px}
 .home .soon-card .name{font-weight:600;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.home .soon-card .cd{font-size:16px;font-weight:700;margin-top:8px}
+.home .soon-card .cd{font-size:16px;font-weight:700;margin-top:8px;color:var(--gold)}
 .home .soon-card .when{font-size:12px;color:var(--text-muted)}
 .home .hype{color:var(--gold)}
 
@@ -512,6 +521,7 @@ const HOME_CSS = `
 
 @media(max-width:900px){
   .home .two-col{grid-template-columns:1fr;gap:0}
+  .home .quad+.quad{margin-top:24px}
   .home .cats{grid-template-columns:repeat(3,1fr)}
 }
 @media(max-width:560px){
