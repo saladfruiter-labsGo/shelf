@@ -17,11 +17,13 @@ import { readdirSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
 import { join } from 'node:path'
 
-const DIR = 'server/prices'
+const DIRS = ['server/prices', 'server/steam', 'server/transfer']
 const MAX_TRIES = 6
 const NATIVE_ABORT = /RemoveEnvironmentCleanupHook|Assertion failed: \(env\) != nullptr/
 
-const files = readdirSync(DIR).filter(f => f.endsWith('.test.ts')).map(f => join(DIR, f))
+const files = DIRS.flatMap(dir =>
+  readdirSync(dir).filter(f => f.endsWith('.test.ts')).map(f => join(dir, f)),
+)
 let failed = 0
 
 for (const file of files) {

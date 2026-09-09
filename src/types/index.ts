@@ -173,6 +173,19 @@ export interface IntegrationStatus {
     enabled:        boolean
     webhook_secret: string
   }
+  steam: {
+    enabled:        boolean
+    steam_id:       string
+    api_key_set:    boolean
+    api_key_masked: string
+    /** Cookies da loja presentes — sem eles a sincronização é só Steam → Shelf. */
+    cookie_set:     boolean
+    session_id:     string
+    sync_mode:      SteamSyncMode
+    sync_removals:  boolean
+    running:        boolean
+    last_sync:      SteamSyncResult | null
+  }
   prices: {
     enabled:        boolean
     api_key_set:    boolean
@@ -183,6 +196,48 @@ export interface IntegrationStatus {
     running:        boolean
   }
 }
+
+/* ─── Steam: conector bidirecional do backlog ─── */
+
+export type SteamSyncMode = 'pull' | 'push' | 'both'
+
+export interface SteamSyncResult {
+  at:            string
+  pulled:        number
+  pushed:        number
+  removed_shelf: number
+  removed_steam: number
+  unmatched:     string[]
+  pending_push:  number
+  can_write:     boolean
+  errors:        string[]
+}
+
+/* ─── Importação / Exportação ─── */
+
+export type ExportScope = 'all' | 'library' | 'backlog'
+export type LetterboxdKind = 'watched' | 'watchlist' | 'ratings' | 'diary'
+
+export interface ExportSummary {
+  all:     { items: number; diary: number }
+  library: { items: number; diary: number }
+  backlog: { items: number; diary: number }
+}
+
+export interface ImportReport {
+  created:    number
+  updated:    number
+  skipped:    number
+  diary:      number
+  unresolved: string[]
+  errors:     string[]
+}
+
+export interface LetterboxdImportReport extends ImportReport {
+  kind: LetterboxdKind
+  rows: number
+}
+
 
 export interface NowPlayingItem {
   media_type:  ActivityMediaType

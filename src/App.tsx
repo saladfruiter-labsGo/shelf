@@ -13,6 +13,8 @@ import { Wishlist }     from './pages/Wishlist'
 import { MediaDetail }  from './pages/MediaDetail'
 import { Wrap }         from './pages/Wrap'
 import { Settings }     from './pages/Settings'
+import { Integrations } from './pages/Integrations'
+import { ImportExport } from './pages/ImportExport'
 import { Lists }        from './pages/Lists'
 import { ListDetail }   from './pages/ListDetail'
 
@@ -38,6 +40,8 @@ export function App() {
             <Route path="media/:id"  element={<MediaDetail />} />
             <Route path="wrap"       element={<Wrap />} />
             <Route path="settings"   element={<Settings />} />
+            <Route path="integrations"  element={<Integrations />} />
+            <Route path="import-export" element={<ImportExport />} />
             <Route path="lists"      element={<Lists />} />
             <Route path="lists/:id"  element={<ListDetail />} />
           </Route>

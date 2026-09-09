@@ -37,10 +37,12 @@ export interface SearchResult {
   release_date: string | null
 }
 
-async function searchMovies(q: string): Promise<SearchResult[]> {
+async function searchMovies(q: string, year?: number | null): Promise<SearchResult[]> {
   const key = apiKey('TMDB_API_KEY')
   if (!key) return []
-  const res = await fetch(`https://api.themoviedb.org/3/search/movie?api_key=${key}&query=${encodeURIComponent(q)}&page=1`)
+  const qs = new URLSearchParams({ api_key: key, query: q, page: '1' })
+  if (year) qs.set('primary_release_year', String(year))
+  const res = await fetch(`https://api.themoviedb.org/3/search/movie?${qs}`)
   if (!res.ok) return []
   const data = await res.json() as { results: any[] }
   return data.results.slice(0, 8).map(m => ({
@@ -99,6 +101,19 @@ async function searchGames(q: string): Promise<SearchResult[]> {
 export async function rawgLookup(name: string): Promise<SearchResult | null> {
   const [first] = await searchGames(name)
   return first ?? null
+}
+
+/**
+ * Resolve o primeiro filme do TMDB por nome (e ano, quando conhecido). Usado
+ * pela importação do Letterboxd, que só traz título + ano: reaproveitar o id do
+ * TMDB como external_id faz o filme importado casar com o mesmo card que o Plex
+ * e a busca manual criam.
+ */
+export async function tmdbMovieLookup(name: string, year?: number | null): Promise<SearchResult | null> {
+  const [withYear] = year ? await searchMovies(name, year) : []
+  if (withYear) return withYear
+  const [any] = await searchMovies(name)
+  return any ?? null
 }
 
 async function searchBooks(q: string): Promise<SearchResult[]> {

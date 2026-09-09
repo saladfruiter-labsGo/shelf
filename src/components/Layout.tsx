@@ -387,6 +387,8 @@ export function Layout() {
             }}>
               {[
                 { icon: '👤', label: 'Perfil', action: () => { setDropOpen(false); setProfileOpen(true) } },
+                { icon: '🔌', label: 'Integrações', action: () => { setDropOpen(false); navigate('/integrations') } },
+                { icon: '📦', label: 'Importação/Exportação', action: () => { setDropOpen(false); navigate('/import-export') } },
                 { icon: '⚙️', label: 'Configurações', action: () => { setDropOpen(false); navigate('/settings') } },
               ].map(item => (
                 <button

@@ -4,6 +4,8 @@ import type {
   SearchResult, WrapData, SeriesView, SeriesPreview, DiaryEntry,
   IntegrationStatus, NowPlaying, ActivityEvent, ActivityMediaType, MusicStats, TrendingItem,
   GamePriceBacklog, GamePriceDetails, GamePriceRange, GamePriceCandidate,
+  SteamSyncResult, ExportScope, ExportSummary, ImportReport,
+  LetterboxdKind, LetterboxdImportReport,
 } from '../types'
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -135,6 +137,28 @@ export const api = {
       request('/integrations/itad/test', { method: 'POST' }),
     itadSync: (): Promise<{ ok: boolean }> =>
       request('/integrations/itad/sync', { method: 'POST' }),
+    steamTest: (): Promise<{ ok: boolean; wishlist?: number; owned?: number | null; can_write?: boolean; error?: string }> =>
+      request('/integrations/steam/test', { method: 'POST' }),
+    steamSync: (): Promise<SteamSyncResult> =>
+      request('/integrations/steam/sync', { method: 'POST' }),
+    steamResolve: (input: string): Promise<{ ok: boolean; steam_id?: string; error?: string }> =>
+      request('/integrations/steam/resolve', { method: 'POST', body: JSON.stringify({ input }) }),
+  },
+
+  transfer: {
+    summary: (): Promise<ExportSummary> => request('/transfer/export/summary'),
+    /** URL de download direto — o navegador baixa o arquivo, sem passar pelo fetch. */
+    exportUrl: (scope: ExportScope, format: 'json' | 'csv'): string =>
+      `/api/transfer/export?scope=${scope}&format=${format}`,
+    importShelf: (payload: unknown, mode: 'merge' | 'replace' = 'merge'): Promise<ImportReport> =>
+      request('/transfer/import/shelf', { method: 'POST', body: JSON.stringify({ payload, mode }) }),
+    detectLetterboxd: (csv: string, filename?: string): Promise<{ kind: LetterboxdKind; headers: string[] }> =>
+      request('/transfer/import/letterboxd/detect', { method: 'POST', body: JSON.stringify({ csv: csv.slice(0, 4096), filename }) }),
+    importLetterboxd: (csv: string, kind: LetterboxdKind, filename?: string): Promise<LetterboxdImportReport> =>
+      request('/transfer/import/letterboxd', { method: 'POST', body: JSON.stringify({ csv, kind, filename }) }),
+    /** Traz a wishlist da Steam para o backlog, uma vez. */
+    importSteam: (): Promise<SteamSyncResult> =>
+      request('/transfer/import/steam', { method: 'POST' }),
   },
 
   prices: {
