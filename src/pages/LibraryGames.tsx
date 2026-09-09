@@ -5,6 +5,7 @@ import { api } from '../lib/api'
 import { LibraryStats } from '../components/LibraryStats'
 import { LibrarySearch } from '../components/LibrarySearch'
 import { Pager, usePagination } from '../components/Pager'
+import { useMediaPreview } from '../components/MediaSummaryModal'
 import { formatPlaytime, formatDate, norm, GAME_STATUS_LABEL, GAME_STATUS_STYLE, gameStatusOf } from '../lib/utils'
 import type { GameStatus } from '../types'
 
@@ -13,6 +14,7 @@ const HEADER_STATES: GameStatus[] = ['jogando', 'zerado', 'platinado', 'abandona
 
 export function LibraryGames() {
   const navigate = useNavigate()
+  const { openMedia } = useMediaPreview()
   const [statusFilter, setStatusFilter] = useState<GameStatus | null>(null)
   const [search, setSearch] = useState('')
 
@@ -89,8 +91,14 @@ export function LibraryGames() {
           : pageItems.map(item => (
               <div
                 key={item.id}
-                onClick={() => navigate(`/media/${item.id}`)}
-                className="media-lift"
+                onClick={() => openMedia(item)}
+                onKeyDown={event => {
+                  if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openMedia(item) }
+                }}
+                role="button"
+                tabIndex={0}
+                aria-label={`Abrir resumo de ${item.title}`}
+                className="media-lift media-preview-card"
                 style={{
                   background: 'var(--card)', borderRadius: 16, overflow: 'hidden',
                   cursor: 'pointer', border: '1px solid var(--border)',

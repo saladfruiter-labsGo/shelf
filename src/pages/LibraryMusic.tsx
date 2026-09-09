@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../lib/api'
 import { LibrarySearch } from '../components/LibrarySearch'
+import { useMediaPreview } from '../components/MediaSummaryModal'
 import { norm } from '../lib/utils'
 
 function formatWhen(iso: string): string {
@@ -21,6 +22,7 @@ function formatDuration(ms: number | null): string | null {
 
 export function LibraryMusic() {
   const navigate = useNavigate()
+  const { openMedia } = useMediaPreview()
   const [search, setSearch] = useState('')
 
   // Cada execução (scrobble Plex/Last.fm) é o seu próprio registro — a
@@ -84,11 +86,41 @@ export function LibraryMusic() {
               return (
                 <div
                   key={play.id}
-                  className="row-hover"
+                  className="row-hover media-preview-card"
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Abrir resumo de ${play.title}`}
+                  onClick={() => openMedia({
+                    type: play.media_type,
+                    title: play.title,
+                    subtitle: play.subtitle,
+                    cover_url: play.cover_url,
+                    genre: play.genre,
+                    rating: play.rating,
+                    occurred_at: play.occurred_at,
+                    duration_ms: play.duration_ms,
+                    statusLabel: 'Ouvida',
+                  })}
+                  onKeyDown={event => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault()
+                      openMedia({
+                        type: play.media_type,
+                        title: play.title,
+                        subtitle: play.subtitle,
+                        cover_url: play.cover_url,
+                        genre: play.genre,
+                        rating: play.rating,
+                        occurred_at: play.occurred_at,
+                        duration_ms: play.duration_ms,
+                        statusLabel: 'Ouvida',
+                      })
+                    }
+                  }}
                   style={{
                     display: 'grid', gridTemplateColumns: '48px 1fr auto auto',
                     alignItems: 'center', gap: 16, padding: '16px 16px',
-                    borderBottom: '1px solid var(--border)', borderRadius: 8, margin: '0 -16px',
+                    borderBottom: '1px solid var(--border)', borderRadius: 8, margin: '0 -16px', cursor: 'pointer',
                   }}
                 >
                   <div style={{

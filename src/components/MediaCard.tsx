@@ -1,7 +1,7 @@
-import { Link } from 'react-router-dom'
 import type { MediaItem } from '../types'
 import { CategoryTag } from './CategoryTag'
 import { StarRating } from './StarRating'
+import { useMediaPreview } from './MediaSummaryModal'
 
 interface Props {
   item: MediaItem
@@ -9,10 +9,14 @@ interface Props {
 }
 
 export function MediaCard({ item, compact = false }: Props) {
+  const { openMedia } = useMediaPreview()
+
   return (
-    <Link
-      to={`/media/${item.id}`}
-      className={`group block ${compact ? 'w-full' : 'w-40 flex-shrink-0'}`}
+    <button
+      type="button"
+      onClick={() => openMedia(item)}
+      aria-label={`Abrir resumo de ${item.title}`}
+      className={`group block border-0 bg-transparent p-0 text-left ${compact ? 'w-full' : 'w-40 flex-shrink-0'}`}
     >
       {/* Poster */}
       <div className="relative overflow-hidden rounded-md bg-card aspect-[2/3] mb-2.5 border border-border group-hover:border-border-strong group-hover:shadow-md transition-all duration-200">
@@ -53,6 +57,6 @@ export function MediaCard({ item, compact = false }: Props) {
       {item.year && (
         <p className="text-xs text-muted mt-0.5 font-medium tabular-nums">{item.year}</p>
       )}
-    </Link>
+    </button>
   )
 }

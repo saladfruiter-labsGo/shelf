@@ -5,6 +5,7 @@ import { api } from '../lib/api'
 import { CATEGORIES } from '../lib/categories'
 import { TYPE_LABEL, TYPE_COLOR, GAME_STATUS_LABEL, gameStatusOf, formatPlaytime, fmtRating, formatMoney, timeAgo, toISODate, todayISODate, daysUntil } from '../lib/utils'
 import type { MediaItem, MediaType, TrendingItem, DiaryEntry, GamePriceSummary } from '../types'
+import { MediaPreviewTrigger, useMediaPreview } from '../components/MediaSummaryModal'
 
 const TYPE_EMOJI: Record<MediaType, string> = { movie: '🎬', series: '📺', game: '🎮', book: '📚', music: '🎵' }
 const hue = (t: MediaType) => `var(--${TYPE_COLOR[t]})`
@@ -67,6 +68,7 @@ const Empty = ({ children }: { children: React.ReactNode }) => (
 
 /* ─── Carrossel "Em alta no público" ─── */
 function TrendingCarousel({ items }: { items: TrendingItem[] }) {
+  const { openMedia } = useMediaPreview()
   const [i, setI] = useState(0)
   const n = items.length
   const go = (k: number) => setI(((k % n) + n) % n)
@@ -80,7 +82,32 @@ function TrendingCarousel({ items }: { items: TrendingItem[] }) {
     <section className="hc-carousel" onMouseEnter={e => (e.currentTarget.dataset.pause = '1')}>
       <div className="hc-track" style={{ transform: `translateX(-${i * 100}%)` }}>
         {items.map((t, k) => (
-          <div className="hc-slide" key={k}>
+          <div
+            className="hc-slide media-preview-card"
+            key={k}
+            role="button"
+            tabIndex={0}
+            aria-label={`Abrir resumo de ${t.title}`}
+            onClick={() => openMedia({
+              type: t.type,
+              title: t.title,
+              subtitle: t.subtitle,
+              cover_url: t.cover_url,
+              statusLabel: `${t.metric} ${t.metric_label}`,
+            })}
+            onKeyDown={event => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault()
+                openMedia({
+                  type: t.type,
+                  title: t.title,
+                  subtitle: t.subtitle,
+                  cover_url: t.cover_url,
+                  statusLabel: `${t.metric} ${t.metric_label}`,
+                })
+              }
+            }}
+          >
             <div className="hc-glow" style={{ background: `radial-gradient(circle at 80% 30%, color-mix(in srgb, ${hue(t.type)} 55%, transparent), transparent 55%), linear-gradient(115deg, color-mix(in srgb, ${hue(t.type)} 22%, #0b0b16), #0b0b16 65%)${t.cover_url ? `, url(${t.cover_url})` : ''}`, backgroundSize: 'cover', backgroundPosition: 'center' }} />
             <div className="hc-inner">
               <span className="hc-flag" style={{ color: hue(t.type) }}>{TYPE_EMOJI[t.type]} Em alta · {TYPE_LABEL[t.type]}</span>
@@ -234,7 +261,7 @@ export function Dashboard() {
             />
             <div className="deals">
               {deals.map(({ price, item }) => (
-                <Link to={`/media/${item.id}`} className="deal-card" key={item.id}>
+                <MediaPreviewTrigger media={item} label={`Abrir resumo de ${item.title}`} className="deal-card" key={item.id}>
                   <Cover url={item.cover_url} type={item.type} w={64} h={96} font={28} />
                   <div className="body">
                     <span className="nm">{item.title}</span>
@@ -264,7 +291,7 @@ export function Dashboard() {
                       {price.last_synced_at && <span className="ago">há {timeAgo(price.last_synced_at)}</span>}
                     </div>
                   </div>
-                </Link>
+                </MediaPreviewTrigger>
               ))}
             </div>
           </div>
@@ -280,7 +307,7 @@ export function Dashboard() {
               {continueItems.map(it => {
                 const m = contMeta(it)
                 return (
-                  <Link to={`/media/${it.id}`} className="cont-card" key={it.id}>
+                  <MediaPreviewTrigger media={it} label={`Abrir resumo de ${it.title}`} className="cont-card" key={it.id}>
                     <Cover url={it.cover_url} type={it.type} w={64} h={96} font={28} />
                     <div className="body">
                       <span className="kind" style={{ color: hue(it.type) }}>{TYPE_LABEL[it.type]}</span>
@@ -291,7 +318,7 @@ export function Dashboard() {
                         <div className="lbl"><span>{m.left}</span><span>{m.right}</span></div>
                       </div>
                     </div>
-                  </Link>
+                  </MediaPreviewTrigger>
                 )
               })}
             </div>
@@ -306,7 +333,7 @@ export function Dashboard() {
                 const cd = days == null ? 'sem data' : days <= 0 ? 'disponível' : `em ${days} dia${days > 1 ? 's' : ''}`
                 const when = it.hype ? 'marcado como hype' : it.release_date ? new Date(it.release_date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }) : 'no backlog'
                 return (
-                  <Link to={`/media/${it.id}`} className="soon-card" key={it.id}>
+                  <MediaPreviewTrigger media={it} label={`Abrir resumo de ${it.title}`} className="soon-card" key={it.id}>
                     <Cover url={it.cover_url} type={it.type} w={48} h={72} font={22} />
                     <div className="body">
                       <span className="kind" style={{ color: hue(it.type) }}>{TYPE_LABEL[it.type]}{it.hype ? <span className="hype"> · ★ hype</span> : ''}</span>
@@ -314,7 +341,7 @@ export function Dashboard() {
                       <div className="cd">{cd}</div>
                       <div className="when">{when}</div>
                     </div>
-                  </Link>
+                  </MediaPreviewTrigger>
                 )
               })}
             </div>
@@ -336,7 +363,7 @@ export function Dashboard() {
           <SectionHead title="Adicionados ao diário" action="Ver diário →" onAction={() => navigate('/diary')} />
           <div className="dlog">
             {recentDiary.map((d: DiaryEntry) => (
-              <Link to={`/media/${d.media_item_id}`} className="dlog-card" key={d.id}>
+              <MediaPreviewTrigger media={d.media_item_id} label={`Abrir resumo de ${d.title}`} className="dlog-card" key={d.id}>
                 <Cover url={d.cover_url} type={d.type} w={48} h={72} font={22} />
                 <div className="body">
                   <span className="kind" style={{ color: hue(d.type) }}>{TYPE_LABEL[d.type]}</span>
@@ -344,7 +371,7 @@ export function Dashboard() {
                   <div className="when">{relTime(d.watched_at)}</div>
                   <div className="st">{d.rating != null && d.rating > 0 ? '★'.repeat(Math.round(d.rating)) : <span style={{ color: 'var(--text-muted)' }}>sem nota</span>}</div>
                 </div>
-              </Link>
+              </MediaPreviewTrigger>
             ))}
           </div>
         </div>
@@ -387,14 +414,14 @@ export function Dashboard() {
             {nesteDia.length ? (
               <div className="grid-cards">
                 {nesteDia.map(d => (
-                  <Link to={`/media/${d.media_item_id}`} className="memo" key={d.id}>
+                  <MediaPreviewTrigger media={d.media_item_id} label={`Abrir resumo de ${d.title}`} className="memo" key={d.id}>
                     <Cover url={d.cover_url} type={d.type} w={44} h={64} radius={6} font={20} />
                     <div>
                       <div className="ago">há {Math.max(1, now.getFullYear() - new Date(d.watched_at).getFullYear())} ano(s)</div>
                       <div className="nm">{d.title}</div>
                       <div className="sub">{d.rating != null && d.rating > 0 ? `você deu ${'★'.repeat(Math.round(d.rating))}` : 'registrado neste dia'}</div>
                     </div>
-                  </Link>
+                  </MediaPreviewTrigger>
                 ))}
               </div>
             ) : <Empty>Nenhum registro neste dia em anos anteriores.</Empty>}
@@ -424,7 +451,7 @@ export function Dashboard() {
               {droppedItems.map(it => {
                 const m = contMeta(it)
                 return (
-                  <Link to={`/media/${it.id}`} className="drop-card" key={it.id}>
+                  <MediaPreviewTrigger media={it} label={`Abrir resumo de ${it.title}`} className="drop-card" key={it.id}>
                     <Cover url={it.cover_url} type={it.type} w={44} h={64} radius={8} font={20} />
                     <div className="body">
                       <span className="kind">{TYPE_LABEL[it.type]}</span>
@@ -432,7 +459,7 @@ export function Dashboard() {
                       <div className="sub">{m.left}</div>
                       {m.pct != null && <div className="prog" style={{ marginTop: 8 }}><div className="track"><i style={{ width: `${Math.round(m.pct * 100)}%`, background: hue(it.type) }} /></div></div>}
                     </div>
-                  </Link>
+                  </MediaPreviewTrigger>
                 )
               })}
             </div>

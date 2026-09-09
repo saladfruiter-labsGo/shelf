@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../lib/api'
-import { SeriesModal } from '../components/SeriesModal'
+import { useMediaPreview } from '../components/MediaSummaryModal'
 import { LibraryStats } from '../components/LibraryStats'
 import { LibrarySearch } from '../components/LibrarySearch'
 import { Pager, usePagination } from '../components/Pager'
@@ -24,7 +24,7 @@ const HEADER_STATES: { key: ShelfFilter; label: string; color: string }[] = [
 
 export function LibrarySeries() {
   const navigate = useNavigate()
-  const [openId, setOpenId] = useState<number | null>(null)
+  const { openMedia } = useMediaPreview()
   const [statusFilter, setStatusFilter] = useState<ShelfFilter | null>(null)
   const [search, setSearch] = useState('')
 
@@ -98,8 +98,14 @@ export function LibrarySeries() {
           : pageItems.map(item => (
               <div
                 key={item.id}
-                onClick={() => setOpenId(item.id)}
-                className="media-lift"
+                onClick={() => openMedia(item)}
+                onKeyDown={event => {
+                  if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openMedia(item) }
+                }}
+                role="button"
+                tabIndex={0}
+                aria-label={`Abrir resumo de ${item.title}`}
+                className="media-lift media-preview-card"
                 style={{
                   background: 'var(--card)', borderRadius: 16, overflow: 'hidden',
                   cursor: 'pointer', border: '1px solid var(--border)',
@@ -165,8 +171,6 @@ export function LibrarySeries() {
           <p style={{ color: 'var(--text-muted)' }}>{items.length === 0 ? 'Nenhuma série na biblioteca ainda' : 'Nenhuma série encontrada'}</p>
         </div>
       )}
-
-      {openId != null && <SeriesModal id={openId} onClose={() => setOpenId(null)} />}
     </div>
   )
 }

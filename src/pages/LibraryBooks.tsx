@@ -6,6 +6,7 @@ import { StarRating } from '../components/StarRating'
 import { LibraryStats } from '../components/LibraryStats'
 import { LibrarySearch } from '../components/LibrarySearch'
 import { Pager, usePagination } from '../components/Pager'
+import { useMediaPreview } from '../components/MediaSummaryModal'
 import { norm } from '../lib/utils'
 
 const STATUS_LABEL: Record<string, string> = {
@@ -24,6 +25,7 @@ const HEADER_STATES: { key: ShelfFilter; label: string; color: string }[] = [
 
 export function LibraryBooks() {
   const navigate = useNavigate()
+  const { openMedia } = useMediaPreview()
   const [statusFilter, setStatusFilter] = useState<ShelfFilter | null>(null)
   const [search, setSearch] = useState('')
 
@@ -97,8 +99,14 @@ export function LibraryBooks() {
           : pageItems.map((item, idx) => (
               <div
                 key={item.id}
-                onClick={() => navigate(`/media/${item.id}`)}
-                className="row-hover"
+                onClick={() => openMedia(item)}
+                onKeyDown={event => {
+                  if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openMedia(item) }
+                }}
+                role="button"
+                tabIndex={0}
+                aria-label={`Abrir resumo de ${item.title}`}
+                className="row-hover media-preview-card"
                 style={{
                   display: 'grid', gridTemplateColumns: '40px 1fr auto auto',
                   alignItems: 'center', gap: 24, padding: '24px 16px',
