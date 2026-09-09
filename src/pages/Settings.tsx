@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../lib/api'
+import { timeAgo } from '../lib/utils'
 
 interface ApiEntry {
   key: string
@@ -239,16 +240,6 @@ function activityLabel(ev: ActivityLike): string {
   return 'Ouviu'
 }
 
-function timeAgo(iso: string): string {
-  const diff = Date.now() - new Date(iso + (iso.includes('Z') ? '' : 'Z')).getTime()
-  const min = Math.floor(diff / 60000)
-  if (min < 1) return 'agora'
-  if (min < 60) return `${min} min`
-  const h = Math.floor(min / 60)
-  if (h < 24) return `${h} h`
-  return `${Math.floor(h / 24)} d`
-}
-
 function IntegrationsSection() {
   const qc = useQueryClient()
   const { data: status } = useQuery({ queryKey: ['integrations'], queryFn: api.integrations.status })
@@ -282,6 +273,9 @@ function IntegrationsSection() {
       kavita_api_key: '',
       kavita_library_id: status.kavita.library_id,
       playnite_enabled: status.playnite.enabled,
+      itad_enabled: status.prices.enabled,
+      itad_api_key: '',
+      itad_country: status.prices.country,
     })
   }, [status])
 
@@ -300,16 +294,19 @@ function IntegrationsSection() {
         kavita_url: form.kavita_url,
         kavita_library_id: form.kavita_library_id,
         playnite_enabled: form.playnite_enabled,
+        itad_enabled: form.itad_enabled,
+        itad_country: form.itad_country,
       }
       if (form.plex_token)   payload.plex_token   = form.plex_token
       if (form.lastfm_api_key) payload.lastfm_api_key = form.lastfm_api_key
       if (form.telegram_bot_token) payload.telegram_bot_token = form.telegram_bot_token
       if (form.kavita_api_key) payload.kavita_api_key = form.kavita_api_key
+      if (form.itad_api_key)   payload.itad_api_key   = form.itad_api_key
       return api.integrations.update(payload)
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['integrations'] })
-      setForm(f => ({ ...f, plex_token: '', lastfm_api_key: '', kavita_api_key: '' }))
+      setForm(f => ({ ...f, plex_token: '', lastfm_api_key: '', kavita_api_key: '', itad_api_key: '' }))
       setMsg('Integrações salvas!')
       setTimeout(() => setMsg(''), 3000)
     },
@@ -339,6 +336,22 @@ function IntegrationsSection() {
     onSuccess: () => { setMsg('Conexão com o Kavita OK!'); setTimeout(() => setMsg(''), 3000) },
     onError: (e: unknown) => { setMsg('Falha no teste: ' + ((e as Error).message || '')); setTimeout(() => setMsg(''), 4000) },
   })
+  const itadTest = useMutation({
+    mutationFn: api.integrations.itadTest,
+    onSuccess: (d) => { setMsg(`Conexão com o IsThereAnyDeal OK! ${d.shops ?? 0} lojas ativas na região.`); setTimeout(() => setMsg(''), 4000) },
+    onError: (e: unknown) => { setMsg('Falha no teste: ' + ((e as Error).message || '')); setTimeout(() => setMsg(''), 4000) },
+  })
+  const itadSync = useMutation({
+    mutationFn: api.integrations.itadSync,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['integrations'] })
+      qc.invalidateQueries({ queryKey: ['prices'] })
+      setMsg('Preços do backlog sincronizados.')
+      setTimeout(() => setMsg(''), 3000)
+    },
+    onError: (e: unknown) => { setMsg('Falha ao sincronizar: ' + ((e as Error).message || '')); setTimeout(() => setMsg(''), 4000) },
+  })
+
   const [playniteCopied, setPlayniteCopied] = useState(false)
   const playniteTest = useMutation({
     mutationFn: api.integrations.playniteTest,
@@ -636,6 +649,58 @@ function IntegrationsSection() {
           className="mt-4 text-xs px-3 py-2 bg-card border border-border rounded-lg text-primary hover:border-accent transition-colors disabled:opacity-50">
           {playniteTest.isPending ? 'Testando…' : '⚡ Testar busca de capas'}
         </button>
+      </div>
+
+      {/* ── IsThereAnyDeal (preços do backlog) ── */}
+      <div className="bg-surface border border-border rounded-xl p-5 mb-4">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <span style={{ fontSize: 18 }}>🏷️</span>
+            <h3 className="font-medium text-primary text-sm">IsThereAnyDeal <span className="text-muted font-normal">preços</span></h3>
+            <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${status?.prices.api_key_set ? 'bg-games-bg text-games' : 'bg-card text-muted'}`}>
+              {status?.prices.api_key_set ? 'Conectado' : 'Não conectado'}
+            </span>
+          </div>
+          <Toggle on={!!form.itad_enabled} onChange={set('itad_enabled')} />
+        </div>
+
+        <p className="text-xs text-muted mb-4">
+          Acompanha o preço dos <b>jogos de PC no backlog</b> nas lojas que atendem à região configurada, com melhor oferta,
+          menor preço histórico e gráfico na página do jogo. Verifica a cada 6 horas. A chave nunca é enviada ao navegador.
+        </p>
+
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs text-secondary mb-1 block">API Key</label>
+            <input className={inputCls + ' font-mono'} type="password" autoComplete="off"
+              placeholder={status?.prices.api_key_set ? status.prices.api_key_masked : 'sua API key do IsThereAnyDeal'}
+              value={String(form.itad_api_key ?? '')} onChange={e => set('itad_api_key')(e.target.value)} spellCheck={false} />
+            <a href="https://isthereanydeal.com/apps/new/" target="_blank" rel="noopener noreferrer"
+               className="text-[11px] text-accent hover:underline">Criar uma aplicação e obter a chave →</a>
+          </div>
+          <div>
+            <label className="text-xs text-secondary mb-1 block">Região <span className="text-muted">(código ISO de 2 letras — BR para o Brasil)</span></label>
+            <input className={inputCls + ' font-mono uppercase'} maxLength={2} placeholder="BR"
+              value={String(form.itad_country ?? '')} onChange={e => set('itad_country')(e.target.value.toUpperCase())} spellCheck={false} />
+          </div>
+        </div>
+
+        <div className="flex gap-2 mt-4">
+          <button type="button" onClick={() => itadTest.mutate()} disabled={itadTest.isPending || !status?.prices.api_key_set}
+            className="text-xs px-3 py-2 bg-card border border-border rounded-lg text-primary hover:border-accent transition-colors disabled:opacity-50">
+            {itadTest.isPending ? 'Testando…' : '⚡ Testar conexão'}
+          </button>
+          <button type="button" onClick={() => itadSync.mutate()} disabled={itadSync.isPending || !status?.prices.enabled}
+            className="text-xs px-3 py-2 bg-card border border-border rounded-lg text-primary hover:border-accent transition-colors disabled:opacity-50">
+            {itadSync.isPending ? 'Sincronizando…' : '↻ Sincronizar agora'}
+          </button>
+        </div>
+        <p className="text-[11px] text-muted mt-2">
+          {status?.prices.tracked ?? 0} {status?.prices.tracked === 1 ? 'jogo acompanhado' : 'jogos acompanhados'}
+          {status?.prices.last_sync ? ` · última sincronização há ${timeAgo(status.prices.last_sync)}` : ' · ainda não sincronizado'}
+          . O teste usa a config salva — salve antes de testar.
+        </p>
+        <p className="text-[11px] text-muted mt-1">Preços e histórico fornecidos por IsThereAnyDeal.</p>
       </div>
 
       {/* Salvar */}

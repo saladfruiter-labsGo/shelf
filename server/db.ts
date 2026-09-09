@@ -202,3 +202,73 @@ if (backfilled !== '1') {
   `).run()
   db.prepare("INSERT INTO settings (key, value) VALUES ('DIARY_BACKFILLED', '1') ON CONFLICT(key) DO UPDATE SET value = '1'").run()
 }
+
+// ─── Preços de jogos (IsThereAnyDeal): produto casado + ofertas + histórico ───
+// Valores monetários são sempre inteiros em centavos (nunca ponto flutuante).
+db.exec(`
+  CREATE TABLE IF NOT EXISTS game_price_products (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    media_item_id     INTEGER NOT NULL REFERENCES media_items(id) ON DELETE CASCADE,
+    provider          TEXT    NOT NULL DEFAULT 'itad',
+    provider_game_id  TEXT,                                  -- uuid do jogo no provedor
+    platform          TEXT    NOT NULL DEFAULT 'pc',
+    matched_title     TEXT,
+    match_method      TEXT,                                   -- 'steam_id' | 'exact_title' | 'manual'
+    match_status      TEXT    NOT NULL DEFAULT 'pending',     -- 'pending' | 'resolved' | 'ambiguous' | 'not_found'
+    currency          TEXT,                                   -- moeda dominante das ofertas (BRL)
+    history_low_minor INTEGER,                                -- menor histórico informado pelo provedor
+    history_low_at    TEXT,
+    last_resolved_at  TEXT,
+    last_synced_at    TEXT,
+    last_error        TEXT,
+    created_at        TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at        TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(media_item_id, provider, platform)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_price_products_media  ON game_price_products(media_item_id);
+  CREATE INDEX IF NOT EXISTS idx_price_products_status ON game_price_products(match_status);
+
+  CREATE TABLE IF NOT EXISTS game_price_offers (
+    id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+    game_price_product_id INTEGER NOT NULL REFERENCES game_price_products(id) ON DELETE CASCADE,
+    shop_id               INTEGER NOT NULL,
+    shop_name             TEXT    NOT NULL,
+    price_minor           INTEGER NOT NULL,
+    regular_minor         INTEGER NOT NULL,
+    currency              TEXT    NOT NULL,
+    discount_percent      INTEGER NOT NULL DEFAULT 0,
+    url                   TEXT    NOT NULL,
+    drm                   TEXT,
+    voucher               TEXT,
+    available             INTEGER NOT NULL DEFAULT 1,
+    observed_at           TEXT    NOT NULL,
+    last_seen_at          TEXT    NOT NULL,
+    created_at            TEXT    NOT NULL DEFAULT (datetime('now')),
+    updated_at            TEXT    NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(game_price_product_id, shop_id)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_price_offers_product ON game_price_offers(game_price_product_id, available);
+
+  CREATE TABLE IF NOT EXISTS game_price_history (
+    id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+    game_price_product_id INTEGER NOT NULL REFERENCES game_price_products(id) ON DELETE CASCADE,
+    shop_id               INTEGER NOT NULL,
+    shop_name             TEXT    NOT NULL,
+    price_minor           INTEGER NOT NULL,
+    regular_minor         INTEGER NOT NULL,
+    currency              TEXT    NOT NULL,
+    discount_percent      INTEGER NOT NULL DEFAULT 0,
+    observed_at           TEXT    NOT NULL,                   -- ISO 8601
+    observed_day          TEXT    NOT NULL,                   -- YYYY-MM-DD (UTC) — dedup diário
+    source                TEXT    NOT NULL,                   -- 'provider_import' | 'shelf_poll'
+    created_at            TEXT    NOT NULL DEFAULT (datetime('now')),
+    -- Um snapshot por dia/loja/preço: mudanças de preço no mesmo dia geram linhas
+    -- novas, mas repetir a sincronização não duplica pontos equivalentes.
+    UNIQUE(game_price_product_id, shop_id, observed_day, price_minor)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_price_hist_shop    ON game_price_history(game_price_product_id, shop_id, observed_at);
+  CREATE INDEX IF NOT EXISTS idx_price_hist_product ON game_price_history(game_price_product_id, observed_at);
+`)

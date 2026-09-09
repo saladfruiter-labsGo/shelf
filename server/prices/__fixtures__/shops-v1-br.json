@@ -1,0 +1,5 @@
+[
+  { "id": 61, "title": "Steam",   "deals": 12000, "games": 90000, "update": "2026-09-08T21:51:13+02:00" },
+  { "id": 35, "title": "Nuuvem",  "deals": 800,   "games": 12000, "update": "2026-09-08T22:10:25+02:00" },
+  { "id": 16, "title": "GOG",     "deals": 400,   "games": 7000,  "update": "2026-09-08T22:10:25+02:00" }
+]

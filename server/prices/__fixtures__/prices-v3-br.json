@@ -1,0 +1,59 @@
+[
+  {
+    "id": "018d937f-012f-73b8-ab2c-898516969e6a",
+    "historyLow": {
+      "all":  { "amount": 24.74, "amountInt": 2474, "currency": "BRL" },
+      "y1":   { "amount": 24.74, "amountInt": 2474, "currency": "BRL" },
+      "m3":   { "amount": 49.49, "amountInt": 4949, "currency": "BRL" }
+    },
+    "deals": [
+      {
+        "shop": { "id": 61, "name": "Steam" },
+        "price":   { "amount": 49.49, "amountInt": 4949, "currency": "BRL" },
+        "regular": { "amount": 98.99, "amountInt": 9899, "currency": "BRL" },
+        "cut": 50,
+        "voucher": null,
+        "storeLow": { "amount": 24.74, "amountInt": 2474, "currency": "BRL" },
+        "flag": null,
+        "drm": [{ "id": 1, "name": "Steam" }],
+        "platforms": [{ "id": 1, "name": "Windows" }],
+        "timestamp": "2026-09-01T12:00:00+02:00",
+        "expiry": null,
+        "url": "https://next.isthereanydeal.com/link/018d9386-7132-719b-89e1-e11b8c591ee7/"
+      },
+      {
+        "shop": { "id": 35, "name": "Nuuvem" },
+        "price":   { "amount": 39.59, "amountInt": 3959, "currency": "BRL" },
+        "regular": { "amount": 98.99, "amountInt": 9899, "currency": "BRL" },
+        "cut": 60,
+        "voucher": "BRDEAL",
+        "storeLow": null,
+        "flag": null,
+        "drm": [],
+        "platforms": [{ "id": 1, "name": "Windows" }],
+        "timestamp": "2026-09-05T09:30:00+02:00",
+        "expiry": null,
+        "url": "https://next.isthereanydeal.com/link/aaaa1111-2222-3333-4444-555566667777/"
+      },
+      {
+        "shop": { "id": 99, "name": "Loja sem link" },
+        "price":   { "amount": 10.0, "amountInt": 1000, "currency": "BRL" },
+        "regular": { "amount": 98.99, "amountInt": 9899, "currency": "BRL" },
+        "cut": 90,
+        "voucher": null,
+        "storeLow": null,
+        "flag": null,
+        "drm": [],
+        "platforms": [],
+        "timestamp": "2026-09-05T09:30:00+02:00",
+        "expiry": null,
+        "url": "http://loja-insegura.example/oferta"
+      }
+    ]
+  },
+  {
+    "id": "018d937f-07fc-72ed-8517-d8e24cb1eb22",
+    "historyLow": { "all": null, "y1": null, "m3": null },
+    "deals": []
+  }
+]

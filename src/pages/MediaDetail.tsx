@@ -7,6 +7,7 @@ import { StarRating } from '../components/StarRating'
 import { SeriesSeasons } from '../components/SeriesSeasons'
 import { DiaryEntryModal, type DiaryEntryValues } from '../components/DiaryEntryModal'
 import { ConfirmDialog } from '../components/ConfirmDialog'
+import { PricePanel } from '../components/PricePanel'
 import type { MediaStatus } from '../types'
 import { STATUS_LABEL, GAME_STATUSES, GAME_STATUS_LABEL, gameStatusOf, formatRuntime, formatPlaytime, formatDate, fmtRating } from '../lib/utils'
 
@@ -359,6 +360,11 @@ export function MediaDetail() {
           </div>
         )}
       </div>
+
+      {/* Preços (jogos de PC no backlog) */}
+      {item.type === 'game' && item.status === 'wishlist' && (
+        <PricePanel mediaItemId={item.id} title={item.title} />
+      )}
 
       {/* Temporadas e episódios (apenas séries) */}
       {item.type === 'series' && (

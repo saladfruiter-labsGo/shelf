@@ -4,16 +4,19 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../lib/api'
 import { DiaryEntryModal, type DiaryEntryValues } from '../components/DiaryEntryModal'
 import { CategoryTag } from '../components/CategoryTag'
+import { PriceBadge } from '../components/PriceBadge'
 import { TYPE_LABEL, formatDate } from '../lib/utils'
 import type { MediaItem, MediaType } from '../types'
 
 /* ─── Ordenações disponíveis ─── */
-type SortKey = 'added_desc' | 'added_asc' | 'release_desc' | 'release_asc'
+type SortKey = 'added_desc' | 'added_asc' | 'release_desc' | 'release_asc' | 'price_asc' | 'discount_desc'
 const SORTS: { value: SortKey; label: string }[] = [
-  { value: 'added_desc',   label: 'Adicionado — recente' },
-  { value: 'added_asc',    label: 'Adicionado — antigo' },
-  { value: 'release_desc', label: 'Lançamento — recente' },
-  { value: 'release_asc',  label: 'Lançamento — antigo' },
+  { value: 'added_desc',    label: 'Adicionado — recente' },
+  { value: 'added_asc',     label: 'Adicionado — antigo' },
+  { value: 'release_desc',  label: 'Lançamento — recente' },
+  { value: 'release_asc',   label: 'Lançamento — antigo' },
+  { value: 'price_asc',     label: 'Menor preço' },
+  { value: 'discount_desc', label: 'Maior desconto' },
 ]
 
 const TYPE_EMOJI: Record<MediaType, string> = {
@@ -74,6 +77,17 @@ export function Wishlist() {
     queryFn: () => api.media.list({ status: 'wishlist', limit: 500 }),
   })
 
+  // Uma única consulta em lote alimenta o preço de todos os cards.
+  const { data: prices } = useQuery({
+    queryKey: ['prices', 'backlog'],
+    queryFn: api.prices.backlog,
+    staleTime: 60_000,
+  })
+  const priceBy = useMemo(
+    () => new Map((prices?.items ?? []).map(p => [p.media_item_id, p])),
+    [prices],
+  )
+
   /* ─── filtros ─── */
   const [fType, setFType]         = useState('')
   const [fGenre, setFGenre]       = useState('')
@@ -81,6 +95,8 @@ export function Wishlist() {
   const [fDecade, setFDecade]     = useState('')
   const [fDirector, setFDirector] = useState('')
   const [fMonth, setFMonth]       = useState('')
+  const [fShop, setFShop]         = useState('')
+  const [fOnSale, setFOnSale]     = useState(false)
   const [sort, setSort]           = useState<SortKey>('added_desc')
 
   /* ─── modal "adicionar ao diário" ─── */
@@ -116,7 +132,9 @@ export function Wishlist() {
       .sort((a, b) => Number(b) - Number(a))
     const directors = uniq(items.map(i => i.creators).filter((c): c is string => !!c)).sort()
     const months   = uniq(items.map(i => addedMonthKey(i.added_at))).sort((a, b) => (a < b ? 1 : -1))
+    const shops    = uniq([...priceBy.values()].map(p => p.best?.shop_name).filter((n): n is string => !!n)).sort()
     return {
+      shops:     shops.map(sh => ({ value: sh, label: sh })),
       types:     types.map(t => ({ value: t, label: `${TYPE_EMOJI[t]} ${TYPE_LABEL[t]}` })),
       genres:    genres.map(g => ({ value: g, label: g })),
       years:     years.map(y => ({ value: y, label: y })),
@@ -124,7 +142,7 @@ export function Wishlist() {
       directors: directors.map(d => ({ value: d, label: d })),
       months:    months.map(m => ({ value: m, label: monthLabel(m) })),
     }
-  }, [items])
+  }, [items, priceBy])
 
   /* ─── aplica filtros + ordenação ─── */
   const filtered = useMemo(() => {
@@ -134,23 +152,33 @@ export function Wishlist() {
       (!fYear     || String(i.year) === fYear) &&
       (!fDecade   || (i.year != null && `${Math.floor(i.year / 10) * 10}` === fDecade)) &&
       (!fDirector || i.creators === fDirector) &&
-      (!fMonth    || addedMonthKey(i.added_at) === fMonth)
+      (!fMonth    || addedMonthKey(i.added_at) === fMonth) &&
+      (!fShop     || priceBy.get(i.id)?.best?.shop_name === fShop) &&
+      (!fOnSale   || (priceBy.get(i.id)?.best?.discount_percent ?? 0) > 0)
     )
     const time = (v: string | null | undefined) => (v ? new Date(v).getTime() : 0)
+    // Itens sem preço conhecido vão para o fim das ordenações por preço.
+    const price    = (id: number) => priceBy.get(id)?.best?.price_minor ?? Number.POSITIVE_INFINITY
+    const discount = (id: number) => priceBy.get(id)?.best?.discount_percent ?? -1
     out = [...out].sort((a, b) => {
       switch (sort) {
-        case 'added_asc':    return time(a.added_at) - time(b.added_at)
-        case 'release_desc': return time(b.release_date) - time(a.release_date)
-        case 'release_asc':  return time(a.release_date) - time(b.release_date)
+        case 'added_asc':     return time(a.added_at) - time(b.added_at)
+        case 'release_desc':  return time(b.release_date) - time(a.release_date)
+        case 'release_asc':   return time(a.release_date) - time(b.release_date)
+        case 'price_asc':     return price(a.id) - price(b.id)
+        case 'discount_desc': return discount(b.id) - discount(a.id)
         case 'added_desc':
-        default:             return time(b.added_at) - time(a.added_at)
+        default:              return time(b.added_at) - time(a.added_at)
       }
     })
     return out
-  }, [items, fType, fGenre, fYear, fDecade, fDirector, fMonth, sort])
+  }, [items, priceBy, fType, fGenre, fYear, fDecade, fDirector, fMonth, fShop, fOnSale, sort])
 
-  const anyFilter = fType || fGenre || fYear || fDecade || fDirector || fMonth
-  const clearAll = () => { setFType(''); setFGenre(''); setFYear(''); setFDecade(''); setFDirector(''); setFMonth('') }
+  const anyFilter = fType || fGenre || fYear || fDecade || fDirector || fMonth || fShop || fOnSale
+  const clearAll = () => {
+    setFType(''); setFGenre(''); setFYear(''); setFDecade(''); setFDirector('')
+    setFMonth(''); setFShop(''); setFOnSale(false)
+  }
 
   return (
     <div style={{ background: 'var(--bg)', minHeight: '100vh' }}>
@@ -178,6 +206,23 @@ export function Wishlist() {
             <FilterSelect label="Década"    value={fDecade}   onChange={setFDecade}   options={opts.decades} />
             <FilterSelect label="Diretor"   value={fDirector} onChange={setFDirector} options={opts.directors} />
             <FilterSelect label="Mês adic." value={fMonth}    onChange={setFMonth}    options={opts.months} />
+            <FilterSelect label="Loja"      value={fShop}     onChange={setFShop}     options={opts.shops} />
+
+            {opts.shops.length > 0 && (
+              <button
+                onClick={() => setFOnSale(v => !v)}
+                aria-pressed={fOnSale}
+                style={{
+                  background: fOnSale ? 'var(--games-bg)' : 'var(--card)',
+                  border: `1px solid ${fOnSale ? 'var(--games)' : 'var(--border-strong)'}`,
+                  color: fOnSale ? 'var(--games)' : 'var(--text-secondary)',
+                  borderRadius: 9999, padding: '7px 14px', fontSize: 13, fontWeight: 500,
+                  cursor: 'pointer', outline: 'none', fontFamily: 'inherit',
+                }}
+              >
+                🏷️ Em promoção
+              </button>
+            )}
 
             {/* Ordenação */}
             <label style={{ display: 'flex', flexDirection: 'column', gap: 4, marginLeft: 'auto' }}>
@@ -257,6 +302,11 @@ export function Wishlist() {
                 <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>
                   {[item.year, item.genre].filter(Boolean).join(' · ') || '—'}
                 </p>
+
+                {/* Preço (só jogos, e só enquanto estão no backlog) */}
+                {item.type === 'game' && prices?.enabled && (
+                  <PriceBadge summary={priceBy.get(item.id)} />
+                )}
 
                 {/* Ação: adicionar ao diário */}
                 <button

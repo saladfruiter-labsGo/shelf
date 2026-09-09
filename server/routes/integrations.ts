@@ -4,6 +4,9 @@ import { db } from '../db.js'
 import { sendTelegram, telegramDetectChats, notifyLibraryActivity } from '../notify.js'
 import { ensureSeriesStructure, setEpisodeWatched, tmdbIdFromGuid, resolveTmdbSeriesId, resolveTmdbMovieId } from '../series.js'
 import { rawgLookup } from './search.js'
+import { fetchShops } from '../prices/providers/isthereanydeal.js'
+import { backlogGames } from '../prices/repository.js'
+import { syncBacklog, syncState } from '../prices/sync.js'
 
 const app = new Hono()
 
@@ -1008,6 +1011,25 @@ app.post('/playnite/webhook', async (c) => {
   return c.json({ ok: true })
 })
 
+/* ───────────────────────────── Preços (IsThereAnyDeal) ────────────────────────────── */
+
+// Confere a chave batendo na lista de lojas do país configurado — é a chamada
+// mais barata do provedor e já mostra se a região responde.
+app.post('/itad/test', async (c) => {
+  try {
+    const shops = await fetchShops()
+    if (shops.length === 0) return c.json({ ok: false, error: 'Nenhuma loja ativa para o país configurado.' }, 400)
+    return c.json({ ok: true, shops: shops.length })
+  } catch (e) {
+    return c.json({ ok: false, error: (e as Error).message }, 400)
+  }
+})
+
+app.post('/itad/sync', async (c) => {
+  await syncBacklog()
+  return c.json({ ok: true, sync: syncState() })
+})
+
 /* ─────────────────────────────────────── Loops ────────────────────────────────────── */
 
 let plexBusy = false
@@ -1056,6 +1078,15 @@ app.get('/', (c) => {
       enabled: cfg('PLAYNITE_ENABLED') === '1',
       webhook_secret: ensurePlayniteSecret(),
     },
+    prices: {
+      enabled:        cfg('ITAD_ENABLED') === '1',
+      api_key_set:    !!cfg('ITAD_API_KEY'),
+      api_key_masked: mask(cfg('ITAD_API_KEY')),
+      country:        cfg('ITAD_COUNTRY') || 'BR',
+      tracked:        backlogGames().length,
+      last_sync:      syncState().last_run?.at ?? null,
+      running:        syncState().running,
+    },
   })
 })
 
@@ -1079,6 +1110,8 @@ app.patch('/', async (c) => {
     ['KAVITA_URL', str(b.kavita_url)],
     ['KAVITA_LIBRARY_ID', str(b.kavita_library_id)],
     ['PLAYNITE_ENABLED', bool(b.playnite_enabled)],
+    ['ITAD_ENABLED', bool(b.itad_enabled)],
+    ['ITAD_COUNTRY', str(b.itad_country)?.toUpperCase().slice(0, 2)],
   ]
   for (const [k, v] of map) if (v !== undefined) setCfg(k, v)
   // Tokens/segredos só são sobrescritos quando um valor novo é enviado (não apagar ao salvar mascarado)
@@ -1090,6 +1123,9 @@ app.patch('/', async (c) => {
   const kavitaKey = str(b.kavita_api_key)
   if (kavitaKey !== undefined && kavitaKey !== '') setCfg('KAVITA_API_KEY', kavitaKey)
   if (b.kavita_api_key_clear === true) setCfg('KAVITA_API_KEY', '')
+  const itadKey = str(b.itad_api_key)
+  if (itadKey !== undefined && itadKey !== '') setCfg('ITAD_API_KEY', itadKey)
+  if (b.itad_api_key_clear === true) setCfg('ITAD_API_KEY', '')
   // credenciais do Kavita podem ter mudado → força re-autenticação no próximo ciclo
   kavitaToken = null
 

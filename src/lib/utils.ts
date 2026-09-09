@@ -106,3 +106,24 @@ export function daysUntil(dateStr: string): number {
 export function norm(s: string): string {
   return s.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase().trim()
 }
+
+/** Dinheiro vem do backend como inteiro em centavos — nunca como float. */
+export function formatMoney(minor: number, currency = 'BRL'): string {
+  try {
+    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency }).format(minor / 100)
+  } catch {
+    return `${currency} ${(minor / 100).toFixed(2)}`
+  }
+}
+
+/** "agora", "12 min", "3 h", "5 d" — para selos de "atualizado há…". */
+export function timeAgo(iso: string): string {
+  const diff = Date.now() - new Date(iso + (iso.includes('Z') || iso.includes('+') ? '' : 'Z')).getTime()
+  const min = Math.floor(diff / 60000)
+  if (!Number.isFinite(min)) return '—'
+  if (min < 1) return 'agora'
+  if (min < 60) return `${min} min`
+  const h = Math.floor(min / 60)
+  if (h < 24) return `${h} h`
+  return `${Math.floor(h / 24)} d`
+}

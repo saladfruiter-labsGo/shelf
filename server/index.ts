@@ -14,6 +14,8 @@ import seriesRoutes   from './routes/series.js'
 import diaryRoutes    from './routes/diary.js'
 import imgRoutes      from './routes/img.js'
 import integrationsRoutes from './routes/integrations.js'
+import pricesRoutes    from './routes/prices.js'
+import { startPriceSync } from './prices/sync.js'
 
 const app = new Hono()
 
@@ -30,6 +32,7 @@ app.route('/api/series',   seriesRoutes)
 app.route('/api/diary',    diaryRoutes)
 app.route('/api/img',      imgRoutes)
 app.route('/api/integrations', integrationsRoutes)
+app.route('/api/prices',  pricesRoutes)
 
 app.get('/api/health', (c) => c.json({ ok: true }))
 
@@ -40,3 +43,6 @@ const port = parseInt(process.env.PORT ?? '3000')
 console.log(`Shelf running on http://localhost:${port}`)
 
 serve({ fetch: app.fetch, port })
+
+// Preços do backlog: primeira passada logo após o boot, depois a cada 6 h.
+startPriceSync()

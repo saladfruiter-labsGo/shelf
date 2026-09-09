@@ -173,6 +173,15 @@ export interface IntegrationStatus {
     enabled:        boolean
     webhook_secret: string
   }
+  prices: {
+    enabled:        boolean
+    api_key_set:    boolean
+    api_key_masked: string
+    country:        string
+    tracked:        number
+    last_sync:      string | null
+    running:        boolean
+  }
 }
 
 export interface NowPlayingItem {
@@ -235,4 +244,97 @@ export interface WrapData {
   activity:             { period_key: string; count: number }[]
   totalRuntimeMinutes:  number
   dominantGenre:        string | null
+}
+
+/* ─── Preços de jogos (IsThereAnyDeal) ─── */
+
+export type GamePriceMatchStatus = 'pending' | 'resolved' | 'ambiguous' | 'not_found'
+
+/** Valores monetários chegam sempre como inteiro em centavos. */
+export interface GamePriceOffer {
+  shop_id:          number
+  shop_name:        string
+  price_minor:      number
+  regular_minor:    number
+  currency:         string
+  discount_percent: number
+  url:              string
+  drm:              string | null
+  voucher:          string | null
+  available:        boolean
+  shop_low_minor:   number | null
+  last_seen_at:     string
+}
+
+export interface GamePriceSummary {
+  media_item_id:     number
+  match_status:      GamePriceMatchStatus
+  matched_title:     string | null
+  currency:          string | null
+  best:              GamePriceOffer | null
+  history_low_minor: number | null
+  is_history_low:    boolean
+  last_synced_at:    string | null
+  stale:             boolean
+}
+
+export interface GamePriceSyncState {
+  running:  boolean
+  last_run: { at: string; ok: number; failed: number; error: string | null } | null
+}
+
+export interface GamePriceBacklog {
+  enabled: boolean
+  sync:    GamePriceSyncState
+  items:   GamePriceSummary[]
+}
+
+/** Um ponto do gráfico: menor preço disponível naquele dia. */
+export interface GamePricePoint {
+  day:              string   // YYYY-MM-DD
+  price_minor:      number
+  regular_minor:    number
+  discount_percent: number
+  shop_name:        string
+}
+
+export interface GamePriceMatch {
+  status:           GamePriceMatchStatus
+  provider_game_id: string | null
+  matched_title:    string | null
+  method:           string | null
+}
+
+export type GamePriceRange = '30d' | '90d' | '1y' | 'all'
+
+export interface GamePriceDetails {
+  media_item_id: number
+  enabled:       boolean
+  match:         GamePriceMatch
+  currency:      string | null
+  stats: {
+    current_minor:     number | null
+    history_low_minor: number | null
+    month_low_minor:   number | null
+    last30_low_minor:  number | null
+    local_since:       string | null
+  }
+  best:           GamePriceOffer | null
+  offers:         GamePriceOffer[]
+  points:         GamePricePoint[]
+  shops:          { id: number; name: string }[]
+  range:          GamePriceRange
+  shop:           number | null
+  last_synced_at: string | null
+  last_error:     string | null
+  stale:          boolean
+}
+
+/** Candidato do provedor para a correspondência manual. */
+export interface GamePriceCandidate {
+  id:     string
+  slug:   string
+  title:  string
+  type:   string | null
+  mature: boolean
 }
