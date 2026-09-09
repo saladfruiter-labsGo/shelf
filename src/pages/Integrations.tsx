@@ -352,6 +352,21 @@ function IntegrationsSection() {
     },
   })
 
+  const plexSyncFiles = useMutation({
+    mutationFn: api.integrations.plexSyncFiles,
+    onSuccess: (result) => {
+      qc.invalidateQueries({ queryKey: ['media'] })
+      const details = [
+        `${result.updated} arquivo(s) atualizado(s) de ${result.matched} filme(s) encontrados`,
+        `${result.unmatched} sem correspondência`,
+      ]
+      if (result.without_file) details.push(`${result.without_file} sem arquivo informado pelo Plex`)
+      setMsg(`${details.join('; ')}.`)
+      setTimeout(() => setMsg(''), 6000)
+    },
+    onError: (e: unknown) => { setMsg('Falha ao buscar arquivos do Plex: ' + ((e as Error).message || '')); setTimeout(() => setMsg(''), 5000) },
+  })
+
   const kavitaSync = useMutation({
     mutationFn: api.integrations.kavitaSync,
     onSuccess: () => {
@@ -508,6 +523,20 @@ function IntegrationsSection() {
             </button>
           </div>
           <p className="text-[11px] text-muted mt-1">Requer Plex Pass. O token na URL evita registros falsos.</p>
+        </div>
+
+        <div className="mt-4 pt-4 border-t border-border">
+          <button
+            type="button"
+            onClick={() => plexSyncFiles.mutate()}
+            disabled={plexSyncFiles.isPending || !status?.plex.url || !status?.plex.token_set}
+            className="text-xs px-3 py-2 bg-card border border-border rounded-lg text-primary hover:border-accent transition-colors disabled:opacity-50"
+          >
+            {plexSyncFiles.isPending ? 'Buscando arquivos…' : '↻ Buscar nomes dos arquivos'}
+          </button>
+          <p className="text-[11px] text-muted mt-2">
+            Busca os nomes dos arquivos de todos os filmes da biblioteca Plex e preenche os tooltips das capas e títulos.
+          </p>
         </div>
       </div>
 

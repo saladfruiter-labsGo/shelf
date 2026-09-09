@@ -6,6 +6,7 @@ import type {
   GamePriceBacklog, GamePriceDetails, GamePriceRange, GamePriceCandidate,
   SteamSyncResult, ExportScope, ExportSummary, ImportReport,
   LetterboxdKind, LetterboxdPlan, LetterboxdPreview, LetterboxdApplyResult,
+  PlexFilenameSyncResult,
 } from '../types'
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -144,6 +145,8 @@ export const api = {
 
   integrations: {
     status:     (): Promise<IntegrationStatus> => request('/integrations'),
+    plexSyncFiles: (): Promise<PlexFilenameSyncResult> =>
+      request('/integrations/plex/sync-files', { method: 'POST' }),
     update:     (data: Record<string, unknown>): Promise<{ ok: boolean }> =>
       request('/integrations', { method: 'PATCH', body: JSON.stringify(data) }),
     nowPlaying: (): Promise<NowPlaying> => request('/integrations/now-playing'),

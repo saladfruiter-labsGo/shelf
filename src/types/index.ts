@@ -156,6 +156,15 @@ export interface ListCheck {
 
 export type ActivityMediaType = 'movie' | 'series' | 'music'
 
+export interface PlexFilenameSyncResult {
+  sections:     number
+  scanned:      number
+  matched:      number
+  updated:      number
+  without_file: number
+  unmatched:    number
+}
+
 export interface IntegrationStatus {
   plex: {
     enabled:        boolean
