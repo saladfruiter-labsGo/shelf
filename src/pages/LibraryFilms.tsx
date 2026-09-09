@@ -1,9 +1,13 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../lib/api'
+import { LibrarySearch } from '../components/LibrarySearch'
+import { norm } from '../lib/utils'
 
 export function LibraryFilms() {
   const navigate = useNavigate()
+  const [search, setSearch] = useState('')
 
   const { data: rawItems = [], isLoading } = useQuery({
     queryKey: ['media', 'movie'],
@@ -14,6 +18,10 @@ export function LibraryFilms() {
   const items = rawItems.filter(i => i.status !== 'wishlist')
 
   const watched = items.filter(i => i.status === 'completed').length
+
+  // Busca por nome (instantânea).
+  const q = norm(search)
+  const visible = q ? items.filter(i => norm(i.title).includes(q)) : items
 
   return (
     <div style={{ background: 'var(--bg)', color: 'var(--text-primary)', minHeight: '100vh' }}>
@@ -39,13 +47,22 @@ export function LibraryFilms() {
         </p>
       </div>
 
+      {/* Busca por nome (filtra instantaneamente) */}
+      <LibrarySearch
+        value={search}
+        onChange={setSearch}
+        ariaLabel="Buscar filme por nome"
+        count={visible.length}
+        showCount={Boolean(q)}
+      />
+
       {/* Grid — 5 columns poster style */}
       <div style={{ maxWidth: 1280, margin: '0 auto', padding: '0 var(--page-x) 80px', display: 'grid', gridTemplateColumns: 'var(--grid-films)', gap: 16 }}>
         {isLoading
           ? Array.from({ length: 10 }).map((_, i) => (
               <div key={i} style={{ aspectRatio: '2/3', background: 'var(--card)', borderRadius: 12 }} />
             ))
-          : items.map(item => (
+          : visible.map(item => (
               <div
                 key={item.id}
                 onClick={() => navigate(`/media/${item.id}`)}
@@ -93,10 +110,10 @@ export function LibraryFilms() {
         }
       </div>
 
-      {items.length === 0 && !isLoading && (
+      {visible.length === 0 && !isLoading && (
         <div style={{ textAlign: 'center', padding: '80px 0' }}>
           <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '3rem', fontWeight: 800, color: 'var(--border-strong)', marginBottom: 12 }}>Vazio</p>
-          <p style={{ color: 'var(--text-muted)' }}>Nenhum filme na biblioteca ainda</p>
+          <p style={{ color: 'var(--text-muted)' }}>{items.length === 0 ? 'Nenhum filme na biblioteca ainda' : 'Nenhum filme encontrado'}</p>
         </div>
       )}
 

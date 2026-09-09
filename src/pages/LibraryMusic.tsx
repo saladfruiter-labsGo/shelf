@@ -1,6 +1,9 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../lib/api'
+import { LibrarySearch } from '../components/LibrarySearch'
+import { norm } from '../lib/utils'
 
 function formatWhen(iso: string): string {
   return new Date(iso).toLocaleString('pt-BR', {
@@ -18,6 +21,7 @@ function formatDuration(ms: number | null): string | null {
 
 export function LibraryMusic() {
   const navigate = useNavigate()
+  const [search, setSearch] = useState('')
 
   // Cada execução (scrobble Plex/Last.fm) é o seu próprio registro — a
   // biblioteca de músicas é o histórico de execuções, não um item por faixa.
@@ -26,7 +30,14 @@ export function LibraryMusic() {
     queryFn: () => api.integrations.activity({ limit: 500, media_type: 'music' }),
   })
 
-  const plays = rawEvents.filter(e => e.event_type === 'scrobble' || e.event_type === 'listen')
+  const allPlays = rawEvents.filter(e => e.event_type === 'scrobble' || e.event_type === 'listen')
+
+  // Busca por nome (instantânea). Uma execução se identifica pela faixa *e*
+  // pelo artista, então os dois entram na busca.
+  const q = norm(search)
+  const plays = q
+    ? allPlays.filter(p => norm(p.title).includes(q) || norm(p.subtitle ?? '').includes(q))
+    : allPlays
 
   return (
     <div style={{ background: 'var(--bg)', color: 'var(--text-primary)', minHeight: '100vh' }}>
@@ -48,9 +59,19 @@ export function LibraryMusic() {
           </h1>
         </div>
         <p style={{ fontFamily: 'Space Grotesk, monospace', fontSize: 13, color: 'var(--text-muted)', paddingBottom: 8 }}>
-          {plays.length} {plays.length === 1 ? 'execução' : 'execuções'}
+          {allPlays.length} {allPlays.length === 1 ? 'execução' : 'execuções'}
         </p>
       </div>
+
+      {/* Busca por nome (filtra instantaneamente) */}
+      <LibrarySearch
+        value={search}
+        onChange={setSearch}
+        placeholder="Buscar por faixa ou artista…"
+        ariaLabel="Buscar música por faixa ou artista"
+        count={plays.length}
+        showCount={Boolean(q)}
+      />
 
       {/* List — one row per play */}
       <div style={{ maxWidth: 1280, margin: '0 auto', padding: '0 var(--page-x) 80px' }}>
@@ -102,10 +123,14 @@ export function LibraryMusic() {
         {plays.length === 0 && !isLoading && (
           <div style={{ textAlign: 'center', padding: '80px 0' }}>
             <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '3rem', fontWeight: 800, color: 'var(--border-strong)', marginBottom: 12 }}>Vazio</p>
-            <p style={{ color: 'var(--text-muted)' }}>Nenhuma faixa ouvida ainda</p>
-            <p style={{ color: 'var(--text-muted)', fontSize: 13, marginTop: 8 }}>
-              Conecte o Plex ou o Last.fm nos ajustes para registrar automaticamente o que você ouve.
+            <p style={{ color: 'var(--text-muted)' }}>
+              {allPlays.length === 0 ? 'Nenhuma faixa ouvida ainda' : 'Nenhuma faixa encontrada'}
             </p>
+            {allPlays.length === 0 && (
+              <p style={{ color: 'var(--text-muted)', fontSize: 13, marginTop: 8 }}>
+                Conecte o Plex ou o Last.fm nos ajustes para registrar automaticamente o que você ouve.
+              </p>
+            )}
           </div>
         )}
       </div>

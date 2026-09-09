@@ -2,14 +2,13 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../lib/api'
-import { formatPlaytime, formatDate, GAME_STATUS_LABEL, GAME_STATUS_STYLE, gameStatusOf } from '../lib/utils'
+import { LibraryStats } from '../components/LibraryStats'
+import { LibrarySearch } from '../components/LibrarySearch'
+import { formatPlaytime, formatDate, norm, GAME_STATUS_LABEL, GAME_STATUS_STYLE, gameStatusOf } from '../lib/utils'
 import type { GameStatus } from '../types'
 
 // Estados que aparecem na biblioteca (nunca_jogado = wishlist, fica de fora).
 const HEADER_STATES: GameStatus[] = ['jogando', 'zerado', 'platinado', 'abandonado']
-
-// normaliza para busca insensível a acento/caixa
-const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()
 
 export function LibraryGames() {
   const navigate = useNavigate()
@@ -56,57 +55,25 @@ export function LibraryGames() {
             Meus jogos
           </h1>
         </div>
-        <div className="lib-stats">
-          {[
-            { key: null as GameStatus | null, n: items.length, l: 'Total', color: 'var(--text-primary)' },
-            ...HEADER_STATES.map(s => ({ key: s as GameStatus | null, n: countByStatus(s), l: GAME_STATUS_LABEL[s], color: GAME_STATUS_STYLE[s].color })),
-          ].map(s => {
-            const active = statusFilter === s.key
-            return (
-              <button
-                key={s.l}
-                onClick={() => setStatusFilter(prev => (s.key && prev === s.key ? null : s.key))}
-                title={s.key ? `Filtrar por ${s.l}` : 'Mostrar todos'}
-                style={{
-                  textAlign: 'right', background: 'none', border: 'none', cursor: 'pointer', padding: '0 0 4px',
-                  borderBottom: `2px solid ${active ? s.color : 'transparent'}`, opacity: active ? 1 : 0.55,
-                  transition: 'opacity .15s',
-                }}
-              >
-                <p className="lib-stat-n" style={{ fontFamily: 'Space Grotesk, sans-serif', fontWeight: 800, color: s.color, lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{s.n}</p>
-                <p style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px' }}>{s.l}</p>
-              </button>
-            )
-          })}
-        </div>
+        <LibraryStats
+          stats={[
+            { key: null, n: items.length, label: 'Total', color: 'var(--text-primary)' },
+            ...HEADER_STATES.map(st => ({ key: st, n: countByStatus(st), label: GAME_STATUS_LABEL[st], color: GAME_STATUS_STYLE[st].color })),
+          ]}
+          active={statusFilter}
+          onChange={setStatusFilter}
+        />
       </div>
 
       {/* Busca por nome (filtra instantaneamente) */}
-      <div style={{ maxWidth: 1280, margin: '0 auto', padding: '0 var(--page-x) 24px', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-        <div style={{ position: 'relative', flex: '1 1 280px', maxWidth: 420 }}>
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Buscar por nome…"
-            aria-label="Buscar jogo por nome"
-            style={{
-              width: '100%', boxSizing: 'border-box', padding: '10px 34px 10px 14px', borderRadius: 10,
-              border: '1px solid var(--border)', background: 'var(--card)', color: 'var(--text-primary)', fontSize: 14, outline: 'none',
-            }}
-          />
-          {search && (
-            <button onClick={() => setSearch('')} title="Limpar" aria-label="Limpar busca"
-              style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 18, lineHeight: 1 }}>
-              ×
-            </button>
-          )}
-        </div>
-        {(statusFilter || q) && (
-          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-            {visible.length} resultado{visible.length === 1 ? '' : 's'}{statusFilter ? ` · ${GAME_STATUS_LABEL[statusFilter]}` : ''}
-          </span>
-        )}
-      </div>
+      <LibrarySearch
+        value={search}
+        onChange={setSearch}
+        ariaLabel="Buscar jogo por nome"
+        count={visible.length}
+        showCount={Boolean(statusFilter || q)}
+        countSuffix={statusFilter ? ` · ${GAME_STATUS_LABEL[statusFilter]}` : undefined}
+      />
 
       {/* Grid */}
       <div style={{ maxWidth: 1280, margin: '0 auto', padding: '0 var(--page-x) 80px', display: 'grid', gridTemplateColumns: 'var(--grid-games)', gap: 16 }}>
