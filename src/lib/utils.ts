@@ -17,7 +17,7 @@ export const TYPE_COLOR: Record<MediaType, string> = {
 }
 
 export const STATUS_LABEL = {
-  wishlist:    'Watchlist',
+  wishlist:    'Backlog',
   in_progress: 'Em andamento',
   completed:   'Concluído',
   dropped:     'Abandonado',

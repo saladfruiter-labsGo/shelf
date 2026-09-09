@@ -54,6 +54,14 @@ interface ConfirmProps {
 
 const epKey = (s: number, e: number) => `${s}-${e}`
 
+const CREATOR_LABEL: Record<MediaType, string> = {
+  movie:  'Direção',
+  series: 'Criação',
+  game:   'Desenvolvedora',
+  book:   'Editora',
+  music:  'Artista',
+}
+
 /** Seletor de temporadas/episódios para séries (Série › Temporada › Episódio). */
 function SeasonPicker({
   seasons, selected, onToggleEp, onToggleSeason,
@@ -163,6 +171,13 @@ function ConfirmPanel({ result, onBack, onAdd, isPending }: ConfirmProps) {
   })
   const seasons = preview?.seasons ?? []
 
+  // Sinopse + diretor/criação: confirma visualmente que a mídia certa foi selecionada
+  const { data: details } = useQuery({
+    queryKey: ['details', result.type, result.external_id],
+    queryFn:  () => api.details(result.type, result.external_id),
+    staleTime: 5 * 60_000,
+  })
+
   const toggleEp = (s: number, e: number) => setSelected(prev => {
     const next = new Set(prev); const k = epKey(s, e)
     next.has(k) ? next.delete(k) : next.add(k); return next
@@ -200,18 +215,26 @@ function ConfirmPanel({ result, onBack, onAdd, isPending }: ConfirmProps) {
 
   return (
     <div className="p-4 max-h-[70vh] overflow-y-auto">
-      {/* Selected item preview */}
-      <div className="flex items-center gap-3 mb-4 p-3 bg-card rounded-lg border border-border">
-        <div className="w-9 h-12 flex-shrink-0 rounded overflow-hidden bg-surface border border-border">
+      {/* Selected item preview — imagem grande + sinopse/diretor para confirmar a escolha */}
+      <div className="flex gap-3 mb-4 p-3 bg-card rounded-lg border border-border">
+        <div className="w-20 h-28 flex-shrink-0 rounded overflow-hidden bg-surface border border-border">
           {result.cover_url
             ? <img src={result.cover_url} alt="" className="w-full h-full object-cover" />
-            : <div className="w-full h-full flex items-center justify-center text-base text-muted">{emoji}</div>}
+            : <div className="w-full h-full flex items-center justify-center text-3xl text-muted">{emoji}</div>}
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-primary truncate">{result.title}</p>
-          <p className="text-xs text-muted">{result.year}{result.author ? ` · ${result.author}` : ''}</p>
+          <div className="flex items-start justify-between gap-2">
+            <p className="text-sm font-semibold text-primary leading-snug">{result.title}</p>
+            <button onClick={onBack} className="text-muted hover:text-primary text-lg leading-none flex-shrink-0">←</button>
+          </div>
+          <p className="text-xs text-muted mt-0.5">
+            {[result.year, details?.creators ? `${CREATOR_LABEL[result.type]}: ${details.creators}` : (result.author ? `${CREATOR_LABEL.book}: ${result.author}` : null)]
+              .filter(Boolean).join(' · ')}
+          </p>
+          {details?.synopsis && (
+            <p className="text-xs text-secondary mt-2 leading-relaxed line-clamp-4">{details.synopsis}</p>
+          )}
         </div>
-        <button onClick={onBack} className="text-muted hover:text-primary text-lg leading-none flex-shrink-0">←</button>
       </div>
 
       {/* Rating */}
@@ -256,7 +279,7 @@ function ConfirmPanel({ result, onBack, onAdd, isPending }: ConfirmProps) {
               {[0, 1, 2].map(i => <div key={i} className="h-11 bg-card rounded-lg animate-pulse" />)}
             </div>
           ) : seasons.length === 0 ? (
-            <p className="text-xs text-muted py-2">Não foi possível carregar as temporadas (verifique a chave do TMDB). Você ainda pode adicionar à Watchlist.</p>
+            <p className="text-xs text-muted py-2">Não foi possível carregar as temporadas (verifique a chave do TMDB). Você ainda pode adicionar ao Backlog.</p>
           ) : (
             <>
               <SeasonPicker seasons={seasons} selected={selected} onToggleEp={toggleEp} onToggleSeason={toggleSeason} />
@@ -297,9 +320,9 @@ function ConfirmPanel({ result, onBack, onAdd, isPending }: ConfirmProps) {
           onClick={() => submit('watchlist')}
           disabled={isPending}
           className="flex-1 py-2 rounded-lg text-sm font-semibold border border-border text-primary bg-card hover:border-border-strong transition-colors disabled:opacity-50"
-          title="Envia para a Watchlist (quero ver/ouvir/ler/jogar depois)"
+          title="Envia para o Backlog (quero ver/ouvir/ler/jogar depois)"
         >
-          {btnBusy('watchlist') ? '...' : '♡ Watchlist'}
+          {btnBusy('watchlist') ? '...' : '♡ Backlog'}
         </button>
       </div>
       <button
@@ -371,7 +394,7 @@ export function SearchModal({ open, onClose }: Props) {
       const when     = date || todayISODate()
       const note     = comment.trim() ? comment.trim() : null
 
-      // Status base: Watchlist → wishlist; séries entram como "em andamento"
+      // Status base: Backlog → wishlist; séries entram como "em andamento"
       // (os episódios marcados recomputam para "concluído" se completarem);
       // demais tipos vistos/registrados entram como "concluído".
       const status: MediaStatus =
