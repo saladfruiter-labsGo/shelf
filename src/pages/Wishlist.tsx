@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../lib/api'
@@ -68,13 +68,85 @@ function FilterSelect({
   )
 }
 
+/* ─── Paginação da grade ─── */
+
+/**
+ * A paginação é da **grade**, não da consulta: os filtros (gênero, ano, diretor,
+ * loja) e a ordenação por preço são montados a partir do backlog inteiro. Se o
+ * servidor mandasse só uma página, o seletor de gênero listaria os gêneros
+ * daquela página e "menor preço" ordenaria dentro dela. Então os dados vêm
+ * completos (`listAll`, em páginas) e só o que é desenhado é fatiado.
+ */
+const PER_PAGE = 48
+
+/** Páginas a mostrar: as pontas, a atual e as vizinhas; o resto vira reticência. */
+function pageWindow(current: number, total: number): (number | '…')[] {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
+  const near = [current - 1, current, current + 1].filter(n => n > 1 && n < total)
+  const out: (number | '…')[] = [1]
+  if (near[0] > 2) out.push('…')
+  out.push(...near)
+  if (near[near.length - 1] < total - 1) out.push('…')
+  out.push(total)
+  return out
+}
+
+const pageBtn = (active: boolean): React.CSSProperties => ({
+  background: active ? 'var(--accent)' : 'var(--card)',
+  border: `1px solid ${active ? 'var(--accent)' : 'var(--border-strong)'}`,
+  color: active ? 'var(--bg)' : 'var(--text-secondary)',
+  borderRadius: 9999, padding: '7px 14px', fontSize: 13, fontWeight: active ? 700 : 500,
+  cursor: 'pointer', outline: 'none', fontFamily: 'inherit', minWidth: 40,
+})
+
+function Pager({ page, total, count, onGo }: {
+  page: number
+  total: number
+  /** Total de itens depois dos filtros — para a linha "mostrando X–Y de Z". */
+  count: number
+  onGo: (p: number) => void
+}) {
+  if (total <= 1) return null
+  const first = (page - 1) * PER_PAGE + 1
+  const last  = Math.min(page * PER_PAGE, count)
+
+  return (
+    <nav
+      aria-label="Paginação do backlog"
+      style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 48 }}
+    >
+      <button onClick={() => onGo(page - 1)} disabled={page === 1}
+        style={{ ...pageBtn(false), opacity: page === 1 ? 0.4 : 1, cursor: page === 1 ? 'default' : 'pointer' }}>
+        ← Anterior
+      </button>
+
+      {pageWindow(page, total).map((p, i) =>
+        p === '…'
+          ? <span key={`gap-${i}`} style={{ color: 'var(--text-muted)', padding: '0 4px', fontSize: 13 }}>…</span>
+          : <button key={p} onClick={() => onGo(p)} aria-current={p === page ? 'page' : undefined} style={pageBtn(p === page)}>
+              {p}
+            </button>,
+      )}
+
+      <button onClick={() => onGo(page + 1)} disabled={page === total}
+        style={{ ...pageBtn(false), opacity: page === total ? 0.4 : 1, cursor: page === total ? 'default' : 'pointer' }}>
+        Próxima →
+      </button>
+
+      <p style={{ width: '100%', textAlign: 'center', marginTop: 12, fontFamily: 'Space Grotesk, monospace', fontSize: 12, color: 'var(--text-muted)' }}>
+        {first}–{last} de {count}
+      </p>
+    </nav>
+  )
+}
+
 export function Wishlist() {
   const navigate = useNavigate()
   const qc = useQueryClient()
 
   const { data: items = [], isLoading } = useQuery({
     queryKey: ['media', 'wishlist'],
-    queryFn: () => api.media.list({ status: 'wishlist', limit: 500 }),
+    queryFn: () => api.media.listAll({ status: 'wishlist' }),
   })
 
   // Uma única consulta em lote alimenta o preço de todos os cards.
@@ -98,6 +170,8 @@ export function Wishlist() {
   const [fShop, setFShop]         = useState('')
   const [fOnSale, setFOnSale]     = useState(false)
   const [sort, setSort]           = useState<SortKey>('added_desc')
+  const [page, setPage]           = useState(1)
+  const gridTop = useRef<HTMLDivElement>(null)
 
   /* ─── modal "adicionar ao diário" ─── */
   const [diaryFor, setDiaryFor] = useState<MediaItem | null>(null)
@@ -173,6 +247,26 @@ export function Wishlist() {
     })
     return out
   }, [items, priceBy, fType, fGenre, fYear, fDecade, fDirector, fMonth, fShop, fOnSale, sort])
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE))
+
+  // Mexeu no filtro ou na ordenação, a lista é outra: voltar para a primeira
+  // página, senão o usuário cai numa página que talvez nem exista mais.
+  useEffect(() => {
+    setPage(1)
+  }, [items.length, fType, fGenre, fYear, fDecade, fDirector, fMonth, fShop, fOnSale, sort])
+
+  const safePage = Math.min(page, totalPages)
+  const pageItems = useMemo(
+    () => filtered.slice((safePage - 1) * PER_PAGE, safePage * PER_PAGE),
+    [filtered, safePage],
+  )
+
+  /** Trocar de página sem deixar o usuário no meio da grade anterior. */
+  const goTo = (p: number) => {
+    setPage(Math.min(Math.max(1, p), totalPages))
+    gridTop.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
 
   const anyFilter = fType || fGenre || fYear || fDecade || fDirector || fMonth || fShop || fOnSale
   const clearAll = () => {
@@ -254,6 +348,9 @@ export function Wishlist() {
           </div>
         )}
 
+        {/* Âncora para onde a página rola ao trocar de página da grade. */}
+        <div ref={gridTop} style={{ scrollMarginTop: 24 }} />
+
         {/* Grid */}
         {isLoading ? (
           <div style={{ display: 'grid', gridTemplateColumns: 'var(--grid-poster)', gap: 16 }}>
@@ -263,7 +360,7 @@ export function Wishlist() {
           </div>
         ) : filtered.length > 0 ? (
           <div style={{ display: 'grid', gridTemplateColumns: 'var(--grid-poster)', gap: 16 }}>
-            {filtered.map(item => (
+            {pageItems.map(item => (
               <div key={item.id} className="group" style={{ display: 'flex', flexDirection: 'column' }}>
                 {/* Poster → detalhe */}
                 <div
@@ -337,6 +434,8 @@ export function Wishlist() {
             </p>
           </div>
         )}
+
+        <Pager page={safePage} total={totalPages} count={filtered.length} onGo={goTo} />
       </div>
 
       {/* Modal: adicionar ao diário (marca como concluído → entra na biblioteca) */}
