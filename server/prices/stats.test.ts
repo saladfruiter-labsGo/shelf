@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { buildSeries, computeStats, dayOf, parseRange, rangeStart, type HistoryRow } from './stats.js'
+import { buildSeries, computeStats, dayOf, parseRange, rangeStart, shopStats, type HistoryRow } from './stats.js'
 
 function row(shop: number, name: string, price: number, at: string, regular = price, cut = 0): HistoryRow {
   return { shop_id: shop, shop_name: name, price_minor: price, regular_minor: regular, discount_percent: cut, currency: 'BRL', observed_at: at }
@@ -102,4 +102,22 @@ test('parseRange cai no padrão de 3 meses para valores inválidos', () => {
   assert.equal(parseRange(undefined), '90d')
   assert.equal(rangeStart('all'), null)
   assert.equal(rangeStart('30d', new Date('2026-09-09T00:00:00Z'))!.toISOString(), '2026-08-10T00:00:00.000Z')
+})
+
+test('shopStats resume menor histórico e último preço de cada loja', () => {
+  const stats = shopStats([
+    row(61, 'Steam',  9899, '2026-06-01T10:00:00Z'),
+    row(61, 'Steam',  2474, '2026-07-04T10:00:00Z'),
+    row(61, 'Steam',  4949, '2026-08-01T10:00:00Z'),
+    row(35, 'Nuuvem', 7999, '2026-06-15T10:00:00Z'),
+  ])
+
+  assert.deepEqual(stats.map(s => [s.shop_name, s.low_minor, s.low_at, s.last_minor, s.last_at]), [
+    ['Steam',  2474, '2026-07-04T10:00:00Z', 4949, '2026-08-01T10:00:00Z'],
+    ['Nuuvem', 7999, '2026-06-15T10:00:00Z', 7999, '2026-06-15T10:00:00Z'],
+  ])
+})
+
+test('shopStats devolve lista vazia sem histórico', () => {
+  assert.deepEqual(shopStats([]), [])
 })

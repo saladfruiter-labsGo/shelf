@@ -177,3 +177,40 @@ export function rangeStart(range: Range, now: Date = new Date()): Date | null {
 export function parseRange(v: unknown): Range {
   return v === '30d' || v === '90d' || v === '1y' || v === 'all' ? v : '90d'
 }
+
+export interface ShopStat {
+  shop_id:     number
+  shop_name:   string
+  /** Menor preço já observado nesta loja, e quando. */
+  low_minor:   number
+  low_at:      string
+  /** Último preço observado nesta loja, e quando. */
+  last_minor:  number
+  last_at:     string
+}
+
+/**
+ * Resumo por loja: menor preço já visto (com a data) e o último preço conhecido.
+ * Alimenta a lista de lojas da página do jogo, inclusive para lojas que já não
+ * têm oferta ativa — o que elas cobraram continua sendo informação útil.
+ */
+export function shopStats(rows: HistoryRow[]): ShopStat[] {
+  const byShop = new Map<number, ShopStat>()
+
+  for (const r of rows) {
+    const cur = byShop.get(r.shop_id)
+    if (!cur) {
+      byShop.set(r.shop_id, {
+        shop_id: r.shop_id, shop_name: r.shop_name,
+        low_minor: r.price_minor, low_at: r.observed_at,
+        last_minor: r.price_minor, last_at: r.observed_at,
+      })
+      continue
+    }
+    cur.shop_name = r.shop_name
+    if (r.price_minor < cur.low_minor) { cur.low_minor = r.price_minor; cur.low_at = r.observed_at }
+    if (r.observed_at >= cur.last_at)  { cur.last_minor = r.price_minor; cur.last_at = r.observed_at }
+  }
+
+  return [...byShop.values()].sort((a, b) => a.low_minor - b.low_minor)
+}

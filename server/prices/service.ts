@@ -6,7 +6,7 @@ import { db } from '../db.js'
 import * as itad from './providers/isthereanydeal.js'
 import * as repo from './repository.js'
 import { resolveMatch, rankCandidates } from './matcher.js'
-import { buildSeries, computeStats, parseRange, rangeStart, type Range } from './stats.js'
+import { buildSeries, computeStats, parseRange, rangeStart, shopStats, type Range } from './stats.js'
 
 const selGame = db.prepare(`SELECT id, title, external_id FROM media_items WHERE id = ? AND type = 'game'`)
 
@@ -17,6 +17,10 @@ const REFRESH_COOLDOWN_MS = 5 * 60_000
 
 const lastManualRefresh = new Map<number, number>()
 
+/**
+ * Uma linha da lista de lojas. Lojas sem oferta ativa também entram: mostram o
+ * último preço conhecido e o menor histórico daquela loja, sem botão de compra.
+ */
 export interface PriceOffer {
   shop_id:          number
   shop_name:        string
@@ -24,11 +28,14 @@ export interface PriceOffer {
   regular_minor:    number
   currency:         string
   discount_percent: number
-  url:              string
+  url:              string | null
   drm:              string | null
   voucher:          string | null
   available:        boolean
+  /** Menor preço já visto nesta loja, e quando. */
   shop_low_minor:   number | null
+  shop_low_at:      string | null
+  /** Última vez que este preço foi observado. */
   last_seen_at:     string
 }
 
@@ -55,7 +62,7 @@ function canShowPrices(status: string): boolean {
   return status === 'resolved'
 }
 
-function toOffer(o: repo.OfferRow, shopLow: number | null): PriceOffer {
+function toOffer(o: repo.OfferRow, low: { low_minor: number; low_at: string } | undefined): PriceOffer {
   return {
     shop_id: o.shop_id,
     shop_name: o.shop_name,
@@ -67,7 +74,8 @@ function toOffer(o: repo.OfferRow, shopLow: number | null): PriceOffer {
     drm: o.drm,
     voucher: o.voucher,
     available: o.available === 1,
-    shop_low_minor: shopLow,
+    shop_low_minor: low?.low_minor ?? o.price_minor,
+    shop_low_at:    low?.low_at ?? null,
     last_seen_at: o.last_seen_at,
   }
 }
@@ -94,6 +102,7 @@ export function backlogSummary(): PriceSummary[] {
           voucher: null,
           available: true,
           shop_low_minor: null,
+          shop_low_at: null,
           last_seen_at: r.last_synced_at ?? '',
         }
       : null
@@ -161,21 +170,47 @@ export function gameDetails(mediaItemId: number, rangeRaw?: unknown, shopRaw?: u
 
   const show = canShowPrices(product.match_status)
   const currency = product.currency
-  const shopLows = repo.getShopLows(product.id)
+
+  const allRows = show ? repo.getHistory(product.id, { currency }) : []
+  const lows = new Map(shopStats(allRows).map(s => [s.shop_id, s]))
 
   const offers = show
     ? repo.getOffers(product.id)
         .filter(o => !currency || o.currency === currency)   // nunca misturar moedas
-        .map(o => toOffer(o, shopLows[o.shop_id] ?? null))
+        .map(o => toOffer(o, lows.get(o.shop_id)))
     : []
   const best = offers.find(o => o.available) ?? null
+
+  // Lojas que aparecem só no histórico importado do provedor entram na lista
+  // com o último preço conhecido — sem botão de compra, porque não há oferta.
+  const listed = new Set(offers.map(o => o.shop_id))
+  for (const s of lows.values()) {
+    if (listed.has(s.shop_id)) continue
+    offers.push({
+      shop_id: s.shop_id,
+      shop_name: s.shop_name,
+      price_minor: s.last_minor,
+      regular_minor: s.last_minor,
+      currency: currency ?? 'BRL',
+      discount_percent: 0,
+      url: null,
+      drm: null,
+      voucher: null,
+      available: false,
+      shop_low_minor: s.low_minor,
+      shop_low_at: s.low_at,
+      last_seen_at: s.last_at,
+    })
+  }
+  // Disponíveis primeiro, da mais barata para a mais cara.
+  offers.sort((a, b) =>
+    Number(b.available) - Number(a.available) || a.price_minor - b.price_minor)
 
   const rows = show
     ? repo.getHistory(product.id, { since: rangeStart(range), shopId: shop, currency })
     : []
   // Só as lojas com oferta ativa carregam o preço até hoje no gráfico.
   const activeShops = offers.filter(o => o.available).map(o => o.shop_id)
-  const allRows = show ? repo.getHistory(product.id, { currency }) : []
 
   const stats = computeStats(allRows, best?.price_minor ?? null)
   const historyLow = [product.history_low_minor, stats.local_low_minor]

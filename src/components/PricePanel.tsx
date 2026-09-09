@@ -218,20 +218,34 @@ function Stat({ label, value, highlight }: { label: string; value: string; highl
 
 /* ───────────────────────────────── Ofertas ────────────────────────────────── */
 
-function OfferRow({ offer, currency }: { offer: GamePriceOffer; currency: string }) {
+function OfferRow({ offer, currency, best }: { offer: GamePriceOffer; currency: string; best: boolean }) {
+  const isShopLow = offer.available && offer.shop_low_minor != null && offer.price_minor <= offer.shop_low_minor
+
   return (
-    <div className={`flex flex-wrap items-center gap-x-4 gap-y-1 py-2.5 border-b border-border ${offer.available ? '' : 'opacity-50'}`}>
-      <div className="min-w-[120px] flex-1">
-        <p className="text-sm text-primary">{offer.shop_name}</p>
+    <div className={`flex flex-wrap items-center gap-x-4 gap-y-1 py-2.5 border-b border-border ${offer.available ? '' : 'opacity-60'}`}>
+      {/* Loja */}
+      <div className="min-w-[140px] flex-1">
+        <p className="text-sm text-primary flex items-center gap-2">
+          {offer.shop_name}
+          {best && (
+            <span className="text-[10px] font-bold uppercase tracking-wide px-1.5 rounded" style={{ color: 'var(--games)', background: 'var(--games-bg)' }}>
+              melhor
+            </span>
+          )}
+        </p>
         <p className="text-[11px] text-muted">
           {offer.drm ? `${offer.drm} · ` : ''}
-          {offer.available ? `verificado há ${timeAgo(offer.last_seen_at)}` : 'oferta indisponível'}
+          {offer.available ? `verificado há ${timeAgo(offer.last_seen_at)}` : `sem oferta · visto há ${timeAgo(offer.last_seen_at)}`}
           {offer.voucher && ` · cupom ${offer.voucher}`}
         </p>
       </div>
 
-      <div className="text-right">
-        <p className="text-sm font-medium text-primary">{formatMoney(offer.price_minor, currency)}</p>
+      {/* Preço atual */}
+      <div className="text-right min-w-[92px]">
+        <p className="text-[10px] text-muted uppercase tracking-wide">{offer.available ? 'Agora' : 'Último preço'}</p>
+        <p className="text-sm font-medium" style={{ color: isShopLow ? 'var(--games)' : 'var(--text-primary)' }}>
+          {formatMoney(offer.price_minor, currency)}
+        </p>
         {offer.discount_percent > 0 && (
           <p className="text-[11px]">
             <span className="line-through text-muted">{formatMoney(offer.regular_minor, currency)}</span>{' '}
@@ -240,14 +254,18 @@ function OfferRow({ offer, currency }: { offer: GamePriceOffer; currency: string
         )}
       </div>
 
-      <div className="text-right min-w-[86px]">
-        <p className="text-[10px] text-muted uppercase tracking-wide">Menor da loja</p>
+      {/* Menor histórico daquela loja + quando */}
+      <div className="text-right min-w-[104px]">
+        <p className="text-[10px] text-muted uppercase tracking-wide">Menor histórico</p>
         <p className="text-xs text-secondary">
           {offer.shop_low_minor != null ? formatMoney(offer.shop_low_minor, currency) : '—'}
         </p>
+        <p className="text-[11px] text-muted">
+          {offer.shop_low_at ? `há ${timeAgo(offer.shop_low_at)}` : '—'}
+        </p>
       </div>
 
-      {offer.available && offer.url && (
+      {offer.available && offer.url ? (
         <a
           href={offer.url}
           target="_blank"
@@ -256,6 +274,8 @@ function OfferRow({ offer, currency }: { offer: GamePriceOffer; currency: string
         >
           Ir para a loja ↗
         </a>
+      ) : (
+        <span className="text-xs text-muted whitespace-nowrap min-w-[104px] text-right">indisponível</span>
       )}
     </div>
   )
@@ -415,10 +435,27 @@ export function PricePanel({ mediaItemId, title }: { mediaItemId: number; title:
             </div>
           </details>
 
-          {/* Ofertas */}
+          {/* Lojas */}
           {data.offers.length > 0 && (
-            <div className="border-t border-border">
-              {data.offers.map(o => <OfferRow key={o.shop_id} offer={o} currency={currency} />)}
+            <div>
+              <div className="flex items-baseline justify-between gap-3 mb-1">
+                <p className="text-xs text-muted uppercase tracking-wide">
+                  Lojas · {data.offers.length}
+                </p>
+                <p className="text-[11px] text-muted">
+                  {data.offers.filter(o => o.available).length} com oferta agora
+                </p>
+              </div>
+              <div className="border-t border-border">
+                {data.offers.map(o => (
+                  <OfferRow
+                    key={o.shop_id}
+                    offer={o}
+                    currency={currency}
+                    best={o.shop_id === data.best?.shop_id}
+                  />
+                ))}
+              </div>
             </div>
           )}
 

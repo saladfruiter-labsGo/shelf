@@ -139,7 +139,7 @@ test('importHistory aceita o log do provedor sem duplicar reimportações', () =
 
   const shops = repo.getShops(p.id)
   assert.ok(shops.some(s => s.name === 'Steam'))
-  assert.equal(repo.getShopLows(p.id)[61], 2474)
+  assert.equal(Math.min(...repo.getHistory(p.id, { shopId: 61 }).map(h => h.price_minor)), 2474)
 })
 
 test('erro do provedor não apaga o último preço conhecido', () => {

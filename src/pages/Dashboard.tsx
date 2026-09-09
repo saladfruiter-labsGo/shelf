@@ -3,8 +3,8 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../lib/api'
 import { CATEGORIES } from '../lib/categories'
-import { TYPE_LABEL, TYPE_COLOR, GAME_STATUS_LABEL, gameStatusOf, formatPlaytime, fmtRating, toISODate, todayISODate, daysUntil } from '../lib/utils'
-import type { MediaItem, MediaType, TrendingItem, DiaryEntry } from '../types'
+import { TYPE_LABEL, TYPE_COLOR, GAME_STATUS_LABEL, gameStatusOf, formatPlaytime, fmtRating, formatMoney, timeAgo, toISODate, todayISODate, daysUntil } from '../lib/utils'
+import type { MediaItem, MediaType, TrendingItem, DiaryEntry, GamePriceSummary } from '../types'
 
 const TYPE_EMOJI: Record<MediaType, string> = { movie: '🎬', series: '📺', game: '🎮', book: '📚', music: '🎵' }
 const hue = (t: MediaType) => `var(--${TYPE_COLOR[t]})`
@@ -113,6 +113,7 @@ export function Dashboard() {
   const { data: lists = [] } = useQuery({ queryKey: ['lists'], queryFn: api.lists.list })
   const { data: trending = [] } = useQuery({ queryKey: ['trending'], queryFn: api.integrations.trending, staleTime: 3_600_000 })
   const { data: wrap } = useQuery({ queryKey: ['wrap-month', now.getFullYear(), now.getMonth() + 1], queryFn: () => api.wrap({ period: 'monthly', year: now.getFullYear(), month: now.getMonth() + 1 }) })
+  const { data: prices } = useQuery({ queryKey: ['prices', 'backlog'], queryFn: api.prices.backlog, staleTime: 60_000 })
 
   /* ─── derivações ─── */
   // Contador da biblioteca por categoria: tudo que já foi consumido — concluído,
@@ -138,6 +139,26 @@ export function Dashboard() {
     out.sort((a, b) => new Date(a.release_date!).getTime() - new Date(b.release_date!).getTime())
     return out.slice(0, 4)
   }, [upcoming])
+
+  /**
+   * Ofertas ativas dos jogos do backlog. Menor histórico primeiro, depois maior
+   * desconto — é o que faz alguém largar tudo e ir comprar.
+   */
+  const deals = useMemo(() => {
+    if (!prices?.enabled) return []          // integração desligada não mostra preço velho
+    const byId = new Map(allItems.map(i => [i.id, i]))
+    return (prices?.items ?? [])
+      .filter((p): p is GamePriceSummary & { best: NonNullable<GamePriceSummary['best']> } => !!p.best)
+      .map(p => ({ price: p, item: byId.get(p.media_item_id) }))
+      .filter((d): d is { price: typeof d.price; item: MediaItem } => !!d.item)
+      .sort((a, b) =>
+        Number(b.price.is_history_low) - Number(a.price.is_history_low) ||
+        b.price.best.discount_percent - a.price.best.discount_percent ||
+        a.price.best.price_minor - b.price.best.price_minor)
+      .slice(0, 4)
+  }, [prices, allItems])
+
+  const dealCount = (prices?.items ?? []).filter(p => p.best && p.best.discount_percent > 0).length
 
   const recentDiary = useMemo(
     () => [...diary].sort((a, b) => new Date(b.watched_at).getTime() - new Date(a.watched_at).getTime()).slice(0, 6),
@@ -200,6 +221,55 @@ export function Dashboard() {
           ))}
         </div>
       </div>
+
+      {/* ── Promoções no backlog ── */}
+      {deals.length > 0 && (
+        <div className="band">
+          <div className="quad quad-deals">
+            <SectionHead
+              title={<>🏷️ Promoções no seu backlog</>}
+              extra={dealCount > 0 ? <span className="count" style={{ color: 'var(--gold)' }}>{dealCount} em promoção</span> : undefined}
+              action="Ver backlog →"
+              onAction={() => navigate('/wishlist')}
+            />
+            <div className="deals">
+              {deals.map(({ price, item }) => (
+                <Link to={`/media/${item.id}`} className="deal-card" key={item.id}>
+                  <Cover url={item.cover_url} type={item.type} w={64} h={96} font={28} />
+                  <div className="body">
+                    <span className="nm">{item.title}</span>
+                    <span className="shop">{price.best.shop_name}</span>
+                    <div className="price">
+                      <span className="now">{formatMoney(price.best.price_minor, price.currency ?? price.best.currency)}</span>
+                      {price.best.discount_percent > 0 && (
+                        <>
+                          <span className="was">{formatMoney(price.best.regular_minor, price.currency ?? price.best.currency)}</span>
+                          <span className="cut">−{price.best.discount_percent}%</span>
+                        </>
+                      )}
+                    </div>
+                    <div className="foot">
+                      {price.is_history_low && <span className="low">menor histórico</span>}
+                      {price.best.url && (
+                        <a
+                          href={price.best.url}
+                          target="_blank"
+                          rel="noopener noreferrer sponsored"
+                          onClick={e => e.stopPropagation()}
+                          className="buy"
+                        >
+                          Ver oferta ↗
+                        </a>
+                      )}
+                      {price.last_synced_at && <span className="ago">há {timeAgo(price.last_synced_at)}</span>}
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Continuar | Em breve ── */}
       <div className="band"><div className="two-col">
@@ -420,6 +490,7 @@ html:not(.dark) .home .quad{background:radial-gradient(120% 110% at 100% 0%,colo
 .home .quad .seeall{color:color-mix(in srgb,var(--text-primary) 75%,transparent)}
 .home .quad .seeall:hover{color:var(--text-primary)}
 .home .quad-continue{--a:#07331F;--b:#12A85C;--c:var(--accent)}
+.home .quad-deals{--a:#38071F;--b:#D11E6E;--c:#FF74B8}
 .home .quad-soon{--a:#3D1B06;--b:#D9791B;--c:var(--gold)}
 
 .home .continue,.home .soon{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;flex:1;grid-auto-rows:1fr;min-height:0}
@@ -521,6 +592,22 @@ html:not(.dark) .home .quad{background:radial-gradient(120% 110% at 100% 0%,colo
 .home .artist .track>i{display:block;height:100%;background:var(--music)}
 .home .artist .pl{font-size:12px;color:var(--text-muted);font-variant-numeric:tabular-nums;flex-shrink:0}
 
+.home .deals{display:grid;grid-template-columns:repeat(auto-fill,minmax(272px,1fr));gap:16px;grid-auto-rows:1fr}
+.home .deal-card{display:flex;gap:14px;padding:16px;background:color-mix(in srgb,var(--card) 92%,transparent);border:1px solid rgba(0,0,0,.28);border-radius:16px;backdrop-filter:blur(2px);transition:border-color .2s,transform .2s}
+.home .deal-card:hover{border-color:color-mix(in srgb,var(--tint) 55%,#fff);transform:translateY(-4px)}
+.home .deal-card .body{display:flex;flex-direction:column;min-width:0;flex:1;gap:4px}
+.home .deal-card .nm{font-weight:600;line-height:1.2;font-size:14px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.home .deal-card .shop{font-size:11px;color:var(--text-muted)}
+.home .deal-card .price{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap;margin-top:auto}
+.home .deal-card .now{font-size:20px;font-weight:800;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.home .deal-card .was{font-size:12px;color:var(--text-muted);text-decoration:line-through}
+.home .deal-card .cut{font-size:11px;font-weight:700;color:#fff;background:var(--b);border-radius:6px;padding:1px 5px}
+.home .deal-card .foot{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:11px}
+.home .deal-card .low{font-weight:700;text-transform:uppercase;letter-spacing:.5px;font-size:10px;color:var(--gold);border:1px solid var(--gold);border-radius:9999px;padding:0 6px}
+.home .deal-card .buy{color:var(--accent);font-weight:600}
+.home .deal-card .buy:hover{text-decoration:underline}
+.home .deal-card .ago{color:var(--text-muted)}
+
 @media(max-width:900px){
   .home .two-col{grid-template-columns:1fr;gap:0}
   .home .quad+.quad{margin-top:24px}
@@ -529,5 +616,9 @@ html:not(.dark) .home .quad{background:radial-gradient(120% 110% at 100% 0%,colo
 @media(max-width:560px){
   .home .continue,.home .soon{grid-template-columns:1fr}
   .home .cats{grid-template-columns:repeat(2,1fr)}
+  .home .deals{grid-template-columns:1fr;grid-auto-rows:auto}
+  /* Título longo + selo + "ver backlog" não cabem numa linha só no celular. */
+  .home .quad-deals .sec-head,.home .quad-deals .sec-head h2{flex-wrap:wrap}
+  .home .quad-deals .seeall{margin-left:auto}
 }
 `
