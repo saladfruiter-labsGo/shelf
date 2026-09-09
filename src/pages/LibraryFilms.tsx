@@ -89,9 +89,16 @@ export function LibraryFilms() {
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   fontSize: 56, marginBottom: 12, overflow: 'hidden', position: 'relative',
                   border: '1px solid var(--border)',
-                }}>
+                }}
+                  title={item.original_filename ? `Arquivo original: ${item.original_filename}` : undefined}
+                >
                   {item.cover_url
-                    ? <img src={item.cover_url} alt={item.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ? <img
+                        src={item.cover_url}
+                        alt={item.title}
+                        title={item.original_filename ? `Arquivo original: ${item.original_filename}` : undefined}
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      />
                     : '🎬'
                   }
                   {/* Hover overlay */}
@@ -110,7 +117,10 @@ export function LibraryFilms() {
                     )}
                   </div>
                 </div>
-                <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 3, lineHeight: 1.2 }}>
+                <p
+                  title={item.original_filename ? `Arquivo original: ${item.original_filename}` : undefined}
+                  style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 3, lineHeight: 1.2 }}
+                >
                   {item.title}
                 </p>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>

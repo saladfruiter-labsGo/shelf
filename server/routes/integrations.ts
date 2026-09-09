@@ -9,6 +9,7 @@ import { backlogGames } from '../prices/repository.js'
 import { syncBacklog, syncState } from '../prices/sync.js'
 import * as steamClient from '../steam/client.js'
 import { syncSteamBacklog, lastSync as steamLastSync, syncRunning as steamSyncRunning } from '../steam/sync.js'
+import { originalFilenameFromPlex } from '../plex.js'
 
 const app = new Hono()
 
@@ -67,13 +68,14 @@ const insertActivity = db.prepare(`
 `)
 
 const upsertMediaItem = db.prepare(`
-  INSERT INTO media_items (external_id, type, title, cover_url, year, author, status, rating, completed_at)
-  VALUES (@external_id, @type, @title, @cover_url, @year, @author, 'completed', @rating, @completed_at)
+  INSERT INTO media_items (external_id, type, title, cover_url, year, author, status, rating, completed_at, original_filename)
+  VALUES (@external_id, @type, @title, @cover_url, @year, @author, 'completed', @rating, @completed_at, @original_filename)
   ON CONFLICT(external_id, type) DO UPDATE SET
     status       = 'completed',
     completed_at = COALESCE(media_items.completed_at, excluded.completed_at),
     author       = COALESCE(media_items.author, excluded.author),
     cover_url    = COALESCE(media_items.cover_url, excluded.cover_url),
+    original_filename = COALESCE(media_items.original_filename, excluded.original_filename),
     rating       = CASE WHEN excluded.rating > 0 THEN excluded.rating ELSE media_items.rating END,
     updated_at   = datetime('now')
 `)
@@ -125,6 +127,7 @@ const backfillMovieMeta = db.prepare(`
     tmdb_id    = COALESCE(tmdb_id, @tmdb),
     cover_url  = COALESCE(cover_url, @cover_url),
     year       = COALESCE(year, @year),
+    original_filename = COALESCE(original_filename, @original_filename),
     updated_at = datetime('now')
   WHERE id = @id
 `)
@@ -249,12 +252,13 @@ async function findOrCreatePlexMovie(meta: PlexMeta, occurredAt: string): Promis
   const title = meta.title ?? 'Desconhecido'
   const thumb = meta.thumb ?? null
   const cover_url = thumb ? `/api/integrations/plex/image?path=${encodeURIComponent(thumb)}` : null
+  const original_filename = originalFilenameFromPlex(meta)
   const tmdb_id = await tmdbIdForPlexMovie(meta)
 
   if (tmdb_id) {
     const existing = findMovieByTmdb.get({ tmdb: tmdb_id }) as { id: number } | undefined
     if (existing) {
-      backfillMovieMeta.run({ id: existing.id, tmdb: tmdb_id, cover_url, year: meta.year ?? null })
+      backfillMovieMeta.run({ id: existing.id, tmdb: tmdb_id, cover_url, year: meta.year ?? null, original_filename })
       return existing.id
     }
   }
@@ -263,10 +267,11 @@ async function findOrCreatePlexMovie(meta: PlexMeta, occurredAt: string): Promis
   upsertMediaItem.run({
     external_id: externalId, type: 'movie', title, cover_url,
     year: meta.year ?? null, author: null, rating: 0, completed_at: occurredAt,
+    original_filename,
   })
   const row = getMediaId.get(externalId, 'movie') as { id: number } | undefined
   if (!row) return null
-  if (tmdb_id) backfillMovieMeta.run({ id: row.id, tmdb: tmdb_id, cover_url, year: meta.year ?? null })
+  if (tmdb_id) backfillMovieMeta.run({ id: row.id, tmdb: tmdb_id, cover_url, year: meta.year ?? null, original_filename })
   return row.id
 }
 
@@ -296,6 +301,7 @@ interface PlexMeta {
   grandparentThumb?: string
   duration?: number
   userRating?: number
+  Media?: { Part?: { file?: string }[] }[]
 }
 interface PlexPayload {
   event?: string
@@ -379,6 +385,7 @@ app.post('/plex/webhook', async (c) => {
       upsertMediaItem.run({
         external_id: m.external_ref, type: m.media_type, title: m.title,
         cover_url: m.cover_url, year: meta.year ?? null, author, rating: 0, completed_at: now,
+        original_filename: null,
       })
     }
   } else if (event === 'media.rate' && rating5 != null) {
@@ -410,6 +417,7 @@ app.post('/plex/webhook', async (c) => {
       upsertMediaItem.run({
         external_id: m.external_ref, type: m.media_type, title: m.title,
         cover_url: m.cover_url, year: meta.year ?? null, author, rating: rating5, completed_at: now,
+        original_filename: null,
       })
       setMediaRating.run(rating5, m.external_ref, m.media_type)
     }
@@ -591,6 +599,7 @@ async function pollLastfm() {
         upsertMediaItem.run({
           external_id: `${artist}|${name}`, type: 'music', title: name,
           cover_url: cover, year: null, author: artist, rating: 0, completed_at: occurred,
+          original_filename: null,
         })
       } catch (e) {
         console.error(`[lastfm] falha ao registrar scrobble "${name}":`, e)

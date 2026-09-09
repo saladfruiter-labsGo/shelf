@@ -31,6 +31,7 @@ db.exec(`
     hype         INTEGER DEFAULT 0,
     added_at     TEXT    NOT NULL DEFAULT (datetime('now')),
     updated_at   TEXT    NOT NULL DEFAULT (datetime('now')),
+    original_filename TEXT,
     UNIQUE(external_id, type)
   );
 
@@ -73,6 +74,7 @@ const newCols: [string, string][] = [
   ['hype',          'INTEGER DEFAULT 0'],
   ['completed_at',  'TEXT'],
   ['tmdb_id',       'TEXT'],    // id TMDB resolvido (séries importadas do Plex têm guid como external_id)
+  ['original_filename', 'TEXT'], // nome do arquivo de origem, enviado pelo Plex
   ['pages_total',   'INTEGER'], // livros (Kavita): total de páginas da série/volume
   ['pages_read',    'INTEGER'], // livros (Kavita): páginas lidas até o último poll
   ['playtime_seconds', 'INTEGER'], // games (Playnite): tempo total jogado, em segundos

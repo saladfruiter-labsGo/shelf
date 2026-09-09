@@ -10,6 +10,9 @@ interface Props {
 
 export function MediaCard({ item, compact = false }: Props) {
   const { openMedia } = useMediaPreview()
+  const originalFilenameTooltip = item.original_filename
+    ? `Arquivo original: ${item.original_filename}`
+    : undefined
 
   return (
     <button
@@ -19,11 +22,15 @@ export function MediaCard({ item, compact = false }: Props) {
       className={`group block border-0 bg-transparent p-0 text-left ${compact ? 'w-full' : 'w-40 flex-shrink-0'}`}
     >
       {/* Poster */}
-      <div className="relative overflow-hidden rounded-md bg-card aspect-[2/3] mb-2.5 border border-border group-hover:border-border-strong group-hover:shadow-md transition-all duration-200">
+      <div
+        className="relative overflow-hidden rounded-md bg-card aspect-[2/3] mb-2.5 border border-border group-hover:border-border-strong group-hover:shadow-md transition-all duration-200"
+        title={originalFilenameTooltip}
+      >
         {item.cover_url ? (
           <img
             src={item.cover_url}
             alt={item.title}
+            title={originalFilenameTooltip}
             className="w-full h-full object-cover group-hover:scale-[1.04] transition-transform duration-500"
             loading="lazy"
           />
@@ -46,7 +53,10 @@ export function MediaCard({ item, compact = false }: Props) {
 
       {/* Title with wavy underline */}
       <span className="card-title-wrap">
-        <p className={`font-bold text-primary group-hover:text-accent transition-colors duration-200 leading-tight truncate ${compact ? 'text-sm' : 'text-base'}`}>
+        <p
+          title={originalFilenameTooltip}
+          className={`font-bold text-primary group-hover:text-accent transition-colors duration-200 leading-tight truncate ${compact ? 'text-sm' : 'text-base'}`}
+        >
           {item.title}
         </p>
       </span>
