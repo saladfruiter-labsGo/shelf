@@ -5,6 +5,7 @@ import { api } from '../lib/api'
 import { SeriesModal } from '../components/SeriesModal'
 import { LibraryStats } from '../components/LibraryStats'
 import { LibrarySearch } from '../components/LibrarySearch'
+import { Pager, usePagination } from '../components/Pager'
 import { norm } from '../lib/utils'
 
 const STATUS_LABEL: Record<string, string> = {
@@ -29,7 +30,7 @@ export function LibrarySeries() {
 
   const { data: rawItems = [], isLoading } = useQuery({
     queryKey: ['media', 'series'],
-    queryFn: () => api.media.list({ type: 'series', limit: 500, library: true }),
+    queryFn: () => api.media.listAll({ type: 'series', library: true }),
   })
 
   // Itens em wishlist ficam só na Wishlist, fora da biblioteca.
@@ -44,6 +45,8 @@ export function LibrarySeries() {
     if (q && !norm(i.title).includes(q)) return false
     return true
   })
+
+  const { page, totalPages, pageItems, goTo, anchor } = usePagination(visible, [items.length, search, statusFilter])
 
   return (
     <div style={{ background: 'var(--bg)', color: 'var(--text-primary)', minHeight: '100vh' }}>
@@ -84,13 +87,15 @@ export function LibrarySeries() {
         countSuffix={statusFilter ? ` · ${HEADER_STATES.find(h => h.key === statusFilter)!.label}` : undefined}
       />
 
+      <div ref={anchor} style={{ scrollMarginTop: 24 }} />
+
       {/* Grid — 3 columns banner cards */}
-      <div style={{ maxWidth: 1280, margin: '0 auto', padding: '0 var(--page-x) 80px', display: 'grid', gridTemplateColumns: 'var(--grid-games)', gap: 16 }}>
+      <div style={{ maxWidth: 1280, margin: '0 auto', padding: '0 var(--page-x)', display: 'grid', gridTemplateColumns: 'var(--grid-games)', gap: 16 }}>
         {isLoading
           ? Array.from({ length: 8 }).map((_, i) => (
               <div key={i} style={{ background: 'var(--card)', borderRadius: 16, overflow: 'hidden', aspectRatio: '2/3.6' }} />
             ))
-          : visible.map(item => (
+          : pageItems.map(item => (
               <div
                 key={item.id}
                 onClick={() => setOpenId(item.id)}
@@ -146,6 +151,12 @@ export function LibrarySeries() {
               </div>
             ))
         }
+      </div>
+
+      {/* O `80px` de baixo saiu da grade e veio para cá: com uma página só o
+          Pager some e o espaçamento fica igual ao de antes. */}
+      <div style={{ maxWidth: 1280, margin: '0 auto', padding: '0 var(--page-x) 80px' }}>
+        <Pager page={page} total={totalPages} count={visible.length} onGo={goTo} label="Paginação das séries" />
       </div>
 
       {visible.length === 0 && !isLoading && (

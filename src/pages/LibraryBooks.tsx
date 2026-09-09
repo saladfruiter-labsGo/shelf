@@ -5,6 +5,7 @@ import { api } from '../lib/api'
 import { StarRating } from '../components/StarRating'
 import { LibraryStats } from '../components/LibraryStats'
 import { LibrarySearch } from '../components/LibrarySearch'
+import { Pager, usePagination } from '../components/Pager'
 import { norm } from '../lib/utils'
 
 const STATUS_LABEL: Record<string, string> = {
@@ -28,7 +29,7 @@ export function LibraryBooks() {
 
   const { data: rawItems = [], isLoading } = useQuery({
     queryKey: ['media', 'book'],
-    queryFn: () => api.media.list({ type: 'book', limit: 500, library: true }),
+    queryFn: () => api.media.listAll({ type: 'book', library: true }),
   })
 
   // Itens em wishlist ficam só na Wishlist, fora da biblioteca.
@@ -43,6 +44,8 @@ export function LibraryBooks() {
     if (q && !norm(i.title).includes(q)) return false
     return true
   })
+
+  const { page, totalPages, pageItems, goTo, anchor } = usePagination(visible, [items.length, search, statusFilter])
 
   return (
     <div style={{ background: 'var(--bg)', color: 'var(--text-primary)', minHeight: '100vh' }}>
@@ -83,13 +86,15 @@ export function LibraryBooks() {
         countSuffix={statusFilter ? ` · ${HEADER_STATES.find(h => h.key === statusFilter)!.label}` : undefined}
       />
 
+      <div ref={anchor} style={{ scrollMarginTop: 24 }} />
+
       {/* List */}
       <div style={{ maxWidth: 1280, margin: '0 auto', padding: '0 var(--page-x) 80px' }}>
         {isLoading
           ? Array.from({ length: 5 }).map((_, i) => (
               <div key={i} style={{ height: 72, background: 'var(--card)', borderRadius: 8, margin: '4px -16px', marginBottom: 0, borderBottom: '1px solid var(--border)' }} />
             ))
-          : visible.map((item, idx) => (
+          : pageItems.map((item, idx) => (
               <div
                 key={item.id}
                 onClick={() => navigate(`/media/${item.id}`)}
@@ -146,6 +151,8 @@ export function LibraryBooks() {
               </div>
             ))
         }
+
+        <Pager page={page} total={totalPages} count={visible.length} onGo={goTo} label="Paginação dos livros" />
 
         {visible.length === 0 && !isLoading && (
           <div style={{ textAlign: 'center', padding: '80px 0' }}>

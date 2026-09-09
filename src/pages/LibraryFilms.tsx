@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../lib/api'
 import { LibrarySearch } from '../components/LibrarySearch'
+import { Pager, usePagination } from '../components/Pager'
 import { norm } from '../lib/utils'
 
 export function LibraryFilms() {
@@ -11,7 +12,7 @@ export function LibraryFilms() {
 
   const { data: rawItems = [], isLoading } = useQuery({
     queryKey: ['media', 'movie'],
-    queryFn: () => api.media.list({ type: 'movie', limit: 500, library: true }),
+    queryFn: () => api.media.listAll({ type: 'movie', library: true }),
   })
 
   // Itens em wishlist ficam só na Wishlist — excluídos no servidor (`library`),
@@ -23,6 +24,8 @@ export function LibraryFilms() {
   // Busca por nome (instantânea).
   const q = norm(search)
   const visible = q ? items.filter(i => norm(i.title).includes(q)) : items
+
+  const { page, totalPages, pageItems, goTo, anchor } = usePagination(visible, [items.length, search])
 
   return (
     <div style={{ background: 'var(--bg)', color: 'var(--text-primary)', minHeight: '100vh' }}>
@@ -57,13 +60,15 @@ export function LibraryFilms() {
         showCount={Boolean(q)}
       />
 
+      <div ref={anchor} style={{ scrollMarginTop: 24 }} />
+
       {/* Grid — 5 columns poster style */}
-      <div style={{ maxWidth: 1280, margin: '0 auto', padding: '0 var(--page-x) 80px', display: 'grid', gridTemplateColumns: 'var(--grid-films)', gap: 16 }}>
+      <div style={{ maxWidth: 1280, margin: '0 auto', padding: '0 var(--page-x)', display: 'grid', gridTemplateColumns: 'var(--grid-films)', gap: 16 }}>
         {isLoading
           ? Array.from({ length: 10 }).map((_, i) => (
               <div key={i} style={{ aspectRatio: '2/3', background: 'var(--card)', borderRadius: 12 }} />
             ))
-          : visible.map(item => (
+          : pageItems.map(item => (
               <div
                 key={item.id}
                 onClick={() => navigate(`/media/${item.id}`)}
@@ -109,6 +114,12 @@ export function LibraryFilms() {
               </div>
             ))
         }
+      </div>
+
+      {/* O `80px` de baixo saiu da grade e veio para cá: com uma página só o
+          Pager some e o espaçamento fica igual ao de antes. */}
+      <div style={{ maxWidth: 1280, margin: '0 auto', padding: '0 var(--page-x) 80px' }}>
+        <Pager page={page} total={totalPages} count={visible.length} onGo={goTo} label="Paginação dos filmes" />
       </div>
 
       {visible.length === 0 && !isLoading && (
