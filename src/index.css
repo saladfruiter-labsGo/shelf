@@ -298,6 +298,78 @@ body {
 .backlog-category-button:hover { transform: translateY(-2px); }
 .backlog-category-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .backlog-category-button strong { min-width: 25px; padding: 2px 7px; border-radius: 999px; background: color-mix(in srgb, currentColor 12%, transparent); font-size: 11px; text-align: center; }
+.backlog-filter-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; }
+.backlog-filter-control { display: flex; flex-direction: column; gap: 4px; }
+.backlog-filter-label {
+  display: block;
+  min-height: 12px;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 12px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+}
+.backlog-filter-select,
+.backlog-filter-input,
+.backlog-filter-action { height: 34px; }
+.backlog-filter-select {
+  min-width: 120px;
+  padding: 7px 14px;
+  border-radius: 9999px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  outline: none;
+}
+.backlog-filter-input {
+  width: min(260px, 100%);
+  min-width: 190px;
+  padding: 0 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: var(--card);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+}
+.backlog-filter-input::placeholder { color: var(--text-muted); }
+.backlog-filter-input:focus,
+.backlog-filter-select:focus,
+.backlog-filter-action:focus-visible { border-color: var(--accent); outline: 2px solid var(--accent); outline-offset: 1px; }
+.backlog-filter-action {
+  padding: 0 14px;
+  border-radius: 9999px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  outline: none;
+  white-space: nowrap;
+}
+.backlog-filter-sort { margin-left: auto; }
+.backlog-filter-clear {
+  align-self: flex-end;
+  height: 34px;
+  padding: 0 4px;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 12px;
+}
+@media (max-width: 760px) {
+  .backlog-filter-row { align-items: stretch; }
+  .backlog-filter-control { flex: 1 1 160px; min-width: 0; }
+  .backlog-filter-name { flex-basis: 220px; }
+  .backlog-filter-input,
+  .backlog-filter-select,
+  .backlog-filter-action { width: 100%; }
+  .backlog-filter-sort { margin-left: 0; }
+  .backlog-filter-clear { align-self: flex-start; }
+}
 
 /* ─── Confirmação de nova mídia: capa grande + formulário ─── */
 .add-media-confirm {
