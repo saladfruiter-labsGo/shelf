@@ -370,8 +370,11 @@ export function Dashboard() {
               <span>Atividade · {heat.active} dias no último ano</span>
               <span className="gh-legend">Menos{HEAT_LV.map((c, k) => <i key={k} style={{ background: c }} />)}Mais</span>
             </div>
-            <div className="months">{heat.months.map((m, k) => <span key={k}>{m}</span>)}</div>
-            <div className="grid">{heat.cells.map((lv, k) => <span key={k} className="cell" style={{ background: HEAT_LV[lv] }} />)}</div>
+            {/* Quando não cabe, a grade rola dentro de si — a página nunca rola de lado. */}
+            <div className="gh-scroll">
+              <div className="months">{heat.months.map((m, k) => <span key={k}>{m}</span>)}</div>
+              <div className="grid">{heat.cells.map((lv, k) => <span key={k} className="cell" style={{ background: HEAT_LV[lv] }} />)}</div>
+            </div>
           </div>
         </div>
       </div>
@@ -551,9 +554,12 @@ html:not(.dark) .home .quad{background:radial-gradient(120% 110% at 100% 0%,colo
 .home .streak .lbl{font-size:13px;color:var(--text-muted)}
 .home .streak .best{font-size:12px;color:var(--text-muted);margin-top:8px}
 .home .ghmap{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px}
-.home .ghmap .gh-top{display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px}
+.home .ghmap .gh-top{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:4px 12px;font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px}
 .home .ghmap .gh-legend{display:flex;align-items:center;gap:4px;text-transform:none;letter-spacing:0}
 .home .ghmap .gh-legend i{width:11px;height:11px;border-radius:3px}
+.home .ghmap .gh-scroll{display:flex;flex-direction:column;gap:6px;overflow-x:auto}
+/* Largura mínima igual nos dois para os meses continuarem alinhados às colunas. */
+.home .ghmap .months,.home .ghmap .grid{min-width:520px}
 .home .ghmap .months{display:flex;justify-content:space-between;font-size:10px;color:var(--text-muted);padding:0 2px}
 .home .ghmap .grid{display:grid;grid-template-rows:repeat(7,1fr);grid-auto-flow:column;grid-auto-columns:1fr;gap:3px;height:120px}
 .home .ghmap .cell{border-radius:3px;background:var(--border)}
@@ -617,6 +623,9 @@ html:not(.dark) .home .quad{background:radial-gradient(120% 110% at 100% 0%,colo
   .home .continue,.home .soon{grid-template-columns:1fr}
   .home .cats{grid-template-columns:repeat(2,1fr)}
   .home .deals{grid-template-columns:1fr;grid-auto-rows:auto}
+  /* Empilha streak e heatmap. O nowrap é essencial: numa coluna que embrulha,
+     a linha do flex ganha a largura do maior item e o heatmap estoura o card. */
+  .home .consist{flex-direction:column;flex-wrap:nowrap;align-items:stretch;gap:20px}
   /* Título longo + selo + "ver backlog" não cabem numa linha só no celular. */
   .home .quad-deals .sec-head,.home .quad-deals .sec-head h2{flex-wrap:wrap}
   .home .quad-deals .seeall{margin-left:auto}
