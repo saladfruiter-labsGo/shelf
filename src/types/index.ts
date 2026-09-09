@@ -9,6 +9,7 @@ export interface MediaItem {
   type:         MediaType
   title:        string
   cover_url:    string | null
+  original_filename: string | null
   year:         number | null
   genre:        string | null
   runtime:      number | null
