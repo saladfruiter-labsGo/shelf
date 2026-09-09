@@ -6,7 +6,7 @@ import { CategoryTag } from '../components/CategoryTag'
 import { PriceBadge } from '../components/PriceBadge'
 import { Pager, usePagination } from '../components/Pager'
 import { useMediaPreview } from '../components/MediaSummaryModal'
-import { TYPE_LABEL, TYPE_COLOR, formatDate } from '../lib/utils'
+import { TYPE_LABEL, TYPE_COLOR, formatDate, norm } from '../lib/utils'
 import type { MediaItem, MediaType } from '../types'
 
 /* ─── Ordenações disponíveis ─── */
@@ -46,11 +46,12 @@ function FilterSelect({
 }) {
   if (options.length === 0) return null
   return (
-    <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-      <span style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '1.5px', color: 'var(--text-muted)' }}>
+    <label className="backlog-filter-control">
+      <span className="backlog-filter-label">
         {label}
       </span>
       <select
+        className="backlog-filter-select"
         value={value}
         onChange={e => onChange(e.target.value)}
         style={{
@@ -66,6 +67,28 @@ function FilterSelect({
           <option key={o.value} value={o.value}>{o.label}</option>
         ))}
       </select>
+    </label>
+  )
+}
+
+function FilterInput({
+  label, value, onChange, placeholder,
+}: {
+  label: string
+  value: string
+  onChange: (v: string) => void
+  placeholder: string
+}) {
+  return (
+    <label className="backlog-filter-control backlog-filter-name">
+      <span className="backlog-filter-label">{label}</span>
+      <input
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        placeholder={placeholder}
+        aria-label={label}
+        className="backlog-filter-input"
+      />
     </label>
   )
 }
@@ -91,6 +114,7 @@ export function Wishlist() {
   )
 
   /* ─── filtros ─── */
+  const [fName, setFName]         = useState('')
   const [fType, setFType]         = useState<MediaType | ''>('')
   const [fGenre, setFGenre]       = useState('')
   const [fYear, setFYear]         = useState('')
@@ -151,8 +175,10 @@ export function Wishlist() {
   }, [items])
 
   /* ─── aplica filtros + ordenação ─── */
+  const normalizedName = norm(fName)
   const filtered = useMemo(() => {
     let out = items.filter(i =>
+      (!normalizedName || norm(i.title).includes(normalizedName)) &&
       (!fType     || i.type === fType) &&
       (!fGenre    || i.genre === fGenre) &&
       (!fYear     || String(i.year) === fYear) &&
@@ -178,16 +204,16 @@ export function Wishlist() {
       }
     })
     return out
-  }, [items, priceBy, fType, fGenre, fYear, fDecade, fDirector, fMonth, fShop, fOnSale, sort])
+  }, [items, priceBy, normalizedName, fType, fGenre, fYear, fDecade, fDirector, fMonth, fShop, fOnSale, sort])
 
   const { page, totalPages, pageItems, goTo, anchor } = usePagination(
     filtered,
-    [items.length, fType, fGenre, fYear, fDecade, fDirector, fMonth, fShop, fOnSale, sort],
+    [items.length, fName, fType, fGenre, fYear, fDecade, fDirector, fMonth, fShop, fOnSale, sort],
   )
 
-  const anyFilter = fType || fGenre || fYear || fDecade || fDirector || fMonth || fShop || fOnSale
+  const anyFilter = Boolean(fName || fType || fGenre || fYear || fDecade || fDirector || fMonth || fShop || fOnSale)
   const clearAll = () => {
-    setFType(''); setFGenre(''); setFYear(''); setFDecade(''); setFDirector('')
+    setFName(''); setFType(''); setFGenre(''); setFYear(''); setFDecade(''); setFDirector('')
     setFMonth(''); setFShop(''); setFOnSale(false)
   }
 
@@ -252,7 +278,8 @@ export function Wishlist() {
               </div>
             </div>
 
-            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', gap: 12 }}>
+            <div className="backlog-filter-row">
+              <FilterInput label="Nome" value={fName} onChange={setFName} placeholder="Buscar por nome…" />
               <FilterSelect label="Gênero"    value={fGenre}    onChange={setFGenre}    options={opts.genres} />
               <FilterSelect label="Ano"       value={fYear}     onChange={setFYear}     options={opts.years} />
               <FilterSelect label="Década"    value={fDecade}   onChange={setFDecade}   options={opts.decades} />
@@ -261,33 +288,33 @@ export function Wishlist() {
               <FilterSelect label="Loja"      value={fShop}     onChange={setFShop}     options={opts.shops} />
 
               {opts.shops.length > 0 && (
-                <button
-                  onClick={() => setFOnSale(v => !v)}
-                  aria-pressed={fOnSale}
-                  style={{
-                    background: fOnSale ? 'var(--games-bg)' : 'var(--card)',
-                    border: `1px solid ${fOnSale ? 'var(--games)' : 'var(--border-strong)'}`,
-                    color: fOnSale ? 'var(--games)' : 'var(--text-secondary)',
-                    borderRadius: 9999, padding: '7px 14px', fontSize: 13, fontWeight: 500,
-                    cursor: 'pointer', outline: 'none', fontFamily: 'inherit',
-                  }}
-                >
-                  🏷️ Em promoção
-                </button>
+                <div className="backlog-filter-control backlog-filter-sale">
+                  <span className="backlog-filter-label" aria-hidden="true">&nbsp;</span>
+                  <button
+                    onClick={() => setFOnSale(v => !v)}
+                    aria-pressed={fOnSale}
+                    className="backlog-filter-action"
+                    style={{
+                      background: fOnSale ? 'var(--games-bg)' : 'var(--card)',
+                      border: `1px solid ${fOnSale ? 'var(--games)' : 'var(--border-strong)'}`,
+                      color: fOnSale ? 'var(--games)' : 'var(--text-secondary)',
+                    }}
+                  >
+                    🏷️ Em promoção
+                  </button>
+                </div>
               )}
 
               {/* Ordenação */}
-              <label style={{ display: 'flex', flexDirection: 'column', gap: 4, marginLeft: 'auto' }}>
-                <span style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '1.5px', color: 'var(--text-muted)' }}>
-                  Ordenar
-                </span>
+              <label className="backlog-filter-control backlog-filter-sort">
+                <span className="backlog-filter-label">Ordenar</span>
                 <select
+                  className="backlog-filter-select"
                   value={sort}
                   onChange={e => setSort(e.target.value as SortKey)}
                   style={{
                     background: 'var(--card)', border: '1px solid var(--border-strong)',
-                    color: 'var(--text-secondary)', borderRadius: 9999, padding: '7px 14px',
-                    fontSize: 13, fontWeight: 500, cursor: 'pointer', outline: 'none', fontFamily: 'inherit',
+                    color: 'var(--text-secondary)',
                   }}
                 >
                   {SORTS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
@@ -297,8 +324,7 @@ export function Wishlist() {
               {anyFilter && (
                 <button
                   onClick={clearAll}
-                  className="link-accent"
-                  style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 12, paddingBottom: 8 }}
+                  className="link-accent backlog-filter-clear"
                 >
                   Limpar filtros
                 </button>
