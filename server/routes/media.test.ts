@@ -5,20 +5,23 @@
  * wishlist. Enquanto o filtro morava no cliente, um backlog grande ocupava a
  * janela inteira e a biblioteca aparecia vazia, com os contadores zerados.
  */
-import { test, before } from 'node:test'
+import { test, before, after } from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import type Database from 'better-sqlite3'
 
 const dataDir = mkdtempSync(join(tmpdir(), 'shelf-media-'))
 process.env.DATA_DIR = dataDir
 
-let app: { request: (path: string) => Promise<Response> }
+let app: { request: (path: string, init?: RequestInit) => Promise<Response> }
 let gameId: number
+let database: Database.Database
 
 before(async () => {
   const db = (await import('../db.js')).db
+  database = db
   app = (await import('./media.js')).default as any
 
   const add = db.prepare(
@@ -40,6 +43,8 @@ before(async () => {
     if (i === 1) gameId = Number(result.lastInsertRowid)
   }
 })
+
+after(() => database.close())
 
 const titles = async (qs: string) =>
   ((await (await app.request(`/?${qs}`)).json()) as { title: string }[]).map(i => i.title)
@@ -89,6 +94,44 @@ test('offset além do fim devolve lista vazia, não erro', async () => {
 test('offset inválido é tratado como zero', async () => {
   assert.deepEqual(await titles('type=game&limit=2&offset=-5'), await titles('type=game&limit=2'))
   assert.deepEqual(await titles('type=game&limit=2&offset=abc'), await titles('type=game&limit=2'))
+})
+
+test('criação rejeita tipo e status fora do domínio', async () => {
+  const invalidType = await app.request('/', {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ external_id: 'invalid-type', type: 'music', title: 'Faixa' }),
+  })
+  assert.equal(invalidType.status, 400)
+
+  const invalidStatus = await app.request('/', {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ external_id: 'invalid-status', type: 'movie', title: 'Filme', status: 'finished' }),
+  })
+  assert.equal(invalidStatus.status, 400)
+})
+
+test('edição rejeita enums inválidos e deriva status de game_status', async () => {
+  const invalidGameStatus = await app.request(`/${gameId}`, {
+    method: 'PATCH', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ game_status: 'beaten' }),
+  })
+  assert.equal(invalidGameStatus.status, 400)
+
+  const valid = await app.request(`/${gameId}`, {
+    method: 'PATCH', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ game_status: 'platinado' }),
+  })
+  assert.equal(valid.status, 200)
+  const updated = await valid.json() as { game_status: string; status: string; completed_at: string | null }
+  assert.equal(updated.game_status, 'platinado')
+  assert.equal(updated.status, 'completed')
+  assert.ok(updated.completed_at)
+
+  const invalidStatus = await app.request(`/${gameId}`, {
+    method: 'PATCH', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ status: 'finished' }),
+  })
+  assert.equal(invalidStatus.status, 400)
 })
 
 test('identificação TMDB rejeita código inválido e tipos incompatíveis', async () => {

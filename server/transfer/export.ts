@@ -12,13 +12,14 @@
  *   de fora de propósito.
  */
 import { db } from '../db.js'
+import { LIBRARY_STATUS_PREDICATE } from '../media-domain.js'
 
 export type ExportScope = 'all' | 'library' | 'backlog'
 
 /** Filtro de status por escopo. Backlog = wishlist; biblioteca = o resto. */
 function scopeWhere(scope: ExportScope): string {
   if (scope === 'backlog') return "status = 'wishlist'"
-  if (scope === 'library') return "status != 'wishlist'"
+  if (scope === 'library') return LIBRARY_STATUS_PREDICATE
   return '1=1'
 }
 
