@@ -2,6 +2,7 @@ import Database from 'better-sqlite3'
 import path from 'path'
 import fs from 'fs'
 import { writeVerifiedDatabaseBackup } from './database-backup.js'
+import { hasPendingMigrations, runMigrations, type Migration } from './migrations.js'
 
 export const dataDir = path.resolve(process.env.DATA_DIR ?? './data')
 fs.mkdirSync(dataDir, { recursive: true })
@@ -14,9 +15,8 @@ db.pragma('journal_mode = WAL')
 db.pragma('foreign_keys = ON')
 
 /**
- * O schema anterior não tinha marcador de versão. Enquanto as migrations
- * versionadas não chegam, detectamos qualquer estrutura antiga antes do primeiro
- * DDL e guardamos uma cópia integral. Falhar o backup impede a migration.
+ * Detecta estruturas anteriores à versão-base para decidir se o startup precisa
+ * proteger o banco antes do primeiro DDL. Falhar o backup impede a migration.
  */
 function schemaNeedsUpgrade(): boolean {
   if (!databaseExisted) return false
@@ -51,18 +51,11 @@ function schemaNeedsUpgrade(): boolean {
     || !columns('diary_entries').has('episode_number')
 }
 
-if (schemaNeedsUpgrade()) {
-  const destination = path.resolve(process.env.BACKUP_DIR ?? path.join(dataDir, 'backups'))
-  try {
-    const backup = await writeVerifiedDatabaseBackup(db, destination, 'before-migration')
-    console.log(`[backup] snapshot antes da migration: ${backup.filename}`)
-  } catch (error) {
-    db.close()
-    throw new Error(`Não foi possível proteger o banco antes da migration: ${(error as Error).message}`)
-  }
-}
-
-db.exec(`
+const migrations: Migration[] = [{
+  version: 1,
+  name: 'baseline-schema',
+  up: () => {
+    db.exec(`
   CREATE TABLE IF NOT EXISTS media_items (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
     external_id  TEXT    NOT NULL,
@@ -368,3 +361,18 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_price_hist_shop    ON game_price_history(game_price_product_id, shop_id, observed_at);
   CREATE INDEX IF NOT EXISTS idx_price_hist_product ON game_price_history(game_price_product_id, observed_at);
 `)
+  },
+}]
+
+if (databaseExisted && (hasPendingMigrations(db, migrations) || schemaNeedsUpgrade())) {
+  const destination = path.resolve(process.env.BACKUP_DIR ?? path.join(dataDir, 'backups'))
+  try {
+    const backup = await writeVerifiedDatabaseBackup(db, destination, 'before-migration')
+    console.log(`[backup] snapshot antes da migration: ${backup.filename}`)
+  } catch (error) {
+    db.close()
+    throw new Error(`Não foi possível proteger o banco antes da migration: ${(error as Error).message}`)
+  }
+}
+
+runMigrations(db, migrations)
