@@ -13,6 +13,8 @@ export interface PlaynitePayload {
   publishers?: string[] | string | null
 }
 
+export type PlayniteRatingPolicy = 'shelf' | 'playnite'
+
 export type PlayniteState = Record<string, {
   externalId: string
   gameStatus: string
@@ -46,6 +48,20 @@ export function playniteGameStatus(completion: string | undefined, playtimeSecon
 export function playniteRating(userScore: number | null | undefined): number {
   if (userScore == null || userScore <= 0) return 0
   return Math.round((userScore / 20) * 2) / 2
+}
+
+/**
+ * Por padrão, uma nota já curada no Shelf é a fonte de verdade. A política
+ * `playnite` pode ser escolhida explicitamente para aceitar sobrescritas.
+ */
+export function resolvePlayniteRating(
+  currentRating: number,
+  incomingRating: number,
+  policy: PlayniteRatingPolicy,
+): number {
+  if (incomingRating <= 0) return currentRating
+  if (policy === 'playnite' || currentRating <= 0) return incomingRating
+  return currentRating
 }
 
 /** Aceita array ou string única, conforme a serialização do PowerShell. */

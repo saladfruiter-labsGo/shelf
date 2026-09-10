@@ -223,6 +223,7 @@ export interface IntegrationStatus {
   playnite: {
     enabled:        boolean
     webhook_secret: string
+    rating_policy:  'shelf' | 'playnite'
   }
   steam: {
     enabled:        boolean

@@ -111,6 +111,7 @@ app.get('/', (c) => {
     playnite: {
       enabled: cfg('PLAYNITE_ENABLED') === '1',
       webhook_secret: ensurePlayniteSecret(),
+      rating_policy: cfg('PLAYNITE_RATING_POLICY') === 'playnite' ? 'playnite' : 'shelf',
     },
     steam: {
       enabled:          cfg('STEAM_ENABLED') === '1',
@@ -158,6 +159,7 @@ app.patch('/', async (c) => {
     ['KAVITA_URL', str(b.kavita_url)],
     ['KAVITA_LIBRARY_ID', str(b.kavita_library_id)],
     ['PLAYNITE_ENABLED', bool(b.playnite_enabled)],
+    ['PLAYNITE_RATING_POLICY', ['shelf', 'playnite'].includes(String(b.playnite_rating_policy)) ? String(b.playnite_rating_policy) : undefined],
     ['ITAD_ENABLED', bool(b.itad_enabled)],
     ['ITAD_COUNTRY', str(b.itad_country)?.toUpperCase().slice(0, 2)],
     ['STEAM_ENABLED', bool(b.steam_enabled)],

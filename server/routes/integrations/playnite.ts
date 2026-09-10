@@ -5,6 +5,8 @@ import {
   joinPlayniteNames,
   playniteGameStatus,
   playniteRating,
+  resolvePlayniteRating,
+  type PlayniteRatingPolicy,
   type PlaynitePayload,
   type PlayniteState,
 } from '../../integrations/playnite-domain.js'
@@ -30,17 +32,13 @@ const upsertGame = db.prepare(`
     library          = COALESCE(excluded.library, media_items.library),
     status           = excluded.status,
     game_status      = excluded.game_status,
-    rating           = CASE WHEN excluded.rating > 0 THEN excluded.rating ELSE media_items.rating END,
+    rating           = @resolved_rating,
     playtime_seconds = excluded.playtime_seconds,
     last_played_at   = COALESCE(excluded.last_played_at, media_items.last_played_at),
     completed_at     = CASE WHEN @is_completed = 1 THEN COALESCE(media_items.completed_at, @completed_at) ELSE media_items.completed_at END,
     updated_at       = datetime('now')
 `)
-const getMediaId = db.prepare("SELECT id FROM media_items WHERE external_id = ? AND type = 'game'")
-const setMediaRating = db.prepare(`
-  UPDATE media_items SET rating = ?, updated_at = datetime('now')
-  WHERE external_id = ? AND type = 'game'
-`)
+const getMedia = db.prepare("SELECT id, rating FROM media_items WHERE external_id = ? AND type = 'game'")
 const insertActivity = db.prepare(`
   INSERT OR IGNORE INTO activity_events
     (source, event_type, media_type, external_ref, title, subtitle, cover_url, rating, duration_ms, genre, occurred_at, raw)
@@ -88,6 +86,7 @@ app.post('/playnite/webhook', async (c) => {
     if (!Number.isNaN(parsed.getTime())) lastPlayedIso = parsed.toISOString()
   }
   const isCompleted = gameStatus === 'zerado' || gameStatus === 'platinado'
+  const ratingPolicy: PlayniteRatingPolicy = cfg('PLAYNITE_RATING_POLICY') === 'playnite' ? 'playnite' : 'shelf'
 
   const state = readState()
   const previous = state[gameId]
@@ -108,6 +107,9 @@ app.post('/playnite/webhook', async (c) => {
     }
   }
 
+  const before = getMedia.get(externalId) as { id: number; rating: number } | undefined
+  const resolvedRating = resolvePlayniteRating(before?.rating ?? 0, rating, ratingPolicy)
+
   upsertGame.run({
     external_id: externalId,
     title: name,
@@ -120,12 +122,13 @@ app.post('/playnite/webhook', async (c) => {
     status,
     game_status: gameStatus,
     rating,
+    resolved_rating: resolvedRating,
     playtime_seconds: playtime || null,
     last_played_at: lastPlayedIso,
     is_completed: isCompleted ? 1 : 0,
     completed_at: lastPlayedIso ?? nowIso,
   })
-  const row = getMediaId.get(externalId) as { id: number } | undefined
+  const row = getMedia.get(externalId) as { id: number; rating: number } | undefined
   if (!row) return c.json({ ok: true })
 
   const wasCompleted = previous?.gameStatus === 'zerado' || previous?.gameStatus === 'platinado'
@@ -144,13 +147,12 @@ app.post('/playnite/webhook', async (c) => {
     notifyLibraryActivity({ event: 'in_progress', type: 'game', title: name })
   }
 
-  if (rating > 0 && previous && previous.rating !== rating) {
-    setMediaRating.run(rating, externalId)
+  if (rating > 0 && previous && previous.rating !== rating && before?.rating !== row.rating) {
     insertActivity.run({
       source: 'playnite', event_type: 'rate', external_ref: externalId, title: name,
-      cover_url: coverUrl, rating, genre, occurred_at: nowIso,
+      cover_url: coverUrl, rating: row.rating, genre, occurred_at: nowIso,
     })
-    notifyLibraryActivity({ event: 'rated', type: 'game', title: name, rating })
+    notifyLibraryActivity({ event: 'rated', type: 'game', title: name, rating: row.rating })
   }
 
   state[gameId] = { externalId, gameStatus, rating, playtime }
