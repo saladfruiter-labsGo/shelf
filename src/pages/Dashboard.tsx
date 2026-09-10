@@ -722,45 +722,46 @@ const HOME_CSS = `
 .home .cat-chip .ct{font-size:13px;font-weight:600;color:var(--text-secondary);font-variant-numeric:tabular-nums;background:var(--card);border-radius:9999px;padding:2px 10px}
 
 /* Banner de favoritos: faixa larga, pôsteres grandes, #1 com coroa e moldura dourada. */
-.home .favband{margin-top:28px;padding:28px var(--page-x) 32px;border-block:1px solid var(--border);background:radial-gradient(70% 130% at 8% 0%,color-mix(in srgb,var(--movies) 14%,transparent),transparent 62%),radial-gradient(70% 130% at 92% 100%,color-mix(in srgb,var(--games) 14%,transparent),transparent 62%),var(--surface)}
-.home .favband .favrow+.favrow{margin-top:28px;padding-top:28px;border-top:1px solid var(--border)}
+.home .favband{display:grid;grid-template-columns:1fr 1fr;gap:32px;align-items:start;margin-top:28px;padding:20px var(--page-x) 24px;border-block:1px solid var(--border);background:radial-gradient(70% 130% at 8% 0%,color-mix(in srgb,var(--movies) 14%,transparent),transparent 62%),radial-gradient(70% 130% at 92% 100%,color-mix(in srgb,var(--games) 14%,transparent),transparent 62%),var(--surface)}
+.home .favrow{min-width:0}
 .home .fav-head{display:flex;align-items:center;gap:12px}
-.home .fav-head i{width:4px;height:24px;border-radius:2px;background:var(--fav);flex-shrink:0}
-.home .fav-head h2{margin:0;font-size:clamp(19px,2vw,24px);font-weight:700;letter-spacing:-.02em}
+.home .fav-head i{width:4px;height:21px;border-radius:2px;background:var(--fav);flex-shrink:0}
+.home .fav-head h2{margin:0;font-size:clamp(17px,1.5vw,21px);font-weight:700;letter-spacing:-.02em}
 .home .fav-head .n{font-size:12px;font-weight:700;color:var(--text-secondary);background:var(--card);border:1px solid var(--border);border-radius:9999px;padding:2px 9px;font-variant-numeric:tabular-nums}
 .home .fav-head .seeall{margin-left:auto}
 /* padding no topo: a coroa do #1 escapa do pôster e não pode ser cortada pelo scroll. */
-.home .fav-strip{display:flex;align-items:flex-end;justify-content:safe center;gap:18px;overflow-x:auto;padding:24px 4px 8px;scrollbar-width:thin}
-.home .fav-card{position:relative;flex:0 0 auto;width:158px;cursor:pointer;transition:transform .25s var(--ease)}
-.home .fav-card:hover{transform:translateY(-6px)}
+/* As cinco vagas dividem a largura da coluna — sem rolagem lateral. */
+.home .fav-strip{display:flex;align-items:flex-end;gap:10px;padding:22px 0 2px}
+.home .fav-card{position:relative;flex:1 1 0;min-width:0;cursor:pointer;transition:transform .25s var(--ease)}
+.home .fav-card:hover{transform:translateY(-4px)}
 .home .fav-card .shot{position:relative;border-radius:12px;overflow:hidden;box-shadow:0 10px 26px rgba(0,0,0,.38)}
 .home .fav-card .art{display:block;width:100%;aspect-ratio:2/3;object-fit:cover}
-.home .fav-card .art.fb{display:grid;place-items:center;font-size:38px;color:#fff}
-.home .fav-card.top{width:186px}
+.home .fav-card .art.fb{display:grid;place-items:center;font-size:30px;color:#fff}
+.home .fav-card.top{flex:1.24 1 0}
 .home .fav-card.top .shot{outline:3px solid var(--gold);outline-offset:-1px;box-shadow:0 0 0 6px color-mix(in srgb,var(--gold) 18%,transparent),0 14px 34px color-mix(in srgb,var(--gold) 30%,transparent)}
-.home .fav-card .crown{position:absolute;top:-20px;left:50%;transform:translateX(-50%);font-size:20px;line-height:1;z-index:2;filter:drop-shadow(0 2px 5px rgba(0,0,0,.55))}
-.home .fav-card .foot{position:absolute;left:0;right:0;bottom:0;display:flex;justify-content:center;gap:12px;padding:22px 8px 8px;font-size:11px;font-weight:600;color:#fff;font-variant-numeric:tabular-nums;background:linear-gradient(transparent,rgba(0,0,0,.88))}
+.home .fav-card .crown{position:absolute;top:-18px;left:50%;transform:translateX(-50%);font-size:17px;line-height:1;z-index:2;filter:drop-shadow(0 2px 5px rgba(0,0,0,.55))}
+.home .fav-card .foot{position:absolute;left:0;right:0;bottom:0;display:flex;justify-content:center;gap:8px;padding:18px 4px 6px;font-size:10px;font-weight:600;color:#fff;font-variant-numeric:tabular-nums;background:linear-gradient(transparent,rgba(0,0,0,.88))}
 .home .fav-card .foot .rt{color:var(--gold)}
 /* Altura fixa de duas linhas + strip alinhado embaixo: os pôsteres encostam na
    mesma linha de base, então o #1 cresce só para cima, como na referência. */
-.home .fav-card .ttl{margin-top:10px;height:34px;font-size:13px;font-weight:600;line-height:1.3;color:var(--text-secondary);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.home .fav-card .ttl{margin-top:8px;height:30px;font-size:12px;font-weight:600;line-height:1.3;color:var(--text-secondary);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .home .fav-card.top .ttl{color:var(--text-primary)}
 /* Ações do pôster (coroar, remover): discretas até o card receber mouse ou foco. */
-.home .fav-card .acts{position:absolute;top:6px;right:6px;z-index:3;display:flex;gap:6px;opacity:0;transition:opacity .18s}
+.home .fav-card .acts{position:absolute;top:5px;right:5px;z-index:3;display:flex;gap:5px;opacity:0;transition:opacity .18s}
 .home .fav-card:hover .acts,.home .fav-card:focus-within .acts{opacity:1}
 @media(hover:none){.home .fav-card .acts{opacity:1}}
-.home .fav-card .acts button{width:26px;height:26px;padding:0;border-radius:50%;border:1px solid rgba(255,255,255,.24);background:rgba(10,10,20,.72);color:#fff;font-size:13px;line-height:1;display:grid;place-items:center;cursor:pointer;backdrop-filter:blur(4px);transition:background .18s,border-color .18s}
+.home .fav-card .acts button{width:24px;height:24px;padding:0;border-radius:50%;border:1px solid rgba(255,255,255,.24);background:rgba(10,10,20,.72);color:#fff;font-size:12px;line-height:1;display:grid;place-items:center;cursor:pointer;backdrop-filter:blur(4px);transition:background .18s,border-color .18s}
 .home .fav-card .acts button:disabled{cursor:default;opacity:.4}
 .home .fav-card .mk:hover{background:var(--gold);border-color:var(--gold)}
-.home .fav-card .rm{font-size:15px}
+.home .fav-card .rm{font-size:14px}
 .home .fav-card .rm:hover{background:#e0245e;border-color:#e0245e}
 
 /* Vaga vazia: o único jeito de entrar no banner é por aqui. */
 .home .fav-add{background:none;border:none;padding:0;font:inherit;text-align:left;color:inherit}
 .home .fav-add .shot{display:grid;place-items:center;align-content:center;gap:6px;aspect-ratio:2/3;border:2px dashed var(--border-strong);background:color-mix(in srgb,var(--card) 55%,transparent);color:var(--text-muted);box-shadow:none;transition:border-color .2s,color .2s}
 .home .fav-add:hover .shot{border-color:var(--fav);color:var(--fav)}
-.home .fav-add .plus{font-size:28px;line-height:1;font-weight:300}
-.home .fav-add .lb{font-size:11px;font-weight:600;letter-spacing:.4px}
+.home .fav-add .plus{font-size:24px;line-height:1;font-weight:300}
+.home .fav-add .lb{font-size:10px;font-weight:600;letter-spacing:.4px}
 .home .fav-add:disabled{opacity:.5}
 
 /* Seletor da vaga (modal) */
@@ -904,15 +905,27 @@ html:not(.dark) .home .quad{background:radial-gradient(120% 110% at 100% 0%,colo
 .home .deal-card .buy:hover{text-decoration:underline}
 .home .deal-card .ago{color:var(--text-muted)}
 
+/* Estreito demais para cinco pôsteres em meia largura: volta a empilhar. */
+@media(max-width:1080px){
+  .home .favband{grid-template-columns:1fr;gap:0}
+  .home .favrow+.favrow{margin-top:22px;padding-top:22px;border-top:1px solid var(--border)}
+  /* Empilhado, a tira não estica: os pôsteres continuam do tamanho de meia largura. */
+  .home .fav-strip{max-width:640px}
+}
+/* Estreito de verdade: a tira volta a rolar de lado — pôster miúdo fica ilegível. */
+@media(max-width:700px){
+  .home .fav-strip{max-width:none;overflow-x:auto;padding:22px 2px 8px;scrollbar-width:thin}
+  .home .fav-card{flex:0 0 118px}
+  .home .fav-card.top{flex:0 0 140px}
+}
 @media(max-width:900px){
   .home .two-col{grid-template-columns:1fr;gap:0}
   .home .quad+.quad{margin-top:24px}
   .home .cats{grid-template-columns:repeat(3,1fr)}
 }
 @media(max-width:560px){
-  .home .fav-card{width:124px}
-  .home .fav-card.top{width:146px}
-  .home .fav-card .ttl{font-size:12px;height:32px}
+  .home .fav-strip{gap:8px}
+  .home .fav-card .ttl{height:28px}
   .home .continue,.home .soon{grid-template-columns:1fr}
   .home .cats{grid-template-columns:repeat(2,1fr)}
   .home .deals{grid-template-columns:1fr;grid-auto-rows:auto}
