@@ -109,6 +109,37 @@ test('webhook repetido do Playnite não duplica conclusão, atividade ou diário
   assert.equal((db.prepare("SELECT COUNT(*) AS n FROM diary_entries WHERE source = 'playnite'").get() as { n: number }).n, 1)
 })
 
+test('política de nota do Playnite preserva o Shelf por padrão e permite optar pelo Playnite', async () => {
+  setCfg('PLAYNITE_ENABLED', '1')
+  setCfg('PLAYNITE_RATING_POLICY', 'shelf')
+  setCfg('PLAYNITE_STATE', JSON.stringify({
+    'rating-policy-game': {
+      externalId: 'playnite:rating-policy-game', gameStatus: 'jogando', rating: 0, playtime: 60,
+    },
+  }))
+  db.prepare(`
+    INSERT INTO media_items (external_id, type, title, status, game_status, rating)
+    VALUES ('playnite:rating-policy-game', 'game', 'Jogo com curadoria', 'in_progress', 'jogando', 4.5)
+  `).run()
+
+  const secret = ensureSecret('PLAYNITE_WEBHOOK_SECRET')
+  const send = (userScore: number) => playniteRoutes.request(`/playnite/webhook?token=${secret}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      gameId: 'rating-policy-game', name: 'Jogo com curadoria', completionStatus: 'Playing',
+      playtimeSeconds: 120, userScore,
+    }),
+  })
+
+  assert.equal((await send(60)).status, 200)
+  assert.equal((db.prepare("SELECT rating FROM media_items WHERE external_id = 'playnite:rating-policy-game'").get() as { rating: number }).rating, 4.5)
+
+  setCfg('PLAYNITE_RATING_POLICY', 'playnite')
+  assert.equal((await send(70)).status, 200)
+  assert.equal((db.prepare("SELECT rating FROM media_items WHERE external_id = 'playnite:rating-policy-game'").get() as { rating: number }).rating, 3.5)
+})
+
 test('poll repetido do Kavita preserva progresso sem duplicar conclusão', async () => {
   setCfg('KAVITA_ENABLED', '1')
   setCfg('KAVITA_URL', 'http://kavita.test')

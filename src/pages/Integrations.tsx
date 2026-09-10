@@ -292,6 +292,7 @@ function IntegrationsSection() {
       kavita_api_key: '',
       kavita_library_id: status.kavita.library_id,
       playnite_enabled: status.playnite.enabled,
+      playnite_rating_policy: status.playnite.rating_policy,
       steam_enabled: status.steam.enabled,
       steam_id: status.steam.steam_id,
       steam_api_key: '',
@@ -321,6 +322,7 @@ function IntegrationsSection() {
         kavita_url: form.kavita_url,
         kavita_library_id: form.kavita_library_id,
         playnite_enabled: form.playnite_enabled,
+        playnite_rating_policy: form.playnite_rating_policy,
         steam_enabled: form.steam_enabled,
         steam_id: form.steam_id,
         steam_sync_mode: form.steam_sync_mode,
@@ -735,6 +737,21 @@ function IntegrationsSection() {
           Ao fechar um jogo, a extensão do Playnite envia o <b>tempo jogado</b>, o <b>status</b> (jogando/concluído) e a <b>nota</b>
           para o Shelf. A capa e o gênero são buscados automaticamente pela RAWG. Instale a extensão <code className="bg-card px-1 rounded">ShelfSync</code> no PC de jogos e cole a URL abaixo nas configurações dela.
         </p>
+
+        <div className="mb-4">
+          <label className="text-xs text-secondary mb-1 block">Fonte da nota quando houver conflito</label>
+          <select
+            className={inputCls}
+            value={String(form.playnite_rating_policy ?? 'shelf')}
+            onChange={e => set('playnite_rating_policy')(e.target.value)}
+          >
+            <option value="shelf">Shelf — preservar minha curadoria</option>
+            <option value="playnite">Playnite — aceitar a nota mais recente enviada</option>
+          </select>
+          <p className="text-[11px] text-muted mt-1">
+            O padrão Shelf só importa a nota do Playnite quando o jogo ainda não tem avaliação aqui.
+          </p>
+        </div>
 
         {/* Webhook URL */}
         <div>

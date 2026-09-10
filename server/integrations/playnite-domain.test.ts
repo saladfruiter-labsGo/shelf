@@ -1,6 +1,11 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { joinPlayniteNames, playniteGameStatus, playniteRating } from './playnite-domain.js'
+import {
+  joinPlayniteNames,
+  playniteGameStatus,
+  playniteRating,
+  resolvePlayniteRating,
+} from './playnite-domain.js'
 
 test('converte todos os CompletionStatus conhecidos', () => {
   assert.equal(playniteGameStatus('Beaten', 0), 'platinado')
@@ -27,4 +32,11 @@ test('normaliza nota e listas vindas do PowerShell', () => {
   assert.equal(joinPlayniteNames(['CD Projekt RED', '  Saber  ']), 'CD Projekt RED, Saber')
   assert.equal(joinPlayniteNames('Valve'), 'Valve')
   assert.equal(joinPlayniteNames([]), null)
+})
+
+test('preserva a curadoria do Shelf salvo quando Playnite é a fonte escolhida', () => {
+  assert.equal(resolvePlayniteRating(4.5, 3, 'shelf'), 4.5)
+  assert.equal(resolvePlayniteRating(0, 3, 'shelf'), 3)
+  assert.equal(resolvePlayniteRating(4.5, 3, 'playnite'), 3)
+  assert.equal(resolvePlayniteRating(4.5, 0, 'playnite'), 4.5)
 })
