@@ -1,47 +1,27 @@
 import { Hono } from 'hono'
-import { randomUUID } from 'crypto'
 import { db } from '../db.js'
 import { sendTelegram, telegramDetectChats, notifyLibraryActivity } from '../notify.js'
 import { ensureSeriesStructure, setEpisodeWatched, tmdbIdFromGuid, resolveTmdbSeriesId, resolveTmdbMovieId } from '../series.js'
 import { rawgLookup } from './search.js'
-import { fetchShops } from '../prices/providers/isthereanydeal.js'
 import { backlogGames } from '../prices/repository.js'
-import { syncBacklog, syncState } from '../prices/sync.js'
+import { syncState } from '../prices/sync.js'
 import * as steamClient from '../steam/client.js'
-import { syncSteamBacklog, lastSync as steamLastSync, syncRunning as steamSyncRunning } from '../steam/sync.js'
+import { lastSync as steamLastSync, syncRunning as steamSyncRunning } from '../steam/sync.js'
 import { originalFilenameFromPlex, type PlexMediaFileMetadata } from '../plex.js'
 import { GAME_STATUS_TO_BASE, type GameStatus } from '../media-domain.js'
+import { cfg, ensureSecret, setCfg } from '../integrations/config.js'
+import priceIntegrationRoutes from './integrations/prices.js'
+import steamIntegrationRoutes from './integrations/steam.js'
 
 const app = new Hono()
+app.route('/', priceIntegrationRoutes)
+app.route('/', steamIntegrationRoutes)
 
 /* ────────────────────────── Config (persistida no settings) ───────────────────────── */
 
-const getSetting = db.prepare('SELECT value FROM settings WHERE key = ?')
-const setSetting = db.prepare(
-  'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'
-)
-const delSetting = db.prepare('DELETE FROM settings WHERE key = ?')
-
-function cfg(key: string): string {
-  // Prioridade: valor salvo na UI (settings) → variável de ambiente (.env) → vazio.
-  // Unifica o acesso às integrações (Last.fm, Plex, Kavita, ...) num só ponto,
-  // igual ao padrão já usado em search.ts/series.ts/details.ts.
-  const row = getSetting.get(key) as { value: string } | undefined
-  return row?.value?.trim() || process.env[key] || ''
-}
-function setCfg(key: string, val: string) {
-  if (val) setSetting.run(key, val)
-  else delSetting.run(key)
-}
-
 /** Garante que exista um segredo para o webhook do Plex. */
 function ensureWebhookSecret(): string {
-  let s = cfg('PLEX_WEBHOOK_SECRET')
-  if (!s) {
-    s = randomUUID().replace(/-/g, '')
-    setSetting.run('PLEX_WEBHOOK_SECRET', s)
-  }
-  return s
+  return ensureSecret('PLEX_WEBHOOK_SECRET')
 }
 
 /* ────────────────────────────── Estado "tocando agora" ─────────────────────────────── */
@@ -988,12 +968,7 @@ async function pollKavita(): Promise<void> {
 
 /** Garante um segredo para o webhook do Playnite (mesmo molde do Plex). */
 function ensurePlayniteSecret(): string {
-  let s = cfg('PLAYNITE_WEBHOOK_SECRET')
-  if (!s) {
-    s = randomUUID().replace(/-/g, '')
-    setSetting.run('PLAYNITE_WEBHOOK_SECRET', s)
-  }
-  return s
+  return ensureSecret('PLAYNITE_WEBHOOK_SECRET')
 }
 
 /**
@@ -1174,62 +1149,6 @@ app.post('/playnite/webhook', async (c) => {
   state[gameId] = { externalId, gameStatus, rating, playtime }
   writePlayniteState(state)
   return c.json({ ok: true })
-})
-
-/* ───────────────────────────── Preços (IsThereAnyDeal) ────────────────────────────── */
-
-// Confere a chave batendo na lista de lojas do país configurado — é a chamada
-// mais barata do provedor e já mostra se a região responde.
-app.post('/itad/test', async (c) => {
-  try {
-    const shops = await fetchShops()
-    if (shops.length === 0) return c.json({ ok: false, error: 'Nenhuma loja ativa para o país configurado.' }, 400)
-    return c.json({ ok: true, shops: shops.length })
-  } catch (e) {
-    return c.json({ ok: false, error: (e as Error).message }, 400)
-  }
-})
-
-app.post('/itad/sync', async (c) => {
-  await syncBacklog()
-  return c.json({ ok: true, sync: syncState() })
-})
-
-/* ────────────────────────────────── Steam (conector) ──────────────────────────────── */
-
-// Testa as duas superfícies de uma vez: a Web API (biblioteca/wishlist) e, se o
-// usuário colou os cookies da loja, informa que a escrita está disponível.
-app.post('/steam/test', async (c) => {
-  try {
-    const steamid = cfg('STEAM_ID')
-    if (!steamid) return c.json({ ok: false, error: 'Informe o SteamID (ou o link do perfil) e salve.' }, 400)
-
-    const wishlist = await steamClient.fetchWishlist()
-    let owned: number | null = null
-    if (cfg('STEAM_API_KEY')) {
-      owned = (await steamClient.fetchOwnedGames().catch(() => [])).length || null
-    }
-    return c.json({ ok: true, wishlist: wishlist.length, owned, can_write: steamClient.steamCanWrite() })
-  } catch (e) {
-    return c.json({ ok: false, error: (e as Error).message }, 400)
-  }
-})
-
-app.post('/steam/sync', async (c) => {
-  const result = await syncSteamBacklog()
-  return c.json(result)
-})
-
-/** Converte um link de perfil ou vanity em SteamID64 (a UI preenche o campo). */
-app.post('/steam/resolve', async (c) => {
-  const body = (await c.req.json().catch(() => ({}))) as { input?: string }
-  try {
-    const id = await steamClient.normalizeSteamId(body.input ?? '')
-    if (!id) return c.json({ ok: false, error: 'Não consegui resolver esse perfil. Cole o SteamID64 (17 dígitos) ou configure a API key.' }, 400)
-    return c.json({ ok: true, steam_id: id })
-  } catch (e) {
-    return c.json({ ok: false, error: (e as Error).message }, 400)
-  }
 })
 
 /* ─────────────────────────────────────── Loops ────────────────────────────────────── */
