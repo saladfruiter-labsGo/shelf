@@ -29,6 +29,8 @@ interface StoredBackup extends DatabaseBackupInfo {
 
 let running: Promise<DatabaseBackupInfo> | null = null
 let lastError: { at: string; message: string } | null = null
+let schedulerEnabled = false
+let schedulerTimer: NodeJS.Timeout | null = null
 
 async function storedBackups(): Promise<StoredBackup[]> {
   const names = await readdir(backupDir).catch(error => {
@@ -124,7 +126,8 @@ export async function backupStatus() {
 
 /** Inicia depois do servidor; se já existe cópia recente, espera o próximo ciclo. */
 export function startBackupScheduler(): void {
-  if (process.env.BACKUP_ENABLED === '0') return
+  if (process.env.BACKUP_ENABLED === '0' || schedulerEnabled) return
+  schedulerEnabled = true
 
   const intervalMs = intervalHours * HOUR_MS
   const tick = async () => {
@@ -137,11 +140,21 @@ export function startBackupScheduler(): void {
     } catch (error) {
       console.error(`[backup] falha: ${(error as Error).message}`)
     } finally {
-      const timer = setTimeout(tick, intervalMs)
-      timer.unref()
+      if (schedulerEnabled) {
+        schedulerTimer = setTimeout(tick, intervalMs)
+        schedulerTimer.unref()
+      }
     }
   }
 
-  const first = setTimeout(tick, 10_000)
-  first.unref()
+  schedulerTimer = setTimeout(tick, 10_000)
+  schedulerTimer.unref()
+}
+
+/** Cancela o próximo ciclo e espera uma cópia já iniciada terminar. */
+export async function stopBackupScheduler(): Promise<void> {
+  schedulerEnabled = false
+  if (schedulerTimer) clearTimeout(schedulerTimer)
+  schedulerTimer = null
+  if (running) await running.catch(() => {})
 }

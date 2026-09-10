@@ -1248,9 +1248,47 @@ app.post('/steam/resolve', async (c) => {
 let plexBusy = false
 let lastfmBusy = false
 let kavitaBusy = false
-setInterval(async () => { if (plexBusy) return; plexBusy = true; await pollPlexSessions().finally(() => (plexBusy = false)) }, 5000)
-setInterval(async () => { if (lastfmBusy) return; lastfmBusy = true; await pollLastfm().finally(() => (lastfmBusy = false)) }, 30000)
-setInterval(async () => { if (kavitaBusy) return; kavitaBusy = true; await pollKavita().catch(() => {}).finally(() => (kavitaBusy = false)) }, 60000)
+let pollTimers: NodeJS.Timeout[] = []
+const activePolls = new Set<Promise<void>>()
+
+function runPoll(name: 'plex' | 'lastfm' | 'kavita', poll: () => Promise<void>): void {
+  const busy = name === 'plex' ? plexBusy : name === 'lastfm' ? lastfmBusy : kavitaBusy
+  if (busy) return
+  if (name === 'plex') plexBusy = true
+  else if (name === 'lastfm') lastfmBusy = true
+  else kavitaBusy = true
+
+  let task: Promise<void>
+  task = poll()
+    .catch(error => console.error(`[${name}] poll falhou:`, error))
+    .finally(() => {
+      if (name === 'plex') plexBusy = false
+      else if (name === 'lastfm') lastfmBusy = false
+      else kavitaBusy = false
+      activePolls.delete(task)
+    })
+  activePolls.add(task)
+}
+
+/** Polling só começa no bootstrap do servidor, nunca como efeito colateral do import da rota. */
+export function startIntegrationPolling(): void {
+  if (pollTimers.length) return
+  const every = (ms: number, run: () => void) => {
+    const timer = setInterval(run, ms)
+    timer.unref()
+    pollTimers.push(timer)
+  }
+  every(5_000, () => runPoll('plex', pollPlexSessions))
+  every(30_000, () => runPoll('lastfm', pollLastfm))
+  every(60_000, () => runPoll('kavita', pollKavita))
+}
+
+/** Para novos polls e aguarda os que já estavam falando com os provedores. */
+export async function stopIntegrationPolling(): Promise<void> {
+  for (const timer of pollTimers) clearInterval(timer)
+  pollTimers = []
+  await Promise.allSettled([...activePolls])
+}
 
 /* ─────────────────────────────────────── API REST ─────────────────────────────────── */
 

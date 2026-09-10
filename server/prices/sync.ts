@@ -119,6 +119,15 @@ function schedule(delayMs: number) {
 
 /** Liga o agendamento: primeira passada logo após o boot, depois a cada 6 h. */
 export function startPriceSync() {
+  if (scheduled) return
   scheduled = true
   schedule(FIRST_RUN_DELAY_MS)
+}
+
+/** Impede reagendamento e aguarda o ciclo corrente parar de usar o banco. */
+export async function stopPriceSync(): Promise<void> {
+  scheduled = false
+  if (timer) clearTimeout(timer)
+  timer = null
+  while (running) await new Promise(resolve => setTimeout(resolve, 50))
 }
