@@ -12,6 +12,7 @@ import type { NowPlaying } from '../integrations/now-playing.js'
 import kavitaIntegrationRoutes, { pollKavita, resetKavitaAuth } from './integrations/kavita.js'
 import lastfmIntegrationRoutes, { getLastfmNowPlaying, pollLastfm } from './integrations/lastfm.js'
 import playniteIntegrationRoutes, { ensurePlayniteSecret } from './integrations/playnite.js'
+import plexLibraryIntegrationRoutes from './integrations/plex-library.js'
 import priceIntegrationRoutes from './integrations/prices.js'
 import steamIntegrationRoutes from './integrations/steam.js'
 
@@ -19,6 +20,7 @@ const app = new Hono()
 app.route('/', kavitaIntegrationRoutes)
 app.route('/', lastfmIntegrationRoutes)
 app.route('/', playniteIntegrationRoutes)
+app.route('/', plexLibraryIntegrationRoutes)
 app.route('/', priceIntegrationRoutes)
 app.route('/', steamIntegrationRoutes)
 
@@ -281,172 +283,6 @@ interface PlexPayload {
   Account?: { title?: string }
   Metadata?: PlexMeta
 }
-
-interface PlexLibraryItem extends PlexMediaFileMetadata {
-  guid?: string
-  Guid?: { id?: string }[]
-  ratingKey?: string
-  title?: string
-  year?: number
-}
-
-interface PlexLibrarySection {
-  key?: string
-  type?: string
-}
-
-interface ShelfMovie {
-  id: number
-  external_id: string
-  tmdb_id: string | null
-  title: string
-  year: number | null
-}
-
-function plexLibraryUrl(pathname: string): string {
-  const url = cfg('PLEX_URL')
-  return `${url.replace(/\/$/, '')}${pathname}`
-}
-
-async function fetchPlexJson<T>(pathname: string): Promise<T> {
-  const response = await fetch(plexLibraryUrl(pathname), {
-    headers: { 'X-Plex-Token': cfg('PLEX_TOKEN'), Accept: 'application/json' },
-  })
-  if (!response.ok) throw new Error(`Plex respondeu ${response.status}`)
-  return await response.json() as T
-}
-
-function plexExternalIds(item: PlexLibraryItem): string[] {
-  return [item.guid, ...(item.Guid ?? []).map(g => g.id)]
-    .filter((id): id is string => typeof id === 'string' && id.length > 0)
-}
-
-function normalizedTitle(title: string): string {
-  return title.trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ')
-}
-
-function addToIndex(index: Map<string, ShelfMovie[]>, key: string | null | undefined, movie: ShelfMovie): void {
-  if (!key) return
-  const rows = index.get(key) ?? []
-  rows.push(movie)
-  index.set(key, rows)
-}
-
-function moviesForPlexItem(
-  item: PlexLibraryItem,
-  byExternalId: Map<string, ShelfMovie[]>,
-  byTmdbId: Map<string, ShelfMovie[]>,
-  byTitleYear: Map<string, ShelfMovie[]>,
-): ShelfMovie[] {
-  const exact = new Map<number, ShelfMovie>()
-  for (const id of plexExternalIds(item)) {
-    for (const movie of byExternalId.get(id) ?? []) exact.set(movie.id, movie)
-  }
-  if (item.ratingKey) {
-    for (const movie of byExternalId.get(`plex:${item.ratingKey}`) ?? []) exact.set(movie.id, movie)
-  }
-  if (exact.size > 0) return [...exact.values()]
-
-  const tmdbIds = plexExternalIds(item)
-    .map(id => tmdbIdFromGuid(id))
-    .filter((id): id is string => id != null)
-  const byTmdb = new Map<number, ShelfMovie>()
-  for (const id of tmdbIds) {
-    for (const movie of byTmdbId.get(id) ?? []) byTmdb.set(movie.id, movie)
-  }
-  if (byTmdb.size > 0) return [...byTmdb.values()]
-
-  if (!item.title) return []
-  const key = `${normalizedTitle(item.title)}::${item.year ?? ''}`
-  const titleMatches = byTitleYear.get(key) ?? []
-  return titleMatches.length === 1 ? titleMatches : []
-}
-
-async function fetchAllPlexMovies(sections: PlexLibrarySection[]): Promise<PlexLibraryItem[]> {
-  const movies: PlexLibraryItem[] = []
-  const seen = new Set<string>()
-  const pageSize = 500
-
-  for (const section of sections) {
-    if (!section.key) continue
-    for (let start = 0; ; start += pageSize) {
-      const query = new URLSearchParams({
-        type: '1',
-        'X-Plex-Container-Start': String(start),
-        'X-Plex-Container-Size': String(pageSize),
-      })
-      const data = await fetchPlexJson<{ MediaContainer?: { Metadata?: PlexLibraryItem[]; totalSize?: number } }>(
-        `/library/sections/${encodeURIComponent(section.key)}/all?${query}`,
-      )
-      const page = data.MediaContainer?.Metadata ?? []
-      const countBefore = movies.length
-      for (const item of page) {
-        const identity = item.ratingKey ?? item.guid ?? `${item.title ?? ''}:${item.year ?? ''}`
-        if (!seen.has(identity)) { seen.add(identity); movies.push(item) }
-      }
-
-      const totalSize = data.MediaContainer?.totalSize
-      if (
-        page.length < pageSize ||
-        movies.length === countBefore ||
-        (totalSize != null && start + page.length >= totalSize)
-      ) break
-    }
-  }
-  return movies
-}
-
-/** Preenche os nomes dos arquivos de todos os filmes encontrados no Plex. */
-app.post('/plex/sync-files', async (c) => {
-  const url = cfg('PLEX_URL')
-  const token = cfg('PLEX_TOKEN')
-  if (!url || !token) return c.json({ error: 'Configure a URL e o token do Plex antes de sincronizar' }, 400)
-
-  try {
-    const sectionsResponse = await fetchPlexJson<{ MediaContainer?: { Directory?: PlexLibrarySection[] } }>('/library/sections')
-    const sections = (sectionsResponse.MediaContainer?.Directory ?? []).filter(section => section.type === 'movie')
-    const plexMovies = await fetchAllPlexMovies(sections)
-    const shelfMovies = db.prepare(
-      "SELECT id, external_id, tmdb_id, title, year FROM media_items WHERE type = 'movie'",
-    ).all() as ShelfMovie[]
-
-    const byExternalId = new Map<string, ShelfMovie[]>()
-    const byTmdbId = new Map<string, ShelfMovie[]>()
-    const byTitleYear = new Map<string, ShelfMovie[]>()
-    for (const movie of shelfMovies) {
-      addToIndex(byExternalId, movie.external_id, movie)
-      addToIndex(byTmdbId, movie.tmdb_id, movie)
-      if (/^[1-9]\d*$/.test(movie.external_id)) addToIndex(byTmdbId, movie.external_id, movie)
-      addToIndex(byTitleYear, `${normalizedTitle(movie.title)}::${movie.year ?? ''}`, movie)
-    }
-
-    const updateFilename = db.prepare(`
-      UPDATE media_items SET original_filename = ?, updated_at = datetime('now')
-      WHERE id = ? AND (original_filename IS NULL OR original_filename != ?)
-    `)
-    const result = { sections: sections.length, scanned: plexMovies.length, matched: 0, updated: 0, without_file: 0, unmatched: 0 }
-    const matchedIds = new Set<number>()
-
-    const update = db.transaction(() => {
-      for (const plexMovie of plexMovies) {
-        const filename = originalFilenameFromPlex(plexMovie)
-        if (!filename) { result.without_file++; continue }
-
-        const matches = moviesForPlexItem(plexMovie, byExternalId, byTmdbId, byTitleYear)
-        if (matches.length === 0) { result.unmatched++; continue }
-        for (const movie of matches) {
-          matchedIds.add(movie.id)
-          result.updated += Number(updateFilename.run(filename, movie.id, filename).changes)
-        }
-      }
-    })
-    update()
-    result.matched = matchedIds.size
-    return c.json(result)
-  } catch (error) {
-    return c.json({ error: `Não foi possível consultar o Plex: ${(error as Error).message}` }, 502)
-  }
-})
 
 /** Converte metadata do Plex para os campos da nossa activity. */
 function mapPlex(meta: PlexMeta) {

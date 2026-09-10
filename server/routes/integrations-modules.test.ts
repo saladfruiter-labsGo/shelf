@@ -17,6 +17,7 @@ let pollKavita: typeof import('./integrations/kavita.js').pollKavita
 let lastfmRoutes: typeof import('./integrations/lastfm.js').default
 let getLastfmNowPlaying: typeof import('./integrations/lastfm.js').getLastfmNowPlaying
 let playniteRoutes: typeof import('./integrations/playnite.js').default
+let plexLibraryRoutes: typeof import('./integrations/plex-library.js').default
 let priceRoutes: typeof import('./integrations/prices.js').default
 let steamRoutes: typeof import('./integrations/steam.js').default
 
@@ -33,6 +34,7 @@ before(async () => {
   lastfmRoutes = lastfm.default
   getLastfmNowPlaying = lastfm.getLastfmNowPlaying
   playniteRoutes = (await import('./integrations/playnite.js')).default
+  plexLibraryRoutes = (await import('./integrations/plex-library.js')).default
   priceRoutes = (await import('./integrations/prices.js')).default
   steamRoutes = (await import('./integrations/steam.js')).default
 })
@@ -198,4 +200,44 @@ test('sync repetido do Last.fm não duplica scrobble e atualiza tocando agora', 
   assert.equal((db.prepare("SELECT COUNT(*) AS n FROM activity_events WHERE source = 'lastfm'").get() as { n: number }).n, 1)
   assert.equal((db.prepare("SELECT COUNT(*) AS n FROM media_items WHERE external_id = 'Artista|Faixa concluída' AND type = 'music'").get() as { n: number }).n, 1)
   assert.equal(cfg('LASTFM_LAST_UTS'), '1789038000')
+})
+
+test('sync de arquivos do Plex preserva a rota e atualiza o filme correspondente', async () => {
+  setCfg('PLEX_URL', 'http://plex.test')
+  setCfg('PLEX_TOKEN', 'plex-token')
+  db.prepare(`
+    INSERT INTO media_items (external_id, type, title, year, status)
+    VALUES ('plex:movie-file', 'movie', 'Filme do Plex', 2026, 'completed')
+  `).run()
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = async (input) => {
+    const url = String(input)
+    if (url.endsWith('/library/sections')) {
+      return Response.json({ MediaContainer: { Directory: [{ key: '1', type: 'movie' }] } })
+    }
+    if (url.includes('/library/sections/1/all?')) {
+      return Response.json({ MediaContainer: { Metadata: [{
+        ratingKey: 'movie-file',
+        title: 'Filme do Plex',
+        year: 2026,
+        Media: [{ Part: [{ file: '/movies/Filme do Plex (2026).mkv' }] }],
+      }], totalSize: 1 } })
+    }
+    return new Response(null, { status: 404 })
+  }
+
+  let response: Response
+  try {
+    response = await plexLibraryRoutes.request('/plex/sync-files', { method: 'POST' })
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+
+  assert.equal(response.status, 200)
+  assert.deepEqual(await response.json(), {
+    sections: 1, scanned: 1, matched: 1, updated: 1, without_file: 0, unmatched: 0,
+  })
+  assert.equal((db.prepare(
+    "SELECT original_filename FROM media_items WHERE external_id = 'plex:movie-file'",
+  ).get() as { original_filename: string }).original_filename, 'Filme do Plex (2026).mkv')
 })
