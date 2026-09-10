@@ -10,6 +10,7 @@ import { syncBacklog, syncState } from '../prices/sync.js'
 import * as steamClient from '../steam/client.js'
 import { syncSteamBacklog, lastSync as steamLastSync, syncRunning as steamSyncRunning } from '../steam/sync.js'
 import { originalFilenameFromPlex, type PlexMediaFileMetadata } from '../plex.js'
+import { GAME_STATUS_TO_BASE, type GameStatus } from '../media-domain.js'
 
 const app = new Hono()
 
@@ -1035,9 +1036,6 @@ function readPlayniteState(): PlayniteState {
 }
 function writePlayniteState(s: PlayniteState) { setCfg('PLAYNITE_STATE', JSON.stringify(s)) }
 
-/** Status granular de games no Shelf. */
-export type GameStatus = 'jogando' | 'zerado' | 'platinado' | 'abandonado' | 'nunca_jogado'
-
 /** CompletionStatus do Playnite → status granular de game do Shelf (de-para do usuário). */
 function playniteGameStatus(completion: string | undefined, playtimeSeconds: number): GameStatus {
   switch ((completion ?? '').trim().toLowerCase()) {
@@ -1049,15 +1047,6 @@ function playniteGameStatus(completion: string | undefined, playtimeSeconds: num
     // status customizado/desconhecido: pelo tempo jogado
     default: return playtimeSeconds > 0 ? 'jogando' : 'nunca_jogado'
   }
-}
-
-/** game_status → status base do Shelf (mantém contagens/wishlist/wrap funcionando). */
-export const GAME_STATUS_TO_BASE: Record<GameStatus, 'wishlist' | 'in_progress' | 'completed' | 'dropped'> = {
-  jogando:      'in_progress',
-  zerado:       'completed',
-  platinado:    'completed',
-  abandonado:   'dropped',
-  nunca_jogado: 'wishlist',
 }
 
 /** UserScore do Playnite (0–100) → escala 0–5 (meio-ponto) do Shelf. */

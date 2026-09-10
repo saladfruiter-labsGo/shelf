@@ -3,6 +3,13 @@ import { db } from '../db.js'
 import { notifyLibraryActivity } from '../notify.js'
 import { getSeriesView } from '../series.js'
 import { fetchTmdbMediaDetails, type TmdbMediaType } from '../tmdb.js'
+import {
+  GAME_STATUS_TO_BASE,
+  LIBRARY_STATUS_PREDICATE,
+  isGameStatus,
+  isMediaStatus,
+  isMediaType,
+} from '../media-domain.js'
 
 const app = new Hono()
 
@@ -41,7 +48,7 @@ app.get('/', (c) => {
   const params: (string | number)[] = []
   if (type)    { sql += ' AND type = ?';   params.push(type) }
   if (status)  { sql += ' AND status = ?'; params.push(status) }
-  if (library) { sql += " AND status != 'wishlist'" }
+  if (library) { sql += ` AND ${LIBRARY_STATUS_PREDICATE}` }
   // Desempate por id: sem ele, itens com o mesmo `added_at` — um import inteiro
   // tem muitos — podem trocar de lugar entre páginas e sumir ou repetir.
   sql += ' ORDER BY added_at DESC, id DESC LIMIT ? OFFSET ?'
@@ -55,7 +62,7 @@ app.get('/recent', (c) => {
   const result: Record<string, unknown[]> = {}
   for (const t of ['movie', 'series', 'game', 'book']) {
     // Só a biblioteca (consumido): wishlist mora apenas na Wishlist.
-    const rows = db.prepare("SELECT * FROM media_items WHERE type = ? AND status != 'wishlist' ORDER BY added_at DESC LIMIT ?").all(t, perType) as any[]
+    const rows = db.prepare(`SELECT * FROM media_items WHERE type = ? AND ${LIBRARY_STATUS_PREDICATE} ORDER BY added_at DESC LIMIT ?`).all(t, perType) as any[]
     result[t] = t === 'series' || t === 'book' ? withProgress(rows) : rows
   }
   return c.json(result)
@@ -97,6 +104,8 @@ app.post('/', async (c) => {
   if (!external_id || !type || !title) {
     return c.json({ error: 'external_id, type and title are required' }, 400)
   }
+  if (!isMediaType(type)) return c.json({ error: 'Invalid media type' }, 400)
+  if (!isMediaStatus(status)) return c.json({ error: 'Invalid media status' }, 400)
 
   try {
     const res = db.prepare(`
@@ -165,11 +174,6 @@ app.patch('/:id/tmdb-identification', async (c) => {
   return c.json(db.prepare('SELECT * FROM media_items WHERE id = ?').get(c.req.param('id')))
 })
 
-// game_status (granular de games) → status base do Shelf
-const GAME_STATUS_TO_BASE: Record<string, 'wishlist' | 'in_progress' | 'completed' | 'dropped'> = {
-  jogando: 'in_progress', zerado: 'completed', platinado: 'completed', abandonado: 'dropped', nunca_jogado: 'wishlist',
-}
-
 /** Vagas de favorito por categoria (o banner da home mostra exatamente estas). */
 const FAVORITE_LIMIT = 5
 /** `favorite = 2` marca o destaque da categoria — a capa coroada, no centro da faixa. */
@@ -178,10 +182,18 @@ const FAVORITE_TOP = 2
 app.patch('/:id', async (c) => {
   const id   = c.req.param('id')
   const body = await c.req.json()
+  const gameStatus = body.game_status as unknown
+
+  if ('status' in body && !isMediaStatus(body.status)) {
+    return c.json({ error: 'Invalid media status' }, 400)
+  }
+  if ('game_status' in body && gameStatus !== null && !isGameStatus(gameStatus)) {
+    return c.json({ error: 'Invalid game status' }, 400)
+  }
 
   // Ao mudar o status granular de um game, deriva o status base (e a data de conclusão).
-  if (typeof body.game_status === 'string' && GAME_STATUS_TO_BASE[body.game_status]) {
-    const base = GAME_STATUS_TO_BASE[body.game_status]
+  if (isGameStatus(gameStatus)) {
+    const base = GAME_STATUS_TO_BASE[gameStatus]
     body.status = base
     if (base === 'completed' && body.completed_at == null) body.completed_at = new Date().toISOString()
   }
