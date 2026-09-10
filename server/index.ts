@@ -18,6 +18,7 @@ import pricesRoutes    from './routes/prices.js'
 import transferRoutes  from './routes/transfer.js'
 import { startPriceSync } from './prices/sync.js'
 import { startSteamSync } from './steam/sync.js'
+import { startBackupScheduler } from './backup.js'
 
 const app = new Hono()
 
@@ -52,3 +53,6 @@ startPriceSync()
 
 // Backlog ↔ wishlist da Steam: mesma cadência (6 h), quando o conector está ativo.
 startSteamSync()
+
+// Snapshot integral verificado, independente do export JSON portátil.
+startBackupScheduler()

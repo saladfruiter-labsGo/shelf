@@ -52,6 +52,12 @@ function ReportBox({ report }: { report: ImportReport & { rows?: number } }) {
       {report.errors.length > 0 && (
         <p className="text-[11px] text-movies mt-2">{report.errors.slice(0, 3).join(' · ')}</p>
       )}
+      {report.restored && Object.values(report.restored).some(Boolean) && (
+        <p className="text-[11px] text-muted mt-2">
+          Estruturas restauradas: {report.restored.lists} lista(s) · {report.restored.activity} atividade(s) ·{' '}
+          {report.restored.tracks} faixa(s) · {report.restored.prices} acompanhamento(s) de preço.
+        </p>
+      )}
     </div>
   )
 }
@@ -83,7 +89,8 @@ export function ImportExport() {
       <div className={cardCls}>
         <h2 className="font-medium text-primary text-sm mb-1">Exportar</h2>
         <p className="text-xs text-muted mb-4">
-          O <b>JSON</b> é um backup completo e re-importável aqui mesmo: itens, diário, temporadas/episódios e listas.
+          O <b>JSON</b> é um export portátil e re-importável: itens, diário, temporadas/episódios, listas completas,
+          atividade musical e histórico de preços — sem credenciais das integrações.
           O <b>CSV</b> é uma linha por item, para abrir em planilha.
         </p>
 
@@ -116,9 +123,77 @@ export function ImportExport() {
         </div>
       </div>
 
+      <AutomaticBackupCard />
+
       <LetterboxdCard onDone={() => qc.invalidateQueries()} />
       <SteamImportCard onDone={() => qc.invalidateQueries()} />
       <ShelfBackupCard onDone={() => qc.invalidateQueries()} />
+    </div>
+  )
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+}
+
+function AutomaticBackupCard() {
+  const qc = useQueryClient()
+  const { data: status, isLoading } = useQuery({
+    queryKey: ['backup-status'],
+    queryFn: api.transfer.backupStatus,
+    refetchInterval: query => query.state.data?.running ? 1500 : false,
+  })
+  const [message, setMessage] = useState('')
+  const [error, setError] = useState('')
+  const run = useMutation({
+    mutationFn: api.transfer.backupNow,
+    onSuccess: backup => {
+      setError('')
+      setMessage(`Snapshot verificado: ${backup.filename}`)
+      qc.invalidateQueries({ queryKey: ['backup-status'] })
+    },
+    onError: (e: unknown) => { setMessage(''); setError((e as Error).message) },
+  })
+
+  return (
+    <div className={cardCls}>
+      <div className="flex items-center gap-2 mb-1">
+        <span style={{ fontSize: 18 }}>🛡️</span>
+        <h2 className="font-medium text-primary text-sm">Snapshots automáticos do banco</h2>
+      </div>
+      <p className="text-xs text-muted mb-4">
+        Cópias integrais do SQLite, verificadas antes de receber o nome definitivo. Incluem também configurações e
+        credenciais; guarde o diretório de snapshots com a mesma proteção do appdata.
+      </p>
+
+      {isLoading ? (
+        <p className="text-[11px] text-muted">Consultando os snapshots…</p>
+      ) : status && (
+        <div className="text-[11px] text-muted mb-3 space-y-1">
+          <p>
+            {status.enabled ? `Automático a cada ${status.interval_hours} h` : 'Agendamento automático desativado'}
+            {' · '}{status.count} arquivo(s)
+          </p>
+          <p>
+            {status.latest
+              ? `Último: ${new Date(status.latest.created_at).toLocaleString('pt-BR')} · ${formatBytes(status.latest.size_bytes)}`
+              : 'Nenhum snapshot criado ainda.'}
+          </p>
+          <p>
+            Retenção: {status.retention.daily_days} dias + {status.retention.weekly_weeks} semanais; snapshots de
+            segurança: últimos {status.retention.safety_copies}.
+          </p>
+        </div>
+      )}
+
+      <button type="button" className={btnCls} disabled={run.isPending || status?.running}
+        onClick={() => { setMessage(''); setError(''); run.mutate() }}>
+        {run.isPending || status?.running ? 'Criando e verificando…' : 'Criar snapshot agora'}
+      </button>
+      {message && <p className="text-[11px] text-games mt-2">{message}</p>}
+      {error && <p className="text-[11px] text-movies mt-2">{error}</p>}
+      {status?.last_error && <p className="text-[11px] text-movies mt-2">Última falha: {status.last_error.message}</p>}
     </div>
   )
 }

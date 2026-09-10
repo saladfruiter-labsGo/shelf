@@ -4,7 +4,7 @@
  */
 import { test, before } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync } from 'node:fs'
+import { mkdtempSync, readdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import Database from 'better-sqlite3'
@@ -68,6 +68,9 @@ test('migração cria as tabelas de preços num banco que já existia', () => {
   const cols = (db.prepare('PRAGMA table_info(media_items)').all() as { name: string }[]).map(c => c.name)
   assert.ok(cols.includes('game_status'))
   assert.ok(cols.includes('release_date'))
+
+  const snapshots = readdirSync(join(dataDir, 'backups'))
+  assert.equal(snapshots.some(name => /^shelf-before-migration-.+\.db$/.test(name)), true)
 })
 
 test('só jogos no backlog entram na sincronização automática', () => {

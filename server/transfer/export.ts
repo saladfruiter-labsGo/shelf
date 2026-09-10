@@ -3,10 +3,11 @@
  *
  * Dois formatos, com propósitos diferentes:
  *
- * - **JSON** (`shelf_export: 1`) — backup completo e re-importável: itens,
- *   diário, temporadas/episódios e listas. As referências entre tabelas usam
+ * - **JSON** (`shelf_export: 2`) — export portátil e re-importável: itens,
+ *   diário, temporadas/episódios, listas completas, atividade e preços. As referências entre tabelas usam
  *   `external_id + type` em vez do `id` interno, para que a importação funcione
- *   em outro banco (ids do SQLite não sobrevivem a uma restauração).
+ *   em outro banco (ids do SQLite não sobrevivem a uma restauração). Segredos
+ *   de integração não entram; snapshots operacionais cuidam da cópia integral.
  * - **CSV** — uma linha por item, para planilha. Campos longos (sinopse) ficam
  *   de fora de propósito.
  */
@@ -22,23 +23,35 @@ function scopeWhere(scope: ExportScope): string {
 }
 
 export interface ShelfExport {
-  shelf_export: 1
+  shelf_export: 2
   exported_at: string
   scope: ExportScope
-  counts: { items: number; diary: number; series: number; lists: number }
+  counts: {
+    items: number
+    diary: number
+    series: number
+    lists: number
+    activity: number
+    tracks: number
+    prices: number
+  }
   items: Record<string, unknown>[]
   diary: Record<string, unknown>[]
   series: Record<string, unknown>[]
   lists: Record<string, unknown>[]
+  activity: Record<string, unknown>[]
+  tracks: Record<string, unknown>[]
+  prices: Record<string, unknown>[]
 }
 
 export function buildExport(scope: ExportScope): ShelfExport {
-  const items = db.prepare(
+  const itemRows = db.prepare(
     `SELECT * FROM media_items WHERE ${scopeWhere(scope)} ORDER BY type, title`,
   ).all() as Record<string, unknown>[]
+  const items = itemRows.map(({ id: _id, ...item }) => item)
 
-  const ids = items.map(i => i.id as number)
-  const byId = new Map(items.map(i => [i.id as number, i]))
+  const ids = itemRows.map(i => i.id as number)
+  const byId = new Map(itemRows.map(i => [i.id as number, i]))
   const ref = (mediaItemId: number) => {
     const it = byId.get(mediaItemId)
     return { external_id: it?.external_id ?? null, type: it?.type ?? null }
@@ -93,30 +106,109 @@ export function buildExport(scope: ExportScope): ShelfExport {
   // Listas só entram com os itens dentro do escopo exportado (uma lista mista
   // exportada como "backlog" traz apenas a parte que está no backlog).
   const exported = new Set(items.map(i => `${i.type}::${i.external_id}`))
-  const listRows = db.prepare('SELECT id, name, description, mode, created_at FROM lists ORDER BY name').all() as any[]
-  const lists = listRows.map(l => ({
-    name: l.name,
-    description: l.description,
-    mode: l.mode,
-    created_at: l.created_at,
-    // A ordem exportada é a ordem manual da lista (importa para rankings).
-    items: (db.prepare(
-      `SELECT m.external_id, m.type FROM list_items li
-         JOIN media_items m ON m.id = li.media_item_id
-        WHERE li.list_id = ? ORDER BY li.position, li.id`,
-    ).all(l.id) as { external_id: string; type: string }[])
-      .filter(i => exported.has(`${i.type}::${i.external_id}`)),
-  })).filter(l => l.items.length > 0)
+  const listRows = db.prepare(
+    'SELECT id, name, description, mode, dim_seen, created_at, updated_at FROM lists ORDER BY name',
+  ).all() as any[]
+  const lists = listRows.map(l => {
+    const tierRows = db.prepare(
+      'SELECT id, name, color, position FROM list_tiers WHERE list_id = ? ORDER BY position, id',
+    ).all(l.id) as any[]
+    const tierKeys = new Map(tierRows.map((t, index) => [t.id, `tier-${index}`]))
+    return {
+      name: l.name,
+      description: l.description,
+      mode: l.mode,
+      dim_seen: l.dim_seen,
+      created_at: l.created_at,
+      updated_at: l.updated_at,
+      tiers: tierRows.map(t => ({ key: tierKeys.get(t.id), name: t.name, color: t.color, position: t.position })),
+      // A ordem e o tier usam referências portáteis, nunca ids internos.
+      items: (db.prepare(
+        `SELECT m.external_id, m.type, li.position, li.tier_id, li.added_at
+           FROM list_items li
+           JOIN media_items m ON m.id = li.media_item_id
+          WHERE li.list_id = ? ORDER BY li.position, li.id`,
+      ).all(l.id) as any[])
+        .filter(i => exported.has(`${i.type}::${i.external_id}`))
+        .map(i => ({
+          external_id: i.external_id,
+          type: i.type,
+          position: i.position,
+          tier_key: i.tier_id == null ? null : (tierKeys.get(i.tier_id) ?? null),
+          added_at: i.added_at,
+        })),
+    }
+  }).filter(l => scope === 'all' || l.items.length > 0)
+
+  // Atividade e cache musical não pertencem com segurança a um subconjunto de
+  // status; entram apenas no export "Tudo". Os campos normalizados são dados do
+  // usuário, enquanto credenciais e estados internos de `settings` ficam fora.
+  const activity = scope === 'all'
+    ? db.prepare(`
+        SELECT source, event_type, media_type, external_ref, title, subtitle, cover_url,
+               rating, duration_ms, genre, occurred_at, created_at
+          FROM activity_events ORDER BY occurred_at, id
+      `).all() as Record<string, unknown>[]
+    : []
+  const tracks = scope === 'all'
+    ? db.prepare(`
+        SELECT artist, track, album, duration_ms, genre, mbid, cover_url, play_count,
+               first_played, last_played, enriched
+          FROM music_tracks ORDER BY artist, track
+      `).all() as Record<string, unknown>[]
+    : []
+
+  const productRows = inIds
+    ? db.prepare('SELECT * FROM game_price_products WHERE media_item_id IN ' + inIds + ' ORDER BY id').all(...ids) as any[]
+    : []
+  const prices = productRows.map(product => ({
+    ...ref(product.media_item_id),
+    provider: product.provider,
+    platform: product.platform,
+    provider_game_id: product.provider_game_id,
+    matched_title: product.matched_title,
+    match_method: product.match_method,
+    match_status: product.match_status,
+    currency: product.currency,
+    history_low_minor: product.history_low_minor,
+    history_low_at: product.history_low_at,
+    last_resolved_at: product.last_resolved_at,
+    last_synced_at: product.last_synced_at,
+    last_error: product.last_error,
+    created_at: product.created_at,
+    updated_at: product.updated_at,
+    offers: db.prepare(`
+      SELECT shop_id, shop_name, price_minor, regular_minor, currency, discount_percent,
+             url, drm, voucher, available, observed_at, last_seen_at, created_at, updated_at
+        FROM game_price_offers WHERE game_price_product_id = ? ORDER BY shop_id
+    `).all(product.id),
+    history: db.prepare(`
+      SELECT shop_id, shop_name, price_minor, regular_minor, currency, discount_percent,
+             observed_at, observed_day, source, created_at
+        FROM game_price_history WHERE game_price_product_id = ? ORDER BY observed_at, id
+    `).all(product.id),
+  }))
 
   return {
-    shelf_export: 1,
+    shelf_export: 2,
     exported_at: new Date().toISOString(),
     scope,
-    counts: { items: items.length, diary: diary.length, series: series.length, lists: lists.length },
+    counts: {
+      items: items.length,
+      diary: diary.length,
+      series: series.length,
+      lists: lists.length,
+      activity: activity.length,
+      tracks: tracks.length,
+      prices: prices.length,
+    },
     items,
     diary,
     series,
     lists,
+    activity,
+    tracks,
+    prices,
   }
 }
 

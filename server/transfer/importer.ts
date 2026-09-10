@@ -26,6 +26,7 @@ export interface ImportReport {
   /** Títulos que nenhum provedor externo resolveu (importados mesmo assim). */
   unresolved: string[]
   errors: string[]
+  restored?: { lists: number; activity: number; tracks: number; prices: number }
 }
 
 function emptyReport(): ImportReport {
@@ -88,6 +89,9 @@ export interface ShelfBackup {
   diary?: Record<string, unknown>[]
   series?: any[]
   lists?: any[]
+  activity?: any[]
+  tracks?: any[]
+  prices?: any[]
 }
 
 export function importShelfBackup(payload: ShelfBackup, mode: ImportMode = 'merge'): ImportReport {
@@ -96,6 +100,13 @@ export function importShelfBackup(payload: ShelfBackup, mode: ImportMode = 'merg
     report.errors.push('Arquivo não parece um export do Shelf (campo "items" ausente).')
     return report
   }
+  if (payload.shelf_export != null && payload.shelf_export !== 1 && payload.shelf_export !== 2) {
+    report.errors.push(`Versão de export não suportada: ${payload.shelf_export}.`)
+    return report
+  }
+
+  const restored = { lists: 0, activity: 0, tracks: 0, prices: 0 }
+  report.restored = restored
 
   const run = db.transaction(() => {
     for (const raw of payload.items!) {
@@ -184,13 +195,49 @@ export function importShelfBackup(payload: ShelfBackup, mode: ImportMode = 'merg
     for (const l of payload.lists ?? []) {
       const name = String(l.name ?? '').trim()
       if (!name) continue
-      let list = db.prepare('SELECT id FROM lists WHERE name = ?').get(name) as { id: number } | undefined
+      let list = db.prepare('SELECT id FROM lists WHERE name = ? ORDER BY id LIMIT 1').get(name) as { id: number } | undefined
+      const created = !list
       if (!list) {
         const mode = ['list', 'ranking', 'tier'].includes(l.mode) ? l.mode : 'list'
-        const res = db.prepare('INSERT INTO lists (name, description, mode) VALUES (?, ?, ?)')
-          .run(name, l.description ?? null, mode)
+        const res = db.prepare(`
+          INSERT INTO lists (name, description, mode, dim_seen, created_at, updated_at)
+          VALUES (?, ?, ?, ?, COALESCE(?, datetime('now')), COALESCE(?, datetime('now')))
+        `).run(name, l.description ?? null, mode, l.dim_seen ? 1 : 0, l.created_at ?? null, l.updated_at ?? null)
         list = { id: Number(res.lastInsertRowid) }
+      } else if (mode === 'replace') {
+        db.prepare(`
+          UPDATE lists SET description = ?, mode = ?, dim_seen = ?, updated_at = datetime('now') WHERE id = ?
+        `).run(
+          l.description ?? null,
+          ['list', 'ranking', 'tier'].includes(l.mode) ? l.mode : 'list',
+          l.dim_seen ? 1 : 0,
+          list.id,
+        )
       }
+
+      // V2 leva a estrutura da tierlist. V1 não tinha `tiers` nem `tier_key` e
+      // continua caindo naturalmente no comportamento antigo.
+      const tierIds = new Map<string, number>()
+      for (const [index, tier] of (Array.isArray(l.tiers) ? l.tiers : []).entries()) {
+        const tierName = String(tier?.name ?? '').trim().slice(0, 24)
+        if (!tierName) continue
+        let existing = db.prepare(
+          'SELECT id FROM list_tiers WHERE list_id = ? AND name = ? ORDER BY id LIMIT 1',
+        ).get(list.id, tierName) as { id: number } | undefined
+        const position = Number.isFinite(Number(tier.position)) ? Number(tier.position) : index
+        const color = String(tier.color ?? 'accent').trim() || 'accent'
+        if (!existing) {
+          const result = db.prepare(
+            'INSERT INTO list_tiers (list_id, name, color, position) VALUES (?, ?, ?, ?)',
+          ).run(list.id, tierName, color, position)
+          existing = { id: Number(result.lastInsertRowid) }
+        } else if (mode === 'replace') {
+          db.prepare('UPDATE list_tiers SET color = ?, position = ? WHERE id = ?')
+            .run(color, position, existing.id)
+        }
+        tierIds.set(String(tier.key ?? `tier-${index}`), existing.id)
+      }
+
       // A ordem do arquivo é a ordem da lista — vira `position` (usada no ranking).
       const maxPos = db.prepare('SELECT MAX(position) AS max FROM list_items WHERE list_id = ?')
         .get(list.id) as { max: number | null }
@@ -198,10 +245,146 @@ export function importShelfBackup(payload: ShelfBackup, mode: ImportMode = 'merg
       for (const li of l.items ?? []) {
         const item = findItem.get(String(li.external_id ?? ''), String(li.type ?? '')) as { id: number } | undefined
         if (!item) continue
-        const res = db.prepare('INSERT OR IGNORE INTO list_items (list_id, media_item_id, position) VALUES (?, ?, ?)')
-          .run(list.id, item.id, pos)
-        if (res.changes > 0) pos++
+        const filePosition = Number.isFinite(Number(li.position)) ? Number(li.position) : pos
+        const position = created || mode === 'replace' ? filePosition : pos
+        const tierId = li.tier_key == null ? null : (tierIds.get(String(li.tier_key)) ?? null)
+        const res = db.prepare(`
+          INSERT OR IGNORE INTO list_items (list_id, media_item_id, position, tier_id, added_at)
+          VALUES (?, ?, ?, ?, COALESCE(?, datetime('now')))
+        `).run(list.id, item.id, position, tierId, li.added_at ?? null)
+        if (res.changes > 0) {
+          pos = Math.max(pos, position + 1)
+        } else if (mode === 'replace') {
+          db.prepare('UPDATE list_items SET position = ?, tier_id = ? WHERE list_id = ? AND media_item_id = ?')
+            .run(position, tierId, list.id, item.id)
+        }
       }
+      restored.lists++
+    }
+
+    const activityExists = db.prepare(`
+      SELECT 1 FROM activity_events
+       WHERE source = ? AND event_type = ? AND media_type = ? AND external_ref IS ?
+         AND title = ? AND occurred_at = ? LIMIT 1
+    `)
+    const insertActivity = db.prepare(`
+      INSERT INTO activity_events
+        (source, event_type, media_type, external_ref, title, subtitle, cover_url,
+         rating, duration_ms, genre, occurred_at, raw, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, COALESCE(?, datetime('now')))
+    `)
+    for (const event of payload.activity ?? []) {
+      const source = String(event.source ?? '').trim()
+      const eventType = String(event.event_type ?? '').trim()
+      const mediaType = String(event.media_type ?? '').trim()
+      const title = String(event.title ?? '').trim()
+      const occurredAt = String(event.occurred_at ?? '').trim()
+      const externalRef = event.external_ref == null ? null : String(event.external_ref)
+      if (!source || !eventType || !mediaType || !title || !occurredAt) continue
+      if (activityExists.get(source, eventType, mediaType, externalRef, title, occurredAt)) continue
+      insertActivity.run(
+        source, eventType, mediaType, externalRef, title, event.subtitle ?? null,
+        event.cover_url ?? null, event.rating ?? null, event.duration_ms ?? null,
+        event.genre ?? null, occurredAt, event.created_at ?? null,
+      )
+      restored.activity++
+    }
+
+    const upsertTrack = db.prepare(`
+      INSERT INTO music_tracks
+        (artist, track, album, duration_ms, genre, mbid, cover_url, play_count, first_played, last_played, enriched)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(artist, track) DO UPDATE SET
+        album        = COALESCE(music_tracks.album, excluded.album),
+        duration_ms  = COALESCE(music_tracks.duration_ms, excluded.duration_ms),
+        genre        = COALESCE(music_tracks.genre, excluded.genre),
+        mbid         = COALESCE(music_tracks.mbid, excluded.mbid),
+        cover_url    = COALESCE(music_tracks.cover_url, excluded.cover_url),
+        play_count   = MAX(music_tracks.play_count, excluded.play_count),
+        first_played = CASE WHEN music_tracks.first_played IS NULL THEN excluded.first_played
+                            WHEN excluded.first_played IS NULL THEN music_tracks.first_played
+                            ELSE MIN(music_tracks.first_played, excluded.first_played) END,
+        last_played  = CASE WHEN music_tracks.last_played IS NULL THEN excluded.last_played
+                            WHEN excluded.last_played IS NULL THEN music_tracks.last_played
+                            ELSE MAX(music_tracks.last_played, excluded.last_played) END,
+        enriched     = MAX(music_tracks.enriched, excluded.enriched)
+    `)
+    for (const track of payload.tracks ?? []) {
+      const artist = String(track.artist ?? '').trim()
+      const title = String(track.track ?? '').trim()
+      if (!artist || !title) continue
+      const result = upsertTrack.run(
+        artist, title, track.album ?? null, track.duration_ms ?? null, track.genre ?? null,
+        track.mbid ?? null, track.cover_url ?? null, Math.max(0, Number(track.play_count) || 0),
+        track.first_played ?? null, track.last_played ?? null, track.enriched ? 1 : 0,
+      )
+      if (result.changes > 0) restored.tracks++
+    }
+
+    const upsertProduct = db.prepare(`
+      INSERT INTO game_price_products
+        (media_item_id, provider, provider_game_id, platform, matched_title, match_method,
+         match_status, currency, history_low_minor, history_low_at, last_resolved_at,
+         last_synced_at, last_error, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, datetime('now')), COALESCE(?, datetime('now')))
+      ON CONFLICT(media_item_id, provider, platform) DO UPDATE SET
+        provider_game_id = excluded.provider_game_id, matched_title = excluded.matched_title,
+        match_method = excluded.match_method, match_status = excluded.match_status,
+        currency = excluded.currency, history_low_minor = excluded.history_low_minor,
+        history_low_at = excluded.history_low_at, last_resolved_at = excluded.last_resolved_at,
+        last_synced_at = excluded.last_synced_at, last_error = excluded.last_error,
+        updated_at = excluded.updated_at
+    `)
+    const findProduct = db.prepare(
+      'SELECT id FROM game_price_products WHERE media_item_id = ? AND provider = ? AND platform = ?',
+    )
+    const upsertOffer = db.prepare(`
+      INSERT INTO game_price_offers
+        (game_price_product_id, shop_id, shop_name, price_minor, regular_minor, currency,
+         discount_percent, url, drm, voucher, available, observed_at, last_seen_at, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, datetime('now')), COALESCE(?, datetime('now')))
+      ON CONFLICT(game_price_product_id, shop_id) DO UPDATE SET
+        shop_name = excluded.shop_name, price_minor = excluded.price_minor,
+        regular_minor = excluded.regular_minor, currency = excluded.currency,
+        discount_percent = excluded.discount_percent, url = excluded.url,
+        drm = excluded.drm, voucher = excluded.voucher, available = excluded.available,
+        observed_at = excluded.observed_at, last_seen_at = excluded.last_seen_at,
+        updated_at = excluded.updated_at
+    `)
+    const insertHistory = db.prepare(`
+      INSERT OR IGNORE INTO game_price_history
+        (game_price_product_id, shop_id, shop_name, price_minor, regular_minor, currency,
+         discount_percent, observed_at, observed_day, source, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, datetime('now')))
+    `)
+    for (const price of payload.prices ?? []) {
+      const item = findItem.get(String(price.external_id ?? ''), String(price.type ?? 'game')) as { id: number } | undefined
+      if (!item) continue
+      const provider = String(price.provider ?? 'itad')
+      const platform = String(price.platform ?? 'pc')
+      upsertProduct.run(
+        item.id, provider, price.provider_game_id ?? null, platform, price.matched_title ?? null,
+        price.match_method ?? null, price.match_status ?? 'pending', price.currency ?? null,
+        price.history_low_minor ?? null, price.history_low_at ?? null, price.last_resolved_at ?? null,
+        price.last_synced_at ?? null, price.last_error ?? null, price.created_at ?? null, price.updated_at ?? null,
+      )
+      const product = findProduct.get(item.id, provider, platform) as { id: number }
+      for (const offer of price.offers ?? []) {
+        upsertOffer.run(
+          product.id, offer.shop_id, offer.shop_name, offer.price_minor, offer.regular_minor,
+          offer.currency, offer.discount_percent ?? 0, offer.url, offer.drm ?? null,
+          offer.voucher ?? null, offer.available == null ? 1 : Number(offer.available),
+          offer.observed_at, offer.last_seen_at, offer.created_at ?? null, offer.updated_at ?? null,
+        )
+      }
+      for (const point of price.history ?? []) {
+        insertHistory.run(
+          product.id, point.shop_id, point.shop_name, point.price_minor, point.regular_minor,
+          point.currency, point.discount_percent ?? 0, point.observed_at, point.observed_day,
+          point.source, point.created_at ?? null,
+        )
+      }
+      restored.prices++
     }
   })
 
