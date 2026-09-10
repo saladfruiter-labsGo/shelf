@@ -326,10 +326,24 @@ export function importSteamWishlist(): Promise<SteamSyncResult> {
 
 const FIRST_RUN_DELAY_MS = 60_000
 const INTERVAL_MS = 6 * 3_600_000
+let firstRunTimer: NodeJS.Timeout | null = null
+let intervalTimer: NodeJS.Timeout | null = null
 
 /** Sincroniza o backlog logo após o boot e a cada 6 h, quando o conector está ativo. */
 export function startSteamSync(): void {
+  if (firstRunTimer || intervalTimer) return
   const tick = () => { if (steam.steamEnabled()) syncSteamBacklog().catch(() => {}) }
-  setTimeout(tick, FIRST_RUN_DELAY_MS)
-  setInterval(tick, INTERVAL_MS)
+  firstRunTimer = setTimeout(() => { firstRunTimer = null; tick() }, FIRST_RUN_DELAY_MS)
+  intervalTimer = setInterval(tick, INTERVAL_MS)
+  firstRunTimer.unref()
+  intervalTimer.unref()
+}
+
+/** Cancela ciclos futuros e espera uma sincronização em andamento terminar. */
+export async function stopSteamSync(): Promise<void> {
+  if (firstRunTimer) clearTimeout(firstRunTimer)
+  if (intervalTimer) clearInterval(intervalTimer)
+  firstRunTimer = null
+  intervalTimer = null
+  while (running) await new Promise(resolve => setTimeout(resolve, 50))
 }

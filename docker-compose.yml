@@ -3,6 +3,7 @@ services:
     image: ghcr.io/saladfruiter-labsgo/shelf:latest
     container_name: shelf
     restart: unless-stopped
+    stop_grace_period: 30s
     ports:
       - "3000:3000"
     volumes:

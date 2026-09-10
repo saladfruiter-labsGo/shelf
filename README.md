@@ -114,7 +114,9 @@ O compose sobe o container na porta `3000` e persiste o banco em `/app/data` e o
 
 O Shelf cria um snapshot consistente pela Online Backup API do SQLite, abre a cópia com `PRAGMA quick_check` e só então publica o arquivo definitivo. Também cria uma cópia preventiva antes de atualizar um schema antigo e antes de aplicar importações. A tela **Importação/Exportação** mostra o último snapshot e permite criar um sob demanda.
 
-Saúde: `GET /api/health` → `{ "ok": true }`
+Saúde: `GET /api/health` consulta também o SQLite e responde `{ "ok": true }`; durante o encerramento ou se o banco falhar, responde `503`. A imagem executa esse check a cada 30 segundos. O Docker marca o container como `unhealthy`; para reinício por healthcheck é necessário que o orquestrador/plug-in do Unraid observe esse estado. Falhas fatais do processo encerram com erro e são cobertas por `restart: unless-stopped`.
+
+No `SIGTERM`/`SIGINT`, o Shelf para de aceitar conexões, cancela novos polls, espera requisições e jobs correntes, faz checkpoint do WAL e fecha o banco. O compose concede 30 segundos para esse ciclo. O entrypoint ajusta a propriedade dos volumes legados e executa o processo Node como o usuário não privilegiado `node`.
 
 ### Segurança de acesso
 
