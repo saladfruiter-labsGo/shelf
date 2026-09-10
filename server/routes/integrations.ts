@@ -8,11 +8,13 @@ import * as steamClient from '../steam/client.js'
 import { lastSync as steamLastSync, syncRunning as steamSyncRunning } from '../steam/sync.js'
 import { originalFilenameFromPlex, type PlexMediaFileMetadata } from '../plex.js'
 import { cfg, ensureSecret, setCfg } from '../integrations/config.js'
+import kavitaIntegrationRoutes, { pollKavita, resetKavitaAuth } from './integrations/kavita.js'
 import playniteIntegrationRoutes, { ensurePlayniteSecret } from './integrations/playnite.js'
 import priceIntegrationRoutes from './integrations/prices.js'
 import steamIntegrationRoutes from './integrations/steam.js'
 
 const app = new Hono()
+app.route('/', kavitaIntegrationRoutes)
 app.route('/', playniteIntegrationRoutes)
 app.route('/', priceIntegrationRoutes)
 app.route('/', steamIntegrationRoutes)
@@ -764,206 +766,6 @@ function pickImage(images: any): string | null {
   return u && !u.includes('2a96cbd8b46e442fc41c2b86b821562f') ? u : null // ignora placeholder do Last.fm
 }
 
-/* ──────────────────────────────── Kavita: livros (polling) ─────────────────────────── */
-
-interface KavitaSeries {
-  id: number
-  name: string
-  pages: number
-  pagesRead: number
-  userRating: number
-  hasUserRated: boolean
-  latestReadDate: string | null
-  libraryId: number
-}
-
-/** Upsert de livro sem forçar conclusão (usado para 'in_progress' e como base do 'completed'). */
-const upsertBookProgress = db.prepare(`
-  INSERT INTO media_items (external_id, type, title, cover_url, author, status, rating, pages_total, pages_read)
-  VALUES (@external_id, 'book', @title, @cover_url, @author, @status, @rating, @pages_total, @pages_read)
-  ON CONFLICT(external_id, type) DO UPDATE SET
-    title       = COALESCE(media_items.title, excluded.title),
-    cover_url   = COALESCE(media_items.cover_url, excluded.cover_url),
-    author      = COALESCE(excluded.author, media_items.author),
-    -- nunca rebaixa um livro já concluído de volta para 'in_progress'
-    status      = CASE WHEN media_items.status = 'completed' AND excluded.status = 'in_progress'
-                      THEN media_items.status ELSE excluded.status END,
-    rating      = CASE WHEN excluded.rating > 0 THEN excluded.rating ELSE media_items.rating END,
-    pages_total = excluded.pages_total,
-    pages_read  = excluded.pages_read,
-    updated_at  = datetime('now')
-`)
-
-/** Marca a conclusão preservando o completed_at original. */
-const completeBook = db.prepare(`
-  UPDATE media_items SET status = 'completed',
-    completed_at = COALESCE(completed_at, @completed_at),
-    updated_at = datetime('now')
-  WHERE external_id = @external_id AND type = 'book'
-`)
-
-const insertDiaryKavita = db.prepare(`
-  INSERT INTO diary_entries (media_item_id, watched_at, rating, comment, source)
-  VALUES (?, ?, ?, NULL, 'kavita')
-`)
-
-const getBookRow = db.prepare(`SELECT id, author FROM media_items WHERE external_id = ? AND type = 'book'`)
-
-type KavitaState = Record<string, { status: string; pagesRead: number; rating: number }>
-function readKavitaState(): KavitaState {
-  try { return JSON.parse(cfg('KAVITA_STATE') || '{}') } catch { return {} }
-}
-function writeKavitaState(s: KavitaState) { setCfg('KAVITA_STATE', JSON.stringify(s)) }
-
-let kavitaToken: string | null = null
-function kavitaBase(): string { return cfg('KAVITA_URL').replace(/\/$/, '') }
-
-/** Troca a API key por um JWT (fluxo de plugin do Kavita). */
-async function kavitaAuth(): Promise<boolean> {
-  const base = kavitaBase()
-  const key = cfg('KAVITA_API_KEY')
-  if (!base || !key) { kavitaToken = null; return false }
-  try {
-    const r = await fetch(`${base}/api/Plugin/authenticate?apiKey=${encodeURIComponent(key)}&pluginName=Shelf`, {
-      method: 'POST', headers: { Accept: 'application/json' },
-    })
-    if (!r.ok) { kavitaToken = null; return false }
-    const d = (await r.json()) as { token?: string }
-    kavitaToken = d?.token ?? null
-    return !!kavitaToken
-  } catch { kavitaToken = null; return false }
-}
-
-/** fetch autenticado no Kavita, com re-auth automático em 401. */
-async function kavitaFetch(path: string, init: RequestInit = {}, retry = true): Promise<Response | null> {
-  if (!kavitaToken && !(await kavitaAuth())) return null
-  const headers = {
-    ...(init.headers ?? {}),
-    Authorization: `Bearer ${kavitaToken}`,
-    Accept: (init.headers as Record<string, string> | undefined)?.Accept ?? 'application/json',
-  }
-  let r: Response
-  try { r = await fetch(`${kavitaBase()}${path}`, { ...init, headers }) } catch { return null }
-  if (r.status === 401 && retry) {
-    kavitaToken = null
-    if (await kavitaAuth()) return kavitaFetch(path, init, false)
-    return null
-  }
-  return r
-}
-
-/** Busca todas as séries (com progresso do usuário) via all-v2, paginando. */
-async function kavitaAllSeries(): Promise<KavitaSeries[]> {
-  const out: KavitaSeries[] = []
-  const size = 200
-  for (let page = 1; page <= 25; page++) {
-    const r = await kavitaFetch(`/api/Series/all-v2?PageNumber=${page}&PageSize=${size}`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
-    })
-    if (!r || !r.ok) break
-    let arr: KavitaSeries[]
-    try { arr = (await r.json()) as KavitaSeries[] } catch { break }
-    if (!Array.isArray(arr) || arr.length === 0) break
-    out.push(...arr)
-    if (arr.length < size) break
-  }
-  return out
-}
-
-/** Autor (writer) da série — buscado sob demanda quando ainda não temos. */
-async function kavitaAuthor(seriesId: number): Promise<string | null> {
-  const r = await kavitaFetch(`/api/Series/metadata?seriesId=${seriesId}`)
-  if (!r || !r.ok) return null
-  try {
-    const d = (await r.json()) as { writers?: { name: string }[] }
-    return d?.writers?.[0]?.name ?? null
-  } catch { return null }
-}
-
-/** Normaliza a nota do Kavita para a escala 0–5 (meio-ponto) do Shelf. */
-function kavitaRating(s: KavitaSeries): number {
-  if (!s.hasUserRated || !s.userRating) return 0
-  let v = s.userRating
-  if (v > 5) v = v / 20 // tolera escala 0–100 de versões antigas
-  return Math.round(v * 2) / 2
-}
-
-async function pollKavita(): Promise<void> {
-  if (cfg('KAVITA_ENABLED') !== '1' || !cfg('KAVITA_URL') || !cfg('KAVITA_API_KEY')) return
-  const libFilter = cfg('KAVITA_LIBRARY_ID').trim()
-  const series = await kavitaAllSeries()
-  if (!series.length) return
-
-  const state = readKavitaState()
-  for (const s of series) {
-    if (libFilter && String(s.libraryId) !== libFilter) continue
-    const pages = s.pages ?? 0
-    const read = s.pagesRead ?? 0
-    if (read <= 0) continue // não importa livros ainda não iniciados
-
-    const status: 'in_progress' | 'completed' = pages > 0 && read >= pages ? 'completed' : 'in_progress'
-    const rating = kavitaRating(s)
-    const externalId = `kavita:${s.id}`
-    const nowIso = new Date().toISOString()
-    const occurredAt = s.latestReadDate
-      ? new Date(s.latestReadDate + (s.latestReadDate.includes('Z') ? '' : 'Z')).toISOString()
-      : nowIso
-    const coverUrl = `/api/integrations/kavita/image?seriesId=${s.id}`
-
-    // autor: só busca metadata quando ainda não temos (evita N chamadas por ciclo)
-    const existing = getBookRow.get(externalId) as { id: number; author: string | null } | undefined
-    let author: string | null = existing?.author ?? null
-    if (!author) author = await kavitaAuthor(s.id)
-
-    upsertBookProgress.run({
-      external_id: externalId, title: s.name, cover_url: coverUrl, author, status, rating,
-      pages_total: pages || null, pages_read: read,
-    })
-    const row = getMediaId.get(externalId, 'book') as { id: number } | undefined
-    if (!row) continue
-
-    const prev = state[String(s.id)]
-
-    if (status === 'completed') {
-      completeBook.run({ external_id: externalId, completed_at: occurredAt })
-      if (prev?.status !== 'completed') {
-        insertActivity.run({
-          source: 'kavita', event_type: 'read', media_type: 'book',
-          external_ref: externalId, title: s.name, subtitle: author,
-          cover_url: coverUrl, rating: rating || null, duration_ms: null,
-          genre: null, occurred_at: occurredAt, raw: null,
-        })
-        insertDiaryKavita.run(row.id, occurredAt, rating || null)
-        notifyLibraryActivity({ event: 'completed', type: 'book', title: s.name, rating: rating || null })
-      }
-    } else if (!prev) {
-      // primeira vez que vemos este livro em leitura
-      insertActivity.run({
-        source: 'kavita', event_type: 'reading', media_type: 'book',
-        external_ref: externalId, title: s.name, subtitle: author,
-        cover_url: coverUrl, rating: null, duration_ms: null,
-        genre: null, occurred_at: occurredAt, raw: null,
-      })
-      notifyLibraryActivity({ event: 'in_progress', type: 'book', title: s.name })
-    }
-
-    // mudança de nota (independe do status)
-    if (rating > 0 && prev && prev.rating !== rating) {
-      setMediaRating.run(rating, externalId, 'book')
-      insertActivity.run({
-        source: 'kavita', event_type: 'rate', media_type: 'book',
-        external_ref: externalId, title: s.name, subtitle: author,
-        cover_url: coverUrl, rating, duration_ms: null,
-        genre: null, occurred_at: nowIso, raw: null,
-      })
-      notifyLibraryActivity({ event: 'rated', type: 'book', title: s.name, rating })
-    }
-
-    state[String(s.id)] = { status, pagesRead: read, rating }
-  }
-  writeKavitaState(state)
-}
-
 /* ─────────────────────────────────────── Loops ────────────────────────────────────── */
 
 let plexBusy = false
@@ -1128,7 +930,7 @@ app.patch('/', async (c) => {
     setCfg('STEAM_SESSION_ID', '')
   }
   // credenciais do Kavita podem ter mudado → força re-autenticação no próximo ciclo
-  kavitaToken = null
+  resetKavitaAuth()
 
   // reflete mudanças imediatamente na barra ao vivo
   pollPlexSessions().catch(() => {})
@@ -1292,43 +1094,6 @@ app.post('/telegram/test', async (c) => {
 app.get('/telegram/detect-chat', async (c) => {
   const chats = await telegramDetectChats()
   return c.json({ chats })
-})
-
-// Kavita: proxy de capa (esconde o token, browser não manda header de auth)
-app.get('/kavita/image', async (c) => {
-  const seriesId = c.req.query('seriesId')
-  if (!seriesId || !/^\d+$/.test(seriesId)) return c.body(null, 404)
-  const r = await kavitaFetch(`/api/Image/series-cover?seriesId=${seriesId}`, { headers: { Accept: 'image/*' } })
-  if (!r || !r.ok) return c.body(null, 502)
-  const buf = await r.arrayBuffer()
-  return c.body(buf, 200, {
-    'Content-Type': r.headers.get('content-type') ?? 'image/jpeg',
-    'Cache-Control': 'public, max-age=86400',
-  })
-})
-
-// Kavita: sincroniza livros sob demanda
-app.post('/kavita/sync', async (c) => {
-  await pollKavita()
-  return c.json({ ok: true })
-})
-
-// Kavita: testa conexão (autentica e confirma acesso às séries)
-app.post('/kavita/test', async (c) => {
-  if (!cfg('KAVITA_URL') || !cfg('KAVITA_API_KEY')) {
-    return c.json({ ok: false, error: 'Configure a URL e a API key primeiro (salve antes de testar).' }, 400)
-  }
-  kavitaToken = null
-  if (!(await kavitaAuth())) {
-    return c.json({ ok: false, error: 'Falha na autenticação. Verifique a URL e a API key.' }, 400)
-  }
-  const r = await kavitaFetch(`/api/Series/all-v2?PageNumber=1&PageSize=1`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
-  })
-  if (!r || !r.ok) {
-    return c.json({ ok: false, error: 'Autenticou, mas não consegui listar séries (all-v2 falhou).' }, 400)
-  }
-  return c.json({ ok: true })
 })
 
 export default app

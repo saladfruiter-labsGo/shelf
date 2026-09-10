@@ -12,6 +12,8 @@ let db: Database.Database
 let cfg: typeof import('../integrations/config.js').cfg
 let setCfg: typeof import('../integrations/config.js').setCfg
 let ensureSecret: typeof import('../integrations/config.js').ensureSecret
+let kavitaRoutes: typeof import('./integrations/kavita.js').default
+let pollKavita: typeof import('./integrations/kavita.js').pollKavita
 let playniteRoutes: typeof import('./integrations/playnite.js').default
 let priceRoutes: typeof import('./integrations/prices.js').default
 let steamRoutes: typeof import('./integrations/steam.js').default
@@ -22,6 +24,9 @@ before(async () => {
   cfg = config.cfg
   setCfg = config.setCfg
   ensureSecret = config.ensureSecret
+  const kavita = await import('./integrations/kavita.js')
+  kavitaRoutes = kavita.default
+  pollKavita = kavita.pollKavita
   playniteRoutes = (await import('./integrations/playnite.js')).default
   priceRoutes = (await import('./integrations/prices.js')).default
   steamRoutes = (await import('./integrations/steam.js')).default
@@ -55,6 +60,9 @@ test('routers extraídos preservam os caminhos públicos', async () => {
   const missingPriceKey = await priceRoutes.request('/itad/test', { method: 'POST' })
   assert.equal(missingPriceKey.status, 400)
   assert.equal((await missingPriceKey.json() as { ok: boolean }).ok, false)
+
+  const invalidCover = await kavitaRoutes.request('/kavita/image?seriesId=abc')
+  assert.equal(invalidCover.status, 404)
 })
 
 test('webhook repetido do Playnite não duplica conclusão, atividade ou diário', async () => {
@@ -80,4 +88,50 @@ test('webhook repetido do Playnite não duplica conclusão, atividade ou diário
   assert.equal((db.prepare("SELECT COUNT(*) AS n FROM media_items WHERE external_id = 'playnite:game-1'").get() as { n: number }).n, 1)
   assert.equal((db.prepare("SELECT COUNT(*) AS n FROM activity_events WHERE source = 'playnite' AND event_type = 'played'").get() as { n: number }).n, 1)
   assert.equal((db.prepare("SELECT COUNT(*) AS n FROM diary_entries WHERE source = 'playnite'").get() as { n: number }).n, 1)
+})
+
+test('poll repetido do Kavita preserva progresso sem duplicar conclusão', async () => {
+  setCfg('KAVITA_ENABLED', '1')
+  setCfg('KAVITA_URL', 'http://kavita.test')
+  setCfg('KAVITA_API_KEY', 'secret')
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = async (input) => {
+    const url = String(input)
+    if (url.includes('/api/Plugin/authenticate')) {
+      return new Response(JSON.stringify({ token: 'jwt' }), { status: 200 })
+    }
+    if (url.includes('/api/Series/all-v2')) {
+      return new Response(JSON.stringify([{
+        id: 42,
+        name: 'Livro concluído',
+        pages: 200,
+        pagesRead: 200,
+        userRating: 90,
+        hasUserRated: true,
+        latestReadDate: '2026-09-10T11:00:00.000Z',
+        libraryId: 1,
+      }]), { status: 200 })
+    }
+    if (url.includes('/api/Series/metadata')) {
+      return new Response(JSON.stringify({ writers: [{ name: 'Autora' }] }), { status: 200 })
+    }
+    return new Response(null, { status: 404 })
+  }
+
+  try {
+    await pollKavita()
+    await pollKavita()
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+
+  const book = db.prepare(`
+    SELECT status, rating, pages_total, pages_read, author
+    FROM media_items WHERE external_id = 'kavita:42'
+  `).get()
+  assert.deepEqual(book, {
+    status: 'completed', rating: 4.5, pages_total: 200, pages_read: 200, author: 'Autora',
+  })
+  assert.equal((db.prepare("SELECT COUNT(*) AS n FROM activity_events WHERE source = 'kavita' AND event_type = 'read'").get() as { n: number }).n, 1)
+  assert.equal((db.prepare("SELECT COUNT(*) AS n FROM diary_entries WHERE source = 'kavita'").get() as { n: number }).n, 1)
 })
