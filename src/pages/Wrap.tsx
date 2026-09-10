@@ -1,8 +1,9 @@
-import { useState, useRef } from 'react'
+import { useMemo, useState, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../lib/api'
 import { StarRating } from '../components/StarRating'
 import { MediaPreviewTrigger } from '../components/MediaSummaryModal'
+import { canShareStory, shareImageBlob } from '../lib/story'
 import type { MediaType } from '../types'
 import { TYPE_LABEL, formatRuntime } from '../lib/utils'
 
@@ -28,6 +29,9 @@ export function Wrap() {
   const [year,   setYear]     = useState(now.getFullYear())
   const [month,  setMonth]    = useState(now.getMonth() + 1)
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const [generating, setGenerating] = useState(false)
+  const [shareMessage, setShareMessage] = useState<string | null>(null)
+  const shareable = useMemo(() => canShareStory(), [])
 
   const { data, isLoading } = useQuery({
     queryKey: ['wrap', period, year, month],
@@ -36,16 +40,20 @@ export function Wrap() {
 
   const MONTHS = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
 
-  const maxActivity = data?.activity.reduce((m, a) => Math.max(m, a.count), 0) ?? 1
+  const maxActivity = Math.max(data?.activity.reduce((m, a) => Math.max(m, a.count), 0) ?? 0, 1)
 
-  const generateStory = () => {
+  const generateStory = async () => {
     const canvas = canvasRef.current
     if (!canvas || !data) return
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
-    canvas.width  = 1080
-    canvas.height = 1920
+    setGenerating(true)
+    setShareMessage(null)
+
+    try {
+      canvas.width  = 1080
+      canvas.height = 1920
 
     // Background
     ctx.fillStyle = '#0C1118'
@@ -163,13 +171,27 @@ export function Wrap() {
       const bw = (chartW / barCount) - 4
 
       data.activity.forEach((a, i) => {
-        const h = Math.max((a.count / maxActivity) * chartH, 4)
-        ctx.fillStyle = '#E8A030'
-        ctx.globalAlpha = 0.7
-        ctx.beginPath()
-        ctx.roundRect(x0 + i * (chartW / barCount), y + chartH - h, bw, h, 3)
-        ctx.fill()
-        ctx.globalAlpha = 1
+        const h = a.count > 0 ? Math.max((a.count / maxActivity) * chartH, 4) : 0
+        const x = x0 + i * (chartW / barCount)
+        if (h > 0) {
+          ctx.fillStyle = '#E8A030'
+          ctx.globalAlpha = 0.7
+          ctx.beginPath()
+          ctx.roundRect(x, y + chartH - h, bw, h, 3)
+          ctx.fill()
+          ctx.globalAlpha = 1
+
+          ctx.fillStyle = '#EDF2F8'
+          ctx.font = '20px sans-serif'
+          ctx.textAlign = 'center'
+          ctx.fillText(String(a.count), x + bw / 2, y + chartH - h - 10)
+        }
+        if (barCount <= 12) {
+          ctx.fillStyle = '#5A7090'
+          ctx.font = '18px sans-serif'
+          ctx.textAlign = 'center'
+          ctx.fillText(period === 'annual' ? MONTHS[Number(a.period_key) - 1] : a.period_key, x + bw / 2, y + chartH + 28)
+        }
       })
     }
 
@@ -179,15 +201,23 @@ export function Wrap() {
     ctx.textAlign = 'center'
     ctx.fillText('shelf · sua coleção pessoal', 540, 1870)
 
-    // Download
-    canvas.toBlob((blob) => {
-      if (!blob) return
-      const a = document.createElement('a')
-      a.href = URL.createObjectURL(blob)
-      a.download = `shelf-wrap-${period === 'annual' ? year : `${year}-${String(month).padStart(2, '0')}`}.png`
-      a.click()
-      URL.revokeObjectURL(a.href)
-    }, 'image/png')
+      const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'))
+      if (!blob) {
+        setShareMessage('Não foi possível gerar a arte.')
+        return
+      }
+      const filename = `shelf-wrap-${period === 'annual' ? year : `${year}-${String(month).padStart(2, '0')}`}.png`
+      const result = await shareImageBlob(blob, filename, period === 'annual' ? `Wrap ${year}` : periodLabel)
+      setShareMessage(
+        result === 'shared'
+          ? 'Arte pronta para compartilhar.'
+          : result === 'downloaded'
+            ? 'Seu navegador não compartilha arquivos; a arte foi baixada.'
+            : 'Compartilhamento cancelado.',
+      )
+    } finally {
+      setGenerating(false)
+    }
   }
 
   return (
@@ -288,9 +318,18 @@ export function Wrap() {
               <p className="text-sm font-medium text-secondary mb-3">
                 {period === 'monthly' ? 'Atividade por dia' : 'Atividade por mês'}
               </p>
-              <div className="flex items-end gap-1 h-24">
+              <div className="flex items-end gap-1 h-32 pt-3">
                 {data.activity.map((a, i) => (
-                  <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                  <div
+                    key={i}
+                    className="group relative flex-1 min-w-0 h-full flex flex-col items-center justify-end gap-1"
+                    title={`${period === 'monthly' ? `Dia ${a.period_key}` : MONTHS[parseInt(a.period_key) - 1]}: ${a.count} ${a.count === 1 ? 'atividade' : 'atividades'}`}
+                    role="img"
+                    aria-label={`${period === 'monthly' ? `Dia ${a.period_key}` : MONTHS[parseInt(a.period_key) - 1]}: ${a.count} ${a.count === 1 ? 'atividade' : 'atividades'}`}
+                  >
+                    <span className="text-[9px] text-secondary h-3 leading-3">
+                      {period === 'annual' || a.count > 0 ? a.count : ''}
+                    </span>
                     <div
                       className="w-full bg-accent rounded-sm opacity-70"
                       style={{ height: `${(a.count / maxActivity) * 80}px`, minHeight: a.count > 0 ? 4 : 0 }}
@@ -356,18 +395,24 @@ export function Wrap() {
             <div className="flex items-start justify-between mb-4">
               <div>
                 <h2 className="font-display text-xl font-semibold text-primary mb-1">Stories</h2>
-                <p className="text-sm text-muted">Gere uma arte 1080×1920 para compartilhar</p>
+                <p className="text-sm text-muted">
+                  {shareable ? 'Gere uma arte 1080×1920 e compartilhe direto no Instagram' : 'Gere uma arte 1080×1920 para compartilhar'}
+                </p>
               </div>
               <button
                 onClick={generateStory}
-                className="flex items-center gap-2 px-4 py-2.5 bg-accent text-bg rounded-lg font-medium text-sm hover:opacity-90 transition-opacity"
+                disabled={generating}
+                className="flex items-center gap-2 px-4 py-2.5 bg-accent text-bg rounded-lg font-medium text-sm hover:opacity-90 transition-opacity disabled:opacity-60"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 12v5a3 3 0 003 3h10a3 3 0 003-3v-5m-4-4l-4-4m0 0L8 8m4-4v12" />
                 </svg>
-                Baixar PNG
+                {generating ? 'Gerando…' : shareable ? 'Compartilhar' : 'Baixar PNG'}
               </button>
             </div>
+            {shareMessage && (
+              <p role="status" className="text-xs text-muted mb-4">{shareMessage}</p>
+            )}
 
             {/* Preview */}
             <div className="bg-card rounded-lg overflow-hidden" style={{ maxWidth: 270 }}>

@@ -50,6 +50,7 @@ interface ConfirmProps {
   onBack:    () => void
   onAdd:     (opts: AddOpts) => void
   isPending: boolean
+  error:     string | null
 }
 
 const epKey = (s: number, e: number) => `${s}-${e}`
@@ -152,7 +153,7 @@ function SeasonPicker({
   )
 }
 
-function ConfirmPanel({ result, onBack, onAdd, isPending }: ConfirmProps) {
+function ConfirmPanel({ result, onBack, onAdd, isPending, error }: ConfirmProps) {
   const [rating, setRating]     = useState(0)
   const [date, setDate]         = useState(todayISODate())
   const [comment, setComment]   = useState('')
@@ -336,6 +337,11 @@ function ConfirmPanel({ result, onBack, onAdd, isPending }: ConfirmProps) {
         >
           {btnBusy('diary') ? 'Registrando...' : '✎ Registrar no Diário'}
         </button>
+        {error && (
+          <p role="alert" className="text-xs text-center text-red-400 mt-3">
+            {error}
+          </p>
+        )}
         {needsEpisodes && seasons.length > 0 && (
           <p className="text-[11px] text-dim mt-2 text-center">Selecione ao menos um episódio para "Visto" ou "Registrar no Diário".</p>
         )}
@@ -488,7 +494,11 @@ export function SearchModal({ open, onClose }: Props) {
             result={confirming}
             onBack={() => setConfirming(null)}
             isPending={addMutation.isPending}
-            onAdd={(opts) => addMutation.mutate({ result: confirming, ...opts })}
+            error={addMutation.error instanceof Error ? addMutation.error.message : null}
+            onAdd={(opts) => {
+              addMutation.reset()
+              addMutation.mutate({ result: confirming, ...opts })
+            }}
           />
         ) : (
           <>
@@ -578,7 +588,10 @@ export function SearchModal({ open, onClose }: Props) {
                     <li key={`${result.type}-${result.external_id}`}>
                       <button
                         className="w-full flex items-center gap-3 px-4 py-3 hover:bg-card transition-colors text-left"
-                        onClick={() => setConfirming(result)}
+                        onClick={() => {
+                          addMutation.reset()
+                          setConfirming(result)
+                        }}
                       >
                         <div className="w-10 h-14 flex-shrink-0 rounded overflow-hidden bg-card border border-border">
                           {result.cover_url

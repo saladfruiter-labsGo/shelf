@@ -110,6 +110,15 @@ test('criação rejeita tipo e status fora do domínio', async () => {
   assert.equal(invalidStatus.status, 400)
 })
 
+test('criação explica quando a mídia já está no backlog', async () => {
+  const duplicate = await app.request('/', {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ external_id: 'bl-1', type: 'movie', title: 'Backlog 1' }),
+  })
+  assert.equal(duplicate.status, 409)
+  assert.deepEqual(await duplicate.json(), { error: 'Esta mídia já está no Backlog.' })
+})
+
 test('edição rejeita enums inválidos e deriva status de game_status', async () => {
   const invalidGameStatus = await app.request(`/${gameId}`, {
     method: 'PATCH', headers: { 'content-type': 'application/json' },
