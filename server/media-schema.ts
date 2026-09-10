@@ -15,7 +15,7 @@ export function rebuildMediaItemsWithDomainChecks(db: Database.Database): void {
   const invalid = db.prepare(`
     SELECT id, type, status, game_status
     FROM media_items
-    WHERE type NOT IN ('movie', 'series', 'game', 'book')
+    WHERE type NOT IN ('movie', 'series', 'game', 'book', 'music')
        OR status NOT IN ('wishlist', 'in_progress', 'completed', 'dropped')
        OR (game_status IS NOT NULL AND game_status NOT IN
            ('jogando', 'zerado', 'platinado', 'abandonado', 'nunca_jogado'))
@@ -33,7 +33,7 @@ export function rebuildMediaItemsWithDomainChecks(db: Database.Database): void {
     CREATE TABLE media_items_next (
       id                INTEGER PRIMARY KEY AUTOINCREMENT,
       external_id       TEXT    NOT NULL,
-      type              TEXT    NOT NULL CHECK (type IN ('movie', 'series', 'game', 'book')),
+      type              TEXT    NOT NULL CHECK (type IN ('movie', 'series', 'game', 'book', 'music')),
       title             TEXT    NOT NULL,
       cover_url         TEXT,
       year              INTEGER,
@@ -91,4 +91,13 @@ export function rebuildMediaItemsWithDomainChecks(db: Database.Database): void {
     CREATE INDEX idx_media_steam   ON media_items(steam_appid);
     CREATE INDEX idx_media_fav     ON media_items(favorite);
   `)
+}
+
+/** Corrige bancos que aplicaram a v2 antes de `music` entrar na lista permitida. */
+export function ensureMediaItemsAllowsMusic(db: Database.Database): void {
+  const schema = db.prepare(
+    "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'media_items'",
+  ).get() as { sql: string } | undefined
+  if (schema?.sql.includes("'music'")) return
+  rebuildMediaItemsWithDomainChecks(db)
 }

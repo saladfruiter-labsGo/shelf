@@ -3,7 +3,7 @@ import path from 'path'
 import fs from 'fs'
 import { writeVerifiedDatabaseBackup } from './database-backup.js'
 import { hasPendingMigrations, runMigrations, type Migration } from './migrations.js'
-import { rebuildMediaItemsWithDomainChecks } from './media-schema.js'
+import { ensureMediaItemsAllowsMusic, rebuildMediaItemsWithDomainChecks } from './media-schema.js'
 
 export const dataDir = path.resolve(process.env.DATA_DIR ?? './data')
 fs.mkdirSync(dataDir, { recursive: true })
@@ -368,6 +368,11 @@ db.exec(`
   name: 'media-domain-checks',
   foreignKeys: 'off',
   up: () => rebuildMediaItemsWithDomainChecks(db),
+}, {
+  version: 3,
+  name: 'allow-music-media-type',
+  foreignKeys: 'off',
+  up: () => ensureMediaItemsAllowsMusic(db),
 }]
 
 if (databaseExisted && (hasPendingMigrations(db, migrations) || schemaNeedsUpgrade())) {
