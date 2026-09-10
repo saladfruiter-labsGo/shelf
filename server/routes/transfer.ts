@@ -92,6 +92,9 @@ app.post('/import/shelf', async (c) => {
  * confirmação obrigaria o navegador a enviar o arquivo duas vezes.
  */
 const MAX_UPLOAD  = 64 * 1024 * 1024
+const MAX_ZIP_ENTRY = 32 * 1024 * 1024
+const MAX_ZIP_TOTAL = 128 * 1024 * 1024
+const MAX_ZIP_ENTRIES = 200
 const PLAN_TTL_MS = 30 * 60_000
 const MAX_PLANS   = 4
 
@@ -122,7 +125,11 @@ const isJunk = (path: string) =>
  * para aparecer na lista do que ficou de fora sem custar memória.
  */
 function zipSources(buf: Buffer): LetterboxdSource[] {
-  const entries = readZip(buf).filter(e => !isJunk(e.path))
+  const entries = readZip(buf, {
+    maxEntries: MAX_ZIP_ENTRIES,
+    maxEntrySize: MAX_ZIP_ENTRY,
+    maxTotalSize: MAX_ZIP_TOTAL,
+  }).filter(e => !isJunk(e.path))
   const rel = stripRoot(entries.map(e => e.path))
 
   return entries.map(e => {
