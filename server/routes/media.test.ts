@@ -99,7 +99,7 @@ test('offset inválido é tratado como zero', async () => {
 test('criação rejeita tipo e status fora do domínio', async () => {
   const invalidType = await app.request('/', {
     method: 'POST', headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ external_id: 'invalid-type', type: 'music', title: 'Faixa' }),
+    body: JSON.stringify({ external_id: 'invalid-type', type: 'podcast', title: 'Episódio' }),
   })
   assert.equal(invalidType.status, 400)
 

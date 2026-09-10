@@ -21,7 +21,8 @@ test('cada status granular de jogo deriva o status base correto', () => {
 
 test('reconhece apenas tipos e status persistidos pelo Shelf', () => {
   assert.equal(isMediaType('movie'), true)
-  assert.equal(isMediaType('music'), false)
+  assert.equal(isMediaType('music'), true)
+  assert.equal(isMediaType('podcast'), false)
   assert.equal(isMediaStatus('completed'), true)
   assert.equal(isMediaStatus('finished'), false)
   assert.equal(isGameStatus('platinado'), true)

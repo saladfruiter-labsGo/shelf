@@ -1,4 +1,4 @@
-export const MEDIA_TYPES = ['movie', 'series', 'game', 'book'] as const
+export const MEDIA_TYPES = ['movie', 'series', 'game', 'book', 'music'] as const
 export type MediaType = typeof MEDIA_TYPES[number]
 
 export const MEDIA_STATUSES = ['wishlist', 'in_progress', 'completed', 'dropped'] as const

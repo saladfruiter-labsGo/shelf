@@ -65,6 +65,7 @@ test('adota banco sem versão, preserva dados e cria snapshot antes da migration
   assert.deepEqual(migrations, [
     { version: 1, name: 'baseline-schema' },
     { version: 2, name: 'media-domain-checks' },
+    { version: 3, name: 'allow-music-media-type' },
   ])
 
   const item = db.prepare("SELECT title, status FROM media_items WHERE external_id = 'legacy-1'").get()
@@ -79,8 +80,11 @@ test('adota banco sem versão, preserva dados e cria snapshot antes da migration
   assert.deepEqual(db.pragma('quick_check'), [{ quick_check: 'ok' }])
 
   assert.throws(() => db.prepare(
-    "INSERT INTO media_items (external_id, type, title, status) VALUES ('bad-type', 'music', 'Faixa', 'wishlist')",
+    "INSERT INTO media_items (external_id, type, title, status) VALUES ('bad-type', 'podcast', 'Episódio', 'wishlist')",
   ).run(), /CHECK constraint/)
+  assert.doesNotThrow(() => db.prepare(
+    "INSERT INTO media_items (external_id, type, title, status) VALUES ('music-1', 'music', 'Faixa', 'completed')",
+  ).run())
   assert.throws(() => db.prepare(
     "INSERT INTO media_items (external_id, type, title, status) VALUES ('bad-status', 'movie', 'Filme', 'finished')",
   ).run(), /CHECK constraint/)
