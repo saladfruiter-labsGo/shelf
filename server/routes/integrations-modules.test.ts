@@ -14,6 +14,8 @@ let setCfg: typeof import('../integrations/config.js').setCfg
 let ensureSecret: typeof import('../integrations/config.js').ensureSecret
 let kavitaRoutes: typeof import('./integrations/kavita.js').default
 let pollKavita: typeof import('./integrations/kavita.js').pollKavita
+let lastfmRoutes: typeof import('./integrations/lastfm.js').default
+let getLastfmNowPlaying: typeof import('./integrations/lastfm.js').getLastfmNowPlaying
 let playniteRoutes: typeof import('./integrations/playnite.js').default
 let priceRoutes: typeof import('./integrations/prices.js').default
 let steamRoutes: typeof import('./integrations/steam.js').default
@@ -27,6 +29,9 @@ before(async () => {
   const kavita = await import('./integrations/kavita.js')
   kavitaRoutes = kavita.default
   pollKavita = kavita.pollKavita
+  const lastfm = await import('./integrations/lastfm.js')
+  lastfmRoutes = lastfm.default
+  getLastfmNowPlaying = lastfm.getLastfmNowPlaying
   playniteRoutes = (await import('./integrations/playnite.js')).default
   priceRoutes = (await import('./integrations/prices.js')).default
   steamRoutes = (await import('./integrations/steam.js')).default
@@ -134,4 +139,63 @@ test('poll repetido do Kavita preserva progresso sem duplicar conclusão', async
   })
   assert.equal((db.prepare("SELECT COUNT(*) AS n FROM activity_events WHERE source = 'kavita' AND event_type = 'read'").get() as { n: number }).n, 1)
   assert.equal((db.prepare("SELECT COUNT(*) AS n FROM diary_entries WHERE source = 'kavita'").get() as { n: number }).n, 1)
+})
+
+test('sync repetido do Last.fm não duplica scrobble e atualiza tocando agora', async () => {
+  setCfg('LASTFM_ENABLED', '1')
+  setCfg('LASTFM_API_KEY', 'lastfm-key')
+  setCfg('LASTFM_USER', 'listener')
+  setCfg('LASTFM_LAST_UTS', '0')
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = async (input) => {
+    const url = new URL(String(input))
+    switch (url.searchParams.get('method')) {
+      case 'user.getRecentTracks':
+        return Response.json({ recenttracks: { track: [
+          {
+            name: 'Faixa atual', artist: { '#text': 'Artista atual' },
+            image: [{ size: 'extralarge', '#text': 'https://images.test/current.jpg' }],
+            '@attr': { nowplaying: 'true' },
+          },
+          {
+            name: 'Faixa concluída', artist: { '#text': 'Artista' }, album: { '#text': 'Álbum' },
+            image: [{ size: 'extralarge', '#text': 'https://images.test/track.jpg' }],
+            date: { uts: '1789038000' },
+          },
+        ] } })
+      case 'track.getInfo':
+        return Response.json({ track: { duration: '240000', mbid: 'track-mbid' } })
+      case 'artist.getTopTags':
+        return Response.json({ toptags: { tag: [{ name: 'Rock' }] } })
+      default:
+        return new Response(null, { status: 404 })
+    }
+  }
+
+  try {
+    assert.equal((await lastfmRoutes.request('/lastfm/sync', { method: 'POST' })).status, 200)
+    assert.equal((await lastfmRoutes.request('/lastfm/sync', { method: 'POST' })).status, 200)
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+
+  assert.deepEqual(getLastfmNowPlaying(), {
+    media_type: 'music',
+    title: 'Faixa atual',
+    subtitle: 'Artista atual',
+    cover_url: 'https://images.test/current.jpg',
+    state: 'playing',
+    position_ms: null,
+    duration_ms: null,
+    updated_at: getLastfmNowPlaying()?.updated_at,
+  })
+  assert.deepEqual(db.prepare(`
+    SELECT album, duration_ms, genre, mbid, play_count
+    FROM music_tracks WHERE artist = 'Artista' AND track = 'Faixa concluída'
+  `).get(), {
+    album: 'Álbum', duration_ms: 240000, genre: 'Rock', mbid: 'track-mbid', play_count: 1,
+  })
+  assert.equal((db.prepare("SELECT COUNT(*) AS n FROM activity_events WHERE source = 'lastfm'").get() as { n: number }).n, 1)
+  assert.equal((db.prepare("SELECT COUNT(*) AS n FROM media_items WHERE external_id = 'Artista|Faixa concluída' AND type = 'music'").get() as { n: number }).n, 1)
+  assert.equal(cfg('LASTFM_LAST_UTS'), '1789038000')
 })

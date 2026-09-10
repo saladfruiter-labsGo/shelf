@@ -8,13 +8,16 @@ import * as steamClient from '../steam/client.js'
 import { lastSync as steamLastSync, syncRunning as steamSyncRunning } from '../steam/sync.js'
 import { originalFilenameFromPlex, type PlexMediaFileMetadata } from '../plex.js'
 import { cfg, ensureSecret, setCfg } from '../integrations/config.js'
+import type { NowPlaying } from '../integrations/now-playing.js'
 import kavitaIntegrationRoutes, { pollKavita, resetKavitaAuth } from './integrations/kavita.js'
+import lastfmIntegrationRoutes, { getLastfmNowPlaying, pollLastfm } from './integrations/lastfm.js'
 import playniteIntegrationRoutes, { ensurePlayniteSecret } from './integrations/playnite.js'
 import priceIntegrationRoutes from './integrations/prices.js'
 import steamIntegrationRoutes from './integrations/steam.js'
 
 const app = new Hono()
 app.route('/', kavitaIntegrationRoutes)
+app.route('/', lastfmIntegrationRoutes)
 app.route('/', playniteIntegrationRoutes)
 app.route('/', priceIntegrationRoutes)
 app.route('/', steamIntegrationRoutes)
@@ -28,19 +31,7 @@ function ensureWebhookSecret(): string {
 
 /* ────────────────────────────── Estado "tocando agora" ─────────────────────────────── */
 
-interface NowPlaying {
-  media_type: 'movie' | 'series' | 'music'
-  title: string
-  subtitle: string | null
-  cover_url: string | null
-  state: 'playing' | 'paused'
-  position_ms: number | null
-  duration_ms: number | null
-  updated_at: number // Date.now()
-}
-
 let plexNow: NowPlaying | null = null
-let musicNow: NowPlaying | null = null
 
 /* ─────────────────────────────────── Persistência ─────────────────────────────────── */
 
@@ -638,134 +629,6 @@ async function pollPlexSessions() {
   }
 }
 
-/* ─────────────────────────────── Last.fm: sync + nowplaying ────────────────────────── */
-
-const getTrack = db.prepare('SELECT * FROM music_tracks WHERE artist = ? AND track = ?')
-const upsertTrack = db.prepare(`
-  INSERT INTO music_tracks (artist, track, album, cover_url, play_count, first_played, last_played)
-  VALUES (@artist, @track, @album, @cover_url, 1, @played, @played)
-  ON CONFLICT(artist, track) DO UPDATE SET
-    play_count  = music_tracks.play_count + 1,
-    last_played = @played,
-    album       = COALESCE(music_tracks.album, excluded.album),
-    cover_url   = COALESCE(music_tracks.cover_url, excluded.cover_url)
-`)
-const enrichTrack = db.prepare(`
-  UPDATE music_tracks SET duration_ms = ?, genre = ?, mbid = ?, enriched = 1 WHERE artist = ? AND track = ?
-`)
-
-async function lastfmCall(method: string, params: Record<string, string>): Promise<any> {
-  const key = cfg('LASTFM_API_KEY')
-  const qs = new URLSearchParams({ method, api_key: key, format: 'json', ...params })
-  const r = await fetch(`https://ws.audioscrobbler.com/2.0/?${qs}`)
-  if (!r.ok) throw new Error(`lastfm ${method} ${r.status}`)
-  return r.json()
-}
-
-/** Busca duração (track.getInfo) e gênero (artist.getTopTags) uma única vez por faixa. */
-async function ensureEnriched(artist: string, track: string): Promise<{ duration_ms: number | null; genre: string | null }> {
-  const row = getTrack.get(artist, track) as any
-  if (row?.enriched) return { duration_ms: row.duration_ms ?? null, genre: row.genre ?? null }
-
-  let duration_ms: number | null = null
-  let genre: string | null = null
-  let mbid: string | null = null
-  try {
-    const info = await lastfmCall('track.getInfo', { artist, track })
-    const d = parseInt(info?.track?.duration ?? '0')
-    duration_ms = d > 0 ? d : null
-    mbid = info?.track?.mbid || null
-  } catch { /* segue sem duração */ }
-  try {
-    const tags = await lastfmCall('artist.getTopTags', { artist })
-    genre = tags?.toptags?.tag?.[0]?.name ?? null
-  } catch { /* segue sem gênero */ }
-
-  enrichTrack.run(duration_ms, genre, mbid, artist, track)
-  return { duration_ms, genre }
-}
-
-async function pollLastfm() {
-  const key = cfg('LASTFM_API_KEY')
-  const user = cfg('LASTFM_USER')
-  if (cfg('LASTFM_ENABLED') !== '1' || !key || !user) { musicNow = null; return }
-
-  try {
-    const data = await lastfmCall('user.getRecentTracks', { user, limit: '50' })
-    const tracks: any[] = data?.recenttracks?.track ?? []
-    if (!tracks.length) return
-
-    // "tocando agora" = faixa marcada com @attr.nowplaying
-    const np = tracks.find(t => t['@attr']?.nowplaying === 'true')
-    if (np) {
-      musicNow = {
-        media_type: 'music',
-        title: np.name,
-        subtitle: np.artist?.['#text'] ?? np.artist?.name ?? null,
-        cover_url: pickImage(np.image),
-        state: 'playing',
-        position_ms: null, // Last.fm não expõe posição
-        duration_ms: null,
-        updated_at: Date.now(),
-      }
-    } else {
-      musicNow = null
-    }
-
-    // scrobbles novos (têm date.uts) desde o último cursor
-    const lastUts = parseInt(cfg('LASTFM_LAST_UTS') || '0')
-    const scrobbled = tracks
-      .filter(t => t.date?.uts && parseInt(t.date.uts) > lastUts)
-      .sort((a, b) => parseInt(a.date.uts) - parseInt(b.date.uts))
-
-    let maxUts = lastUts
-    for (const t of scrobbled) {
-      const uts = parseInt(t.date.uts)
-      // Avança o cursor faixa a faixa (mesmo se a gravação falhar) para que um
-      // único scrobble problemático não trave a importação de todos os seguintes.
-      if (uts > maxUts) maxUts = uts
-
-      const name = t.name as string | undefined
-      if (!name) continue // scrobble sem título → nada a registrar
-
-      try {
-        const artist = t.artist?.['#text'] ?? t.artist?.name ?? 'Desconhecido'
-        const album = t.album?.['#text'] || null
-        const cover = pickImage(t.image)
-        const occurred = new Date(uts * 1000).toISOString()
-
-        upsertTrack.run({ artist, track: name, album, cover_url: cover, played: occurred })
-        const { duration_ms, genre } = await ensureEnriched(artist, name)
-
-        insertActivity.run({
-          source: 'lastfm', event_type: 'listen', media_type: 'music',
-          external_ref: `${artist}|${name}`, title: name, subtitle: artist,
-          cover_url: cover, rating: null, duration_ms, genre,
-          occurred_at: occurred, raw: null,
-        })
-        // Scrobble do Last.fm = faixa ouvida até o fim → entra na biblioteca
-        upsertMediaItem.run({
-          external_id: `${artist}|${name}`, type: 'music', title: name,
-          cover_url: cover, year: null, author: artist, rating: 0, completed_at: occurred,
-          original_filename: null,
-        })
-      } catch (e) {
-        console.error(`[lastfm] falha ao registrar scrobble "${name}":`, e)
-      }
-    }
-    if (maxUts > lastUts) setCfg('LASTFM_LAST_UTS', String(maxUts))
-  } catch (e) {
-    console.error('[lastfm] poll falhou:', e)
-  }
-}
-
-function pickImage(images: any): string | null {
-  if (!Array.isArray(images)) return null
-  const large = images.find((i: any) => i.size === 'extralarge') ?? images[images.length - 1]
-  const u = large?.['#text']
-  return u && !u.includes('2a96cbd8b46e442fc41c2b86b821562f') ? u : null // ignora placeholder do Last.fm
-}
-
 /* ─────────────────────────────────────── Loops ────────────────────────────────────── */
 
 let plexBusy = false
@@ -940,7 +803,7 @@ app.patch('/', async (c) => {
 // Tocando agora (Plex com progresso; música sem posição)
 app.get('/now-playing', (c) => {
   const stale = (n: NowPlaying | null) => (n && Date.now() - n.updated_at < 60000 ? n : null)
-  return c.json({ plex: stale(plexNow), music: stale(musicNow) })
+  return c.json({ plex: stale(plexNow), music: stale(getLastfmNowPlaying()) })
 })
 
 // Feed de atividade
@@ -1076,12 +939,6 @@ app.get('/trending', async (c) => {
   } catch {
     return c.json(trendingCache?.items ?? [])
   }
-})
-
-// Sincronizar Last.fm sob demanda
-app.post('/lastfm/sync', async (c) => {
-  await pollLastfm()
-  return c.json({ ok: true })
 })
 
 // Telegram: envia mensagem de teste com a config salva
