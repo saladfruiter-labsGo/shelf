@@ -6,13 +6,14 @@ import { backlogGames } from '../prices/repository.js'
 import { syncState } from '../prices/sync.js'
 import * as steamClient from '../steam/client.js'
 import { lastSync as steamLastSync, syncRunning as steamSyncRunning } from '../steam/sync.js'
-import { originalFilenameFromPlex, type PlexMediaFileMetadata } from '../plex.js'
+import { mapPlexMetadata, originalFilenameFromPlex, type PlexMeta } from '../plex.js'
 import { cfg, ensureSecret, setCfg } from '../integrations/config.js'
 import type { NowPlaying } from '../integrations/now-playing.js'
 import kavitaIntegrationRoutes, { pollKavita, resetKavitaAuth } from './integrations/kavita.js'
 import lastfmIntegrationRoutes, { getLastfmNowPlaying, pollLastfm } from './integrations/lastfm.js'
 import playniteIntegrationRoutes, { ensurePlayniteSecret } from './integrations/playnite.js'
 import plexLibraryIntegrationRoutes from './integrations/plex-library.js'
+import plexLiveIntegrationRoutes, { getPlexNowPlaying, pollPlexSessions } from './integrations/plex-live.js'
 import priceIntegrationRoutes from './integrations/prices.js'
 import steamIntegrationRoutes from './integrations/steam.js'
 
@@ -21,6 +22,7 @@ app.route('/', kavitaIntegrationRoutes)
 app.route('/', lastfmIntegrationRoutes)
 app.route('/', playniteIntegrationRoutes)
 app.route('/', plexLibraryIntegrationRoutes)
+app.route('/', plexLiveIntegrationRoutes)
 app.route('/', priceIntegrationRoutes)
 app.route('/', steamIntegrationRoutes)
 
@@ -32,8 +34,6 @@ function ensureWebhookSecret(): string {
 }
 
 /* ────────────────────────────── Estado "tocando agora" ─────────────────────────────── */
-
-let plexNow: NowPlaying | null = null
 
 /* ─────────────────────────────────── Persistência ─────────────────────────────────── */
 
@@ -261,52 +261,10 @@ async function handlePlexMovie(meta: PlexMeta, occurredAt: string): Promise<void
 
 /* ──────────────────────────────────── Plex: webhook ────────────────────────────────── */
 
-interface PlexMeta extends PlexMediaFileMetadata {
-  type?: string
-  title?: string
-  grandparentTitle?: string
-  grandparentGuid?: string
-  grandparentRatingKey?: string
-  parentTitle?: string
-  parentIndex?: number
-  index?: number
-  year?: number
-  guid?: string
-  ratingKey?: string
-  thumb?: string
-  grandparentThumb?: string
-  duration?: number
-  userRating?: number
-}
 interface PlexPayload {
   event?: string
   Account?: { title?: string }
   Metadata?: PlexMeta
-}
-
-/** Converte metadata do Plex para os campos da nossa activity. */
-function mapPlex(meta: PlexMeta) {
-  const kind = meta.type // movie | episode | track
-  const media_type: 'movie' | 'series' | 'music' =
-    kind === 'movie' ? 'movie' : kind === 'track' ? 'music' : 'series'
-
-  let title = meta.title ?? 'Desconhecido'
-  let subtitle: string | null = null
-
-  if (kind === 'episode') {
-    title = meta.grandparentTitle ?? title
-    const s = meta.parentIndex != null ? `T${meta.parentIndex}` : ''
-    const e = meta.index != null ? `E${meta.index}` : ''
-    subtitle = [[s, e].filter(Boolean).join(''), meta.title].filter(Boolean).join(' · ') || null
-  } else if (kind === 'track') {
-    subtitle = meta.grandparentTitle ?? null // artista
-  }
-
-  const thumb = meta.grandparentThumb ?? meta.thumb ?? null
-  const cover_url = thumb ? `/api/integrations/plex/image?path=${encodeURIComponent(thumb)}` : null
-  const external_ref = meta.guid ?? (meta.ratingKey ? `plex:${meta.ratingKey}` : null)
-
-  return { media_type, title, subtitle, cover_url, external_ref, kind }
 }
 
 app.post('/plex/webhook', async (c) => {
@@ -334,7 +292,7 @@ app.post('/plex/webhook', async (c) => {
     return c.json({ ok: true })
   }
 
-  const m = mapPlex(meta)
+  const m = mapPlexMetadata(meta)
   const now = new Date().toISOString()
   const rating5 = meta.userRating != null ? Math.round((meta.userRating / 2) * 10) / 10 : null
 
@@ -401,69 +359,6 @@ app.post('/plex/webhook', async (c) => {
 
   return c.json({ ok: true })
 })
-
-/* ──────────────────────────── Plex: proxy de capa (esconde token) ──────────────────── */
-
-app.get('/plex/image', async (c) => {
-  const path = c.req.query('path')
-  const url = cfg('PLEX_URL')
-  const tk = cfg('PLEX_TOKEN')
-  if (!path || !url || !tk) return c.body(null, 404)
-  try {
-    const r = await fetch(`${url.replace(/\/$/, '')}${path}`, { headers: { 'X-Plex-Token': tk } })
-    if (!r.ok) return c.body(null, 502)
-    const buf = await r.arrayBuffer()
-    return c.body(buf, 200, {
-      'Content-Type': r.headers.get('content-type') ?? 'image/jpeg',
-      'Cache-Control': 'public, max-age=86400',
-    })
-  } catch {
-    return c.body(null, 502)
-  }
-})
-
-/* ─────────────────────────── Plex: polling de "assistindo agora" ───────────────────── */
-
-async function pollPlexSessions() {
-  const url = cfg('PLEX_URL')
-  const tk = cfg('PLEX_TOKEN')
-  if (cfg('PLEX_ENABLED') !== '1' || !url || !tk) { plexNow = null; return }
-
-  try {
-    const r = await fetch(`${url.replace(/\/$/, '')}/status/sessions`, {
-      headers: { 'X-Plex-Token': tk, Accept: 'application/json' },
-    })
-    if (!r.ok) return
-    const data = (await r.json()) as any
-    const sessions: any[] = data?.MediaContainer?.Metadata ?? []
-
-    const userFilter = cfg('PLEX_USER').toLowerCase()
-    const relevant = sessions.filter(s => {
-      if (s.type !== 'movie' && s.type !== 'episode' && s.type !== 'track') return false
-      if (userFilter && (s.User?.title ?? '').toLowerCase() !== userFilter) return false
-      return true
-    })
-    // prioriza o que está tocando
-    relevant.sort((a, b) => (a.Player?.state === 'playing' ? -1 : 1) - (b.Player?.state === 'playing' ? -1 : 1))
-    const s = relevant[0]
-    if (!s) { plexNow = null; return }
-
-    const m = mapPlex(s)
-    const state = s.Player?.state === 'paused' ? 'paused' : 'playing'
-    plexNow = {
-      media_type: m.media_type,
-      title: m.title,
-      subtitle: m.subtitle,
-      cover_url: m.cover_url,
-      state,
-      position_ms: typeof s.viewOffset === 'number' ? s.viewOffset : null,
-      duration_ms: typeof s.duration === 'number' ? s.duration : null,
-      updated_at: Date.now(),
-    }
-  } catch {
-    /* rede/servidor Plex fora — mantém último estado até esvaziar no próximo ciclo */
-  }
-}
 
 /* ─────────────────────────────────────── Loops ────────────────────────────────────── */
 
@@ -639,7 +534,7 @@ app.patch('/', async (c) => {
 // Tocando agora (Plex com progresso; música sem posição)
 app.get('/now-playing', (c) => {
   const stale = (n: NowPlaying | null) => (n && Date.now() - n.updated_at < 60000 ? n : null)
-  return c.json({ plex: stale(plexNow), music: stale(getLastfmNowPlaying()) })
+  return c.json({ plex: stale(getPlexNowPlaying()), music: stale(getLastfmNowPlaying()) })
 })
 
 // Feed de atividade
