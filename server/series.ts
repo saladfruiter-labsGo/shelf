@@ -1,4 +1,7 @@
 import { db } from './db.js'
+import { tmdbIdFromGuid } from './plex.js'
+
+export { tmdbIdFromGuid } from './plex.js'
 
 /* ─────────────────────────── helpers de config ─────────────────────────── */
 
@@ -40,14 +43,6 @@ const markEpisode = db.prepare(`
 `)
 
 /* ─────────────────────────── enriquecimento TMDB ─────────────────────────── */
-
-/** Extrai um id numérico do TMDB de um guid do Plex, se presente. */
-export function tmdbIdFromGuid(guid?: string | null): string | null {
-  if (!guid) return null
-  // com.plexapp.agents.themoviedb://12345?lang=...  |  tmdb://12345
-  const m = guid.match(/(?:themoviedb|tmdb)[:/]+(\d+)/i)
-  return m ? m[1] : null
-}
 
 /** Procura o id TMDB de uma série pelo título (fallback quando o guid não expõe tmdb). */
 export async function resolveTmdbSeriesId(title: string, year?: number | null): Promise<string | null> {

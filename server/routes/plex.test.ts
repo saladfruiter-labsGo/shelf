@@ -1,6 +1,12 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { originalFilenameFromPlex } from '../plex.js'
+import { originalFilenameFromPlex, tmdbIdFromGuid } from '../plex.js'
+
+test('extrai id TMDB dos formatos de guid usados pelo Plex', () => {
+  assert.equal(tmdbIdFromGuid('tmdb://550'), '550')
+  assert.equal(tmdbIdFromGuid('com.plexapp.agents.themoviedb://550?lang=pt'), '550')
+  assert.equal(tmdbIdFromGuid('plex://movie/hash'), null)
+})
 
 test('extrai o nome do arquivo de caminhos do Plex no Windows e Unix', () => {
   assert.equal(
