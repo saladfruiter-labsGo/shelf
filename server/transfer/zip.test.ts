@@ -120,3 +120,13 @@ test('bytes estragados quebram na leitura da entrada, não do zip todo', () => {
   assert.throws(() => entries[0].read())
   assert.equal(entries[1].text(), 'Date,Name\n2026-01-01,Dune\n')
 })
+
+test('limites impedem excesso de entradas e expansão declarada de zip bomb', () => {
+  const two = zipOf([{ name: 'a.csv', text: 'a' }, { name: 'b.csv', text: 'b' }])
+  assert.throws(() => readZip(two, { maxEntries: 1 }), /entradas demais/)
+
+  const expanded = zipOf([{ name: 'diary.csv', text: 'x' }])
+  const cdOffset = expanded.readUInt32LE(expanded.length - 6)
+  expanded.writeUInt32LE(1_000_000, cdOffset + 24)
+  assert.throws(() => readZip(expanded, { maxEntrySize: 1024 }), /grande demais/)
+})

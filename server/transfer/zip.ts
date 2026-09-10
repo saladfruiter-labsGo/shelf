@@ -35,6 +35,12 @@ export interface ZipEntry {
   text(): string
 }
 
+export interface ZipLimits {
+  maxEntries?: number
+  maxEntrySize?: number
+  maxTotalSize?: number
+}
+
 /** Os quatro primeiros bytes de todo zip — `PK\x03\x04`. */
 export function looksLikeZip(buf: Buffer): boolean {
   return buf.length >= 4 && buf.readUInt32LE(0) === LOCAL_SIG
@@ -49,20 +55,28 @@ function findEocd(buf: Buffer): number {
   return -1
 }
 
-export function readZip(buf: Buffer): ZipEntry[] {
+export function readZip(buf: Buffer, limits: ZipLimits = {}): ZipEntry[] {
   if (buf.length < EOCD_MIN) throw new Error('O arquivo é pequeno demais para ser um .zip.')
 
   const eocd = findEocd(buf)
   if (eocd < 0) throw new Error('Não achei o índice do .zip — o arquivo parece truncado ou não é um .zip.')
 
   const count    = buf.readUInt16LE(eocd + 10)
+  const cdSize   = buf.readUInt32LE(eocd + 12)
   const cdOffset = buf.readUInt32LE(eocd + 16)
-  if (count === 0xffff || cdOffset === 0xffffffff) {
+  if (count === 0xffff || cdSize === 0xffffffff || cdOffset === 0xffffffff) {
     throw new Error('Esse .zip está em formato Zip64, que este importador não lê. Descompacte e envie os CSVs.')
   }
+  if (cdOffset + cdSize > eocd) throw new Error('O índice do .zip está corrompido: aponta para fora do arquivo.')
+
+  const maxEntries = limits.maxEntries ?? 1_000
+  const maxEntrySize = limits.maxEntrySize ?? 256 * 1024 * 1024
+  const maxTotalSize = limits.maxTotalSize ?? 512 * 1024 * 1024
+  if (count > maxEntries) throw new Error(`O .zip tem entradas demais (máximo ${maxEntries}).`)
 
   const entries: ZipEntry[] = []
   let p = cdOffset
+  let totalSize = 0
 
   for (let i = 0; i < count; i++) {
     if (p + CD_FIXED > buf.length || buf.readUInt32LE(p) !== CD_SIG) {
@@ -77,12 +91,21 @@ export function readZip(buf: Buffer): ZipEntry[] {
     const extraLen   = buf.readUInt16LE(p + 30)
     const commentLen = buf.readUInt16LE(p + 32)
     const localAt    = buf.readUInt32LE(p + 42)
+    const next = p + CD_FIXED + nameLen + extraLen + commentLen
+    if (next > eocd) throw new Error(`O índice do .zip está truncado na entrada ${i + 1}.`)
 
     // Bit 11 das flags marca nome em UTF-8; na prática o resto também é ASCII
     // ou UTF-8, e latin-1 aqui só quebraria acento de nome de lista.
     // Zipador antigo de Windows às vezes grava "\" no lugar de "/".
     const path = buf.subarray(p + CD_FIXED, p + CD_FIXED + nameLen).toString('utf-8').split('\\').join('/')
-    p += CD_FIXED + nameLen + extraLen + commentLen
+
+    if (compSize === 0xffffffff || size === 0xffffffff || localAt === 0xffffffff) {
+      throw new Error('Esse .zip usa uma entrada Zip64, que este importador não lê.')
+    }
+    if (size > maxEntrySize) throw new Error(`"${path}" é grande demais depois de descompactar.`)
+    totalSize += size
+    if (totalSize > maxTotalSize) throw new Error('O conteúdo descompactado do .zip excede o limite permitido.')
+    p = next
 
     if (path.endsWith('/')) continue   // diretório: não tem conteúdo
 
@@ -96,12 +119,23 @@ export function readZip(buf: Buffer): ZipEntry[] {
         // O cabeçalho local repete nome e extra, e o `extra` costuma ter tamanho
         // diferente do central: os dois precisam ser lidos de onde estão.
         const dataAt = localAt + LOCAL_FIX + buf.readUInt16LE(localAt + 26) + buf.readUInt16LE(localAt + 28)
+        if (dataAt + compSize > buf.length) {
+          throw new Error(`Não consegui ler "${path}" — os dados comprimidos estão truncados.`)
+        }
         const raw = buf.subarray(dataAt, dataAt + compSize)
 
         let out: Buffer
-        if (method === 0) out = Buffer.from(raw)
-        else if (method === 8) out = zlib.inflateRawSync(raw)
+        if (method === 0) {
+          if (compSize > maxEntrySize) throw new Error(`"${path}" é grande demais.`)
+          out = Buffer.from(raw)
+        } else if (method === 8) {
+          // Para logo depois do tamanho declarado. Um cabeçalho mentiroso não
+          // consegue forçar a alocação do conteúdo inteiro de um zip bomb.
+          out = zlib.inflateRawSync(raw, { maxOutputLength: Math.min(maxEntrySize, Math.max(1, size + 1)) })
+        }
         else throw new Error(`"${path}" usa um método de compressão que não sei ler (${method}).`)
+
+        if (out.length !== size) throw new Error(`"${path}" declara um tamanho diferente do conteúdo real.`)
 
         if (crc32 && crc !== 0 && crc32(out) >>> 0 !== crc) {
           throw new Error(`"${path}" saiu corrompido do .zip.`)

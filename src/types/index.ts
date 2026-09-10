@@ -188,6 +188,9 @@ export interface PlexFilenameSyncResult {
   unmatched:    number
 }
 
+export type SearchApiKey = 'TMDB_API_KEY' | 'RAWG_API_KEY' | 'GOOGLE_BOOKS_KEY'
+export type SearchApiKeySettings = Record<SearchApiKey, { set: boolean; masked: string }>
+
 export interface IntegrationStatus {
   plex: {
     enabled:        boolean
@@ -228,7 +231,9 @@ export interface IntegrationStatus {
     api_key_masked: string
     /** Cookies da loja presentes — sem eles a sincronização é só Steam → Shelf. */
     cookie_set:     boolean
-    session_id:     string
+    login_secure_set: boolean
+    session_id_set: boolean
+    session_id_masked: string
     sync_mode:      SteamSyncMode
     sync_removals:  boolean
     running:        boolean

@@ -6,7 +6,7 @@ import type {
   GamePriceBacklog, GamePriceDetails, GamePriceRange, GamePriceCandidate,
   SteamSyncResult, ExportScope, ExportSummary, ImportReport,
   LetterboxdKind, LetterboxdPlan, LetterboxdPreview, LetterboxdApplyResult,
-  PlexFilenameSyncResult,
+  PlexFilenameSyncResult, SearchApiKeySettings,
 } from '../types'
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -149,8 +149,8 @@ export const api = {
   },
 
   settings: {
-    get:    (): Promise<Record<string, string>> => request('/settings'),
-    update: (data: Record<string, string>): Promise<Record<string, string>> =>
+    get:    (): Promise<SearchApiKeySettings> => request('/settings'),
+    update: (data: Record<string, unknown>): Promise<SearchApiKeySettings> =>
       request('/settings', { method: 'PATCH', body: JSON.stringify(data) }),
   },
 
