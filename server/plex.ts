@@ -18,6 +18,17 @@ export interface PlexMeta extends PlexMediaFileMetadata {
   grandparentThumb?: string
   duration?: number
   userRating?: number
+  lastViewedAt?: number
+  updatedAt?: number
+}
+
+export function plexEventOccurredAt(meta: PlexMeta, fallback = new Date()): string {
+  const seconds = meta.lastViewedAt ?? meta.updatedAt
+  if (typeof seconds === 'number' && Number.isFinite(seconds) && seconds > 0) {
+    const occurredAt = new Date(seconds * 1000)
+    if (!Number.isNaN(occurredAt.getTime())) return occurredAt.toISOString()
+  }
+  return fallback.toISOString()
 }
 
 /** Extrai um id numérico do TMDB de um guid do Plex, se presente. */

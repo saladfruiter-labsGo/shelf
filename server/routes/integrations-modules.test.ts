@@ -21,6 +21,8 @@ let plexLibraryRoutes: typeof import('./integrations/plex-library.js').default
 let plexLiveRoutes: typeof import('./integrations/plex-live.js').default
 let pollPlexSessions: typeof import('./integrations/plex-live.js').pollPlexSessions
 let getPlexNowPlaying: typeof import('./integrations/plex-live.js').getPlexNowPlaying
+let plexWebhookRoutes: typeof import('./integrations/plex-webhook.js').default
+let ensurePlexWebhookSecret: typeof import('./integrations/plex-webhook.js').ensurePlexWebhookSecret
 let priceRoutes: typeof import('./integrations/prices.js').default
 let steamRoutes: typeof import('./integrations/steam.js').default
 
@@ -42,6 +44,9 @@ before(async () => {
   plexLiveRoutes = plexLive.default
   pollPlexSessions = plexLive.pollPlexSessions
   getPlexNowPlaying = plexLive.getPlexNowPlaying
+  const plexWebhook = await import('./integrations/plex-webhook.js')
+  plexWebhookRoutes = plexWebhook.default
+  ensurePlexWebhookSecret = plexWebhook.ensurePlexWebhookSecret
   priceRoutes = (await import('./integrations/prices.js')).default
   steamRoutes = (await import('./integrations/steam.js')).default
 })
@@ -287,4 +292,42 @@ test('poll do Plex seleciona a sessão ativa do usuário configurado', async () 
 
   setCfg('PLEX_TOKEN', '')
   assert.equal((await plexLiveRoutes.request('/plex/image?path=%2Fthumb')).status, 404)
+})
+
+test('retry do webhook Plex não duplica atividade, filme ou diário', async () => {
+  setCfg('PLEX_USER', 'Igao')
+  const secret = ensurePlexWebhookSecret()
+  const payload = {
+    event: 'media.scrobble',
+    Account: { title: 'Igao' },
+    Metadata: {
+      type: 'movie',
+      title: 'Filme idempotente',
+      guid: 'tmdb://987654',
+      ratingKey: 'plex-movie-retry',
+      lastViewedAt: 1_789_038_000,
+      duration: 7_200_000,
+      Media: [{ Part: [{ file: '/movies/Filme idempotente.mkv' }] }],
+    },
+  }
+  const send = () => {
+    const body = new FormData()
+    body.set('payload', JSON.stringify(payload))
+    return plexWebhookRoutes.request(`/plex/webhook?token=${secret}`, { method: 'POST', body })
+  }
+
+  assert.equal((await send()).status, 200)
+  assert.equal((await send()).status, 200)
+
+  assert.equal((db.prepare(
+    "SELECT COUNT(*) AS n FROM media_items WHERE external_id = 'tmdb://987654' AND type = 'movie'",
+  ).get() as { n: number }).n, 1)
+  assert.equal((db.prepare(
+    "SELECT COUNT(*) AS n FROM activity_events WHERE source = 'plex' AND external_ref = 'tmdb://987654'",
+  ).get() as { n: number }).n, 1)
+  assert.equal((db.prepare(`
+    SELECT COUNT(*) AS n FROM diary_entries d
+    JOIN media_items m ON m.id = d.media_item_id
+    WHERE d.source = 'plex' AND m.external_id = 'tmdb://987654'
+  `).get() as { n: number }).n, 1)
 })
