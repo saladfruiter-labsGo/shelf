@@ -3,6 +3,7 @@ import { db } from '../db.js'
 import { notifyLibraryActivity } from '../notify.js'
 import { getSeriesView } from '../series.js'
 import { fetchTmdbMediaDetails, type TmdbMediaType } from '../tmdb.js'
+import { applyQuickRating, isQuickRating } from '../quick-rating.js'
 import {
   GAME_STATUS_TO_BASE,
   LIBRARY_STATUS_PREDICATE,
@@ -178,6 +179,21 @@ app.patch('/:id/tmdb-identification', async (c) => {
 const FAVORITE_LIMIT = 5
 /** `favorite = 2` marca o destaque da categoria — a capa coroada, no centro da faixa. */
 const FAVORITE_TOP = 2
+
+app.patch('/:id/quick-rating', async (c) => {
+  const mediaItemId = Number(c.req.param('id'))
+  const body = await c.req.json().catch(() => ({})) as { rating?: unknown }
+  if (!Number.isInteger(mediaItemId) || mediaItemId <= 0) return c.json({ error: 'Invalid media id' }, 400)
+  if (!isQuickRating(body.rating)) return c.json({ error: 'Rating must be between 0.5 and 5 in half-star steps' }, 400)
+
+  const result = applyQuickRating(mediaItemId, body.rating)
+  if (!result) return c.json({ error: 'Not found' }, 404)
+  if (result.changed) {
+    const item = result.item as { type: string; title: string; rating: number }
+    notifyLibraryActivity({ event: 'rated', type: item.type, title: item.title, rating: item.rating })
+  }
+  return c.json(result.item)
+})
 
 app.patch('/:id', async (c) => {
   const id   = c.req.param('id')

@@ -6,6 +6,7 @@ import { CATEGORIES } from '../lib/categories'
 import { TYPE_LABEL, TYPE_COLOR, GAME_STATUS_LABEL, gameStatusOf, formatPlaytime, formatRuntime, fmtRating, formatMoney, timeAgo, toISODate, todayISODate, daysUntil } from '../lib/utils'
 import type { MediaItem, MediaType, TrendingItem, DiaryEntry, GamePriceSummary } from '../types'
 import { MediaPreviewTrigger, useMediaPreview } from '../components/MediaSummaryModal'
+import { StarRating } from '../components/StarRating'
 
 const TYPE_EMOJI: Record<MediaType, string> = { movie: '🎬', series: '📺', game: '🎮', book: '📚', music: '🎵' }
 const hue = (t: MediaType) => `var(--${TYPE_COLOR[t]})`
@@ -333,6 +334,23 @@ export function Dashboard() {
     () => allItems.filter(i => i.status === 'dropped').sort(byRecent).slice(0, 4),
     [allItems],
   )
+  const unratedCompleted = useMemo(
+    () => allItems
+      .filter(i => i.type !== 'music' && i.status === 'completed' && i.rating <= 0)
+      .sort((a, b) => new Date(b.completed_at ?? b.updated_at).getTime() - new Date(a.completed_at ?? a.updated_at).getTime()),
+    [allItems],
+  )
+
+  const quickRatingMutation = useMutation({
+    mutationFn: ({ id, rating }: { id: number; rating: number }) => api.media.quickRate(id, rating),
+    onSuccess: updated => {
+      qc.setQueryData<MediaItem[]>(['media-library'], current =>
+        current?.map(item => item.id === updated.id ? { ...item, ...updated } : item) ?? [])
+      qc.invalidateQueries({ queryKey: ['diary'] })
+      qc.invalidateQueries({ queryKey: ['diary-all'] })
+      qc.invalidateQueries({ queryKey: ['wrap'] })
+    },
+  })
 
   const emBreve = useMemo(() => {
     const today = todayISODate()
@@ -426,6 +444,39 @@ export function Dashboard() {
           ))}
         </div>
       </div>
+
+      {unratedCompleted.length > 0 && (
+        <div className="band">
+          <section className="quick-rate">
+            <div className="quick-rate-head">
+              <div>
+                <span className="eyebrow">Conclusões sem nota</span>
+                <h2>O que você achou?</h2>
+              </div>
+              <span className="count">{unratedCompleted.length} para avaliar</span>
+            </div>
+            <div className="quick-rate-list">
+              {unratedCompleted.slice(0, 4).map(item => (
+                <div className="quick-rate-item" key={item.id}>
+                  <MediaPreviewTrigger media={item} label={`Abrir resumo de ${item.title}`} className="quick-rate-media">
+                    <Cover url={item.cover_url} type={item.type} w={42} h={62} radius={7} font={20} />
+                    <div>
+                      <span className="kind" style={{ color: hue(item.type) }}>{TYPE_LABEL[item.type]}</span>
+                      <strong>{item.title}</strong>
+                      <small>{item.completed_at ? relTime(item.completed_at) : 'concluído'}</small>
+                    </div>
+                  </MediaPreviewTrigger>
+                  <StarRating
+                    value={0}
+                    size="md"
+                    onChange={rating => rating > 0 && quickRatingMutation.mutate({ id: item.id, rating })}
+                  />
+                </div>
+              ))}
+            </div>
+          </section>
+        </div>
+      )}
 
       {/* ── Favoritos: o destaque da home, e o único lugar onde se edita a lista ── */}
       {(libraryCount('movie') > 0 || libraryCount('game') > 0) && (
@@ -721,6 +772,17 @@ const HOME_CSS = `
 .home .cat-chip .lb{font-weight:600;font-size:14px}
 .home .cat-chip .ct{font-size:13px;font-weight:600;color:var(--text-secondary);font-variant-numeric:tabular-nums;background:var(--card);border-radius:9999px;padding:2px 10px}
 
+.home .quick-rate{margin-top:24px;padding:20px;border:1px solid color-mix(in srgb,var(--accent) 35%,var(--border));border-radius:16px;background:linear-gradient(120deg,color-mix(in srgb,var(--accent) 10%,var(--surface)),var(--surface))}
+.home .quick-rate-head{display:flex;align-items:end;justify-content:space-between;gap:16px;margin-bottom:14px}
+.home .quick-rate-head h2{font-size:20px;margin:3px 0 0}
+.home .quick-rate-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.home .quick-rate-item{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;background:var(--card);border:1px solid var(--border);border-radius:12px;min-width:0}
+.home .quick-rate-media{display:flex;align-items:center;gap:10px;min-width:0;flex:1}
+.home .quick-rate-media>div:last-child{display:flex;flex-direction:column;min-width:0}
+.home .quick-rate-media .kind{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px}
+.home .quick-rate-media strong{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.home .quick-rate-media small{font-size:11px;color:var(--text-muted)}
+
 /* Banner de favoritos: faixa larga, pôsteres grandes, #1 com coroa e moldura dourada. */
 .home .favband{display:grid;grid-template-columns:1fr 1fr;gap:32px;align-items:start;margin-top:28px;padding:20px var(--page-x) 24px;border-block:1px solid var(--border);background:radial-gradient(70% 130% at 8% 0%,color-mix(in srgb,var(--movies) 14%,transparent),transparent 62%),radial-gradient(70% 130% at 92% 100%,color-mix(in srgb,var(--games) 14%,transparent),transparent 62%),var(--surface)}
 .home .favrow{min-width:0}
@@ -775,6 +837,8 @@ const HOME_CSS = `
 
 .home .two-col{display:grid;grid-template-columns:1fr 1fr;gap:32px;align-items:stretch}
 .home .two-col>.quad,.home .two-col>.col-stack{display:flex;flex-direction:column;min-width:0}
+
+@media(max-width:800px){.home .quick-rate-list{grid-template-columns:1fr}.home .quick-rate-item{align-items:flex-start;flex-direction:column}.home .quick-rate-item>div:last-child{align-self:flex-end}}
 
 /* Bloco colorido: --a fundo profundo, --b cor viva, --c brilho do canto. */
 .home .quad{--tint:var(--b);position:relative;margin-top:40px;padding:24px 24px 28px;border-radius:20px;overflow:hidden;border:1px solid color-mix(in srgb,var(--b) 45%,transparent);background:radial-gradient(120% 110% at 100% 0%,color-mix(in srgb,var(--c) 42%,transparent),transparent 62%),linear-gradient(125deg,var(--a) 0%,color-mix(in srgb,var(--b) 70%,var(--a)) 68%,var(--b) 100%)}

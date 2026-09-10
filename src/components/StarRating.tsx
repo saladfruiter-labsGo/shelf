@@ -48,6 +48,7 @@ export function StarRating({ value, onChange, readonly = false, size = 'md' }: P
             key={star}
             type="button"
             disabled={readonly}
+            aria-label={`${star} ${star === 1 ? 'estrela' : 'estrelas'}`}
             style={{ width: px, height: px, padding: 0, background: 'none', border: 'none' }}
             className={`flex-shrink-0 transition-transform ${readonly ? 'cursor-default' : 'cursor-pointer hover:scale-110'}`}
             onPointerDown={e => { lastPointer.current = e.pointerType }}
