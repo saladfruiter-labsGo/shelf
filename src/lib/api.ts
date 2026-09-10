@@ -74,6 +74,8 @@ export const api = {
       request('/media', { method: 'POST', body: JSON.stringify(data) }),
     update: (id: number, data: Partial<Pick<MediaItem, 'rating' | 'status' | 'runtime' | 'synopsis' | 'creators' | 'author' | 'release_date' | 'hype' | 'favorite' | 'completed_at' | 'game_status' | 'last_played_at' | 'playtime_seconds'>>): Promise<MediaItem> =>
       request(`/media/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    quickRate: (id: number, rating: number): Promise<MediaItem> =>
+      request(`/media/${id}/quick-rating`, { method: 'PATCH', body: JSON.stringify({ rating }) }),
     previewTmdb: (id: number, tmdbId: string): Promise<TmdbMediaPreview> =>
       request(`/media/${id}/tmdb-preview?tmdb_id=${encodeURIComponent(tmdbId)}`),
     identifyTmdb: (id: number, tmdbId: string): Promise<MediaItem> =>
