@@ -21,6 +21,7 @@ import { limitedApiBody, noStoreDynamicApi, sameOriginApi, shelfSecurityHeaders 
 import { startBackupScheduler, stopBackupScheduler } from './backup.js'
 import { db } from './db.js'
 import { shutdownServices } from './lifecycle.js'
+import { startActivityRetention, stopActivityRetention } from './activity-retention.js'
 
 const app = new Hono()
 let shuttingDown = false
@@ -75,6 +76,9 @@ startBackupScheduler()
 // Polls de Plex/Last.fm/Kavita começam explicitamente no bootstrap.
 startIntegrationPolling()
 
+// Payloads brutos são diagnósticos temporários; o histórico normalizado permanece.
+startActivityRetention()
+
 let shutdownPromise: Promise<void> | null = null
 function requestShutdown(reason: string, exitCode: number): void {
   if (shutdownPromise) return
@@ -88,6 +92,7 @@ function requestShutdown(reason: string, exitCode: number): void {
       stopPriceSync,
       stopSteamSync,
       stopBackupScheduler,
+      stopActivityRetention,
     ],
   }).then(() => {
     console.log('[shutdown] SQLite fechado após checkpoint do WAL.')
