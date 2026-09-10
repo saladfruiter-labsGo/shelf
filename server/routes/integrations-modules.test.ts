@@ -18,6 +18,9 @@ let lastfmRoutes: typeof import('./integrations/lastfm.js').default
 let getLastfmNowPlaying: typeof import('./integrations/lastfm.js').getLastfmNowPlaying
 let playniteRoutes: typeof import('./integrations/playnite.js').default
 let plexLibraryRoutes: typeof import('./integrations/plex-library.js').default
+let plexLiveRoutes: typeof import('./integrations/plex-live.js').default
+let pollPlexSessions: typeof import('./integrations/plex-live.js').pollPlexSessions
+let getPlexNowPlaying: typeof import('./integrations/plex-live.js').getPlexNowPlaying
 let priceRoutes: typeof import('./integrations/prices.js').default
 let steamRoutes: typeof import('./integrations/steam.js').default
 
@@ -35,6 +38,10 @@ before(async () => {
   getLastfmNowPlaying = lastfm.getLastfmNowPlaying
   playniteRoutes = (await import('./integrations/playnite.js')).default
   plexLibraryRoutes = (await import('./integrations/plex-library.js')).default
+  const plexLive = await import('./integrations/plex-live.js')
+  plexLiveRoutes = plexLive.default
+  pollPlexSessions = plexLive.pollPlexSessions
+  getPlexNowPlaying = plexLive.getPlexNowPlaying
   priceRoutes = (await import('./integrations/prices.js')).default
   steamRoutes = (await import('./integrations/steam.js')).default
 })
@@ -240,4 +247,44 @@ test('sync de arquivos do Plex preserva a rota e atualiza o filme correspondente
   assert.equal((db.prepare(
     "SELECT original_filename FROM media_items WHERE external_id = 'plex:movie-file'",
   ).get() as { original_filename: string }).original_filename, 'Filme do Plex (2026).mkv')
+})
+
+test('poll do Plex seleciona a sessão ativa do usuário configurado', async () => {
+  setCfg('PLEX_ENABLED', '1')
+  setCfg('PLEX_URL', 'http://plex.test')
+  setCfg('PLEX_TOKEN', 'plex-token')
+  setCfg('PLEX_USER', 'Igao')
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = async () => Response.json({ MediaContainer: { Metadata: [
+    {
+      type: 'movie', title: 'Filme pausado', Player: { state: 'paused' },
+      User: { title: 'Igao' }, viewOffset: 1000, duration: 5000,
+    },
+    {
+      type: 'episode', title: 'Episódio', grandparentTitle: 'Série ativa',
+      parentIndex: 2, index: 3, Player: { state: 'playing' }, User: { title: 'Igao' },
+      viewOffset: 2000, duration: 6000,
+    },
+    {
+      type: 'movie', title: 'Outro usuário', Player: { state: 'playing' },
+      User: { title: 'Outra pessoa' },
+    },
+  ] } })
+
+  try {
+    await pollPlexSessions()
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+
+  const current = getPlexNowPlaying()
+  assert.equal(current?.title, 'Série ativa')
+  assert.equal(current?.subtitle, 'T2E3 · Episódio')
+  assert.equal(current?.state, 'playing')
+  assert.equal(current?.position_ms, 2000)
+  assert.equal(current?.duration_ms, 6000)
+  assert.ok(current?.updated_at)
+
+  setCfg('PLEX_TOKEN', '')
+  assert.equal((await plexLiveRoutes.request('/plex/image?path=%2Fthumb')).status, 404)
 })
