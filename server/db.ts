@@ -3,6 +3,7 @@ import path from 'path'
 import fs from 'fs'
 import { writeVerifiedDatabaseBackup } from './database-backup.js'
 import { hasPendingMigrations, runMigrations, type Migration } from './migrations.js'
+import { rebuildMediaItemsWithDomainChecks } from './media-schema.js'
 
 export const dataDir = path.resolve(process.env.DATA_DIR ?? './data')
 fs.mkdirSync(dataDir, { recursive: true })
@@ -362,6 +363,11 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_price_hist_product ON game_price_history(game_price_product_id, observed_at);
 `)
   },
+}, {
+  version: 2,
+  name: 'media-domain-checks',
+  foreignKeys: 'off',
+  up: () => rebuildMediaItemsWithDomainChecks(db),
 }]
 
 if (databaseExisted && (hasPendingMigrations(db, migrations) || schemaNeedsUpgrade())) {

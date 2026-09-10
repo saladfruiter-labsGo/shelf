@@ -66,3 +66,32 @@ test('recusa plano fora de ordem e banco criado por versão desconhecida', () =>
   ]), /desconhecida/)
   db.close()
 })
+
+test('reconstrói tabela referenciada e restaura foreign_keys', () => {
+  const db = new Database(':memory:')
+  db.pragma('foreign_keys = ON')
+  db.exec(`
+    CREATE TABLE parent (id INTEGER PRIMARY KEY, status TEXT NOT NULL);
+    CREATE TABLE child (id INTEGER PRIMARY KEY, parent_id INTEGER NOT NULL REFERENCES parent(id));
+    INSERT INTO parent VALUES (1, 'valid');
+    INSERT INTO child VALUES (1, 1);
+  `)
+
+  runMigrations(db, [{
+    version: 1,
+    name: 'rebuild-parent',
+    foreignKeys: 'off',
+    up: () => db.exec(`
+      CREATE TABLE parent_next (id INTEGER PRIMARY KEY, status TEXT NOT NULL CHECK (status = 'valid'));
+      INSERT INTO parent_next SELECT * FROM parent;
+      DROP TABLE parent;
+      ALTER TABLE parent_next RENAME TO parent;
+    `),
+  }])
+
+  assert.equal(db.pragma('foreign_keys', { simple: true }), 1)
+  assert.deepEqual(db.pragma('foreign_key_check'), [])
+  assert.deepEqual(db.prepare('SELECT * FROM child').all(), [{ id: 1, parent_id: 1 }])
+  assert.throws(() => db.prepare("INSERT INTO parent VALUES (2, 'invalid')").run(), /CHECK constraint/)
+  db.close()
+})

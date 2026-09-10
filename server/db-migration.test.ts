@@ -51,17 +51,21 @@ legacy.exec(`
   );
   INSERT INTO media_items (external_id, type, title, status)
   VALUES ('legacy-1', 'movie', 'Filme preservado', 'completed');
+  INSERT INTO lists (name) VALUES ('Lista preservada');
+  INSERT INTO list_items (list_id, media_item_id) VALUES (1, 1);
 `)
 legacy.close()
 
 test('adota banco sem versão, preserva dados e cria snapshot antes da migration', async () => {
   const { db } = await import('./db.js')
 
-  const migration = db.prepare('SELECT version, name FROM schema_migrations').get() as {
-    version: number
-    name: string
-  }
-  assert.deepEqual(migration, { version: 1, name: 'baseline-schema' })
+  const migrations = db.prepare(
+    'SELECT version, name FROM schema_migrations ORDER BY version',
+  ).all()
+  assert.deepEqual(migrations, [
+    { version: 1, name: 'baseline-schema' },
+    { version: 2, name: 'media-domain-checks' },
+  ])
 
   const item = db.prepare("SELECT title, status FROM media_items WHERE external_id = 'legacy-1'").get()
   assert.deepEqual(item, { title: 'Filme preservado', status: 'completed' })
@@ -70,7 +74,19 @@ test('adota banco sem versão, preserva dados e cria snapshot antes da migration
   assert.ok(mediaColumns.includes('game_status'))
   assert.ok(mediaColumns.includes('favorite'))
   assert.ok(db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'game_price_history'").get())
+  assert.deepEqual(db.prepare('SELECT list_id, media_item_id FROM list_items').all(), [{ list_id: 1, media_item_id: 1 }])
+  assert.deepEqual(db.pragma('foreign_key_check'), [])
   assert.deepEqual(db.pragma('quick_check'), [{ quick_check: 'ok' }])
+
+  assert.throws(() => db.prepare(
+    "INSERT INTO media_items (external_id, type, title, status) VALUES ('bad-type', 'music', 'Faixa', 'wishlist')",
+  ).run(), /CHECK constraint/)
+  assert.throws(() => db.prepare(
+    "INSERT INTO media_items (external_id, type, title, status) VALUES ('bad-status', 'movie', 'Filme', 'finished')",
+  ).run(), /CHECK constraint/)
+  assert.throws(() => db.prepare(
+    "INSERT INTO media_items (external_id, type, title, status, game_status) VALUES ('bad-game', 'game', 'Jogo', 'completed', 'beaten')",
+  ).run(), /CHECK constraint/)
 
   const snapshots = readdirSync(backupDir).filter(name => /^shelf-before-migration-.*\.db$/.test(name))
   assert.equal(snapshots.length, 1)

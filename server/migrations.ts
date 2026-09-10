@@ -4,6 +4,8 @@ export interface Migration {
   version: number
   name: string
   up: () => void
+  /** Necessário apenas para reconstruções de tabelas referenciadas por FKs. */
+  foreignKeys?: 'off'
 }
 
 export interface AppliedMigration {
@@ -75,10 +77,22 @@ export function runMigrations(db: Database.Database, migrations: Migration[]): A
 
   for (const migration of migrations) {
     if (appliedVersions.has(migration.version)) continue
-    db.transaction(() => {
-      migration.up()
-      record.run(migration.version, migration.name)
-    })()
+    const foreignKeysWereEnabled = db.pragma('foreign_keys', { simple: true }) === 1
+    if (migration.foreignKeys === 'off' && foreignKeysWereEnabled) db.pragma('foreign_keys = OFF')
+    try {
+      db.transaction(() => {
+        migration.up()
+        if (migration.foreignKeys === 'off') {
+          const violations = db.pragma('foreign_key_check') as unknown[]
+          if (violations.length > 0) {
+            throw new Error(`Migration ${migration.version} violaria ${violations.length} chave(s) estrangeira(s)`)
+          }
+        }
+        record.run(migration.version, migration.name)
+      })()
+    } finally {
+      if (migration.foreignKeys === 'off' && foreignKeysWereEnabled) db.pragma('foreign_keys = ON')
+    }
   }
 
   return appliedMigrations(db)
