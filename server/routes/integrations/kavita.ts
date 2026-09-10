@@ -31,7 +31,7 @@ const completeBook = db.prepare(`
     updated_at = datetime('now')
   WHERE external_id = @external_id AND type = 'book'
 `)
-const getBook = db.prepare("SELECT id, author FROM media_items WHERE external_id = ? AND type = 'book'")
+const getBook = db.prepare("SELECT id, author, rating FROM media_items WHERE external_id = ? AND type = 'book'")
 const setBookRating = db.prepare(`
   UPDATE media_items SET rating = ?, updated_at = datetime('now')
   WHERE external_id = ? AND type = 'book'
@@ -148,7 +148,7 @@ export async function pollKavita(): Promise<void> {
       : now
     const coverUrl = `/api/integrations/kavita/image?seriesId=${entry.id}`
 
-    const existing = getBook.get(externalId) as { id: number; author: string | null } | undefined
+    const existing = getBook.get(externalId) as { id: number; author: string | null; rating: number } | undefined
     let author = existing?.author ?? null
     if (!author) author = await authorFor(entry.id)
     upsertBookProgress.run({
@@ -161,7 +161,7 @@ export async function pollKavita(): Promise<void> {
       pages_total: pages || null,
       pages_read: pagesRead,
     })
-    const book = getBook.get(externalId) as { id: number; author: string | null } | undefined
+    const book = getBook.get(externalId) as { id: number; author: string | null; rating: number } | undefined
     if (!book) continue
 
     const previous = state[String(entry.id)]
@@ -173,7 +173,7 @@ export async function pollKavita(): Promise<void> {
           cover_url: coverUrl, rating: rating || null, occurred_at: occurredAt,
         })
         insertDiary.run(book.id, occurredAt, rating || null)
-        notifyLibraryActivity({ event: 'completed', type: 'book', title: entry.name, rating: rating || null })
+        notifyLibraryActivity({ event: 'completed', type: 'book', title: entry.name, rating: book.rating || null, mediaItemId: book.id })
       }
     } else if (!previous) {
       insertActivity.run({
