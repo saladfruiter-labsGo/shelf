@@ -1,23 +1,25 @@
+import { lazy } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Layout }       from './components/Layout'
-import { Dashboard }    from './pages/Dashboard'
-import { Library }      from './pages/Library'
-import { LibraryGames } from './pages/LibraryGames'
-import { LibraryBooks } from './pages/LibraryBooks'
-import { LibraryFilms } from './pages/LibraryFilms'
-import { LibrarySeries } from './pages/LibrarySeries'
-import { LibraryMusic } from './pages/LibraryMusic'
-import { Diary }        from './pages/Diary'
-import { Wishlist }     from './pages/Wishlist'
-import { MediaDetail }  from './pages/MediaDetail'
-import { Wrap }         from './pages/Wrap'
-import { Settings }     from './pages/Settings'
-import { Integrations } from './pages/Integrations'
-import { ImportExport } from './pages/ImportExport'
-import { Lists }        from './pages/Lists'
-import { ListDetail }   from './pages/ListDetail'
 import { MediaPreviewProvider } from './components/MediaSummaryModal'
+
+const Dashboard = lazy(() => import('./pages/Dashboard').then(module => ({ default: module.Dashboard })))
+const Library = lazy(() => import('./pages/Library').then(module => ({ default: module.Library })))
+const LibraryGames = lazy(() => import('./pages/LibraryGames').then(module => ({ default: module.LibraryGames })))
+const LibraryBooks = lazy(() => import('./pages/LibraryBooks').then(module => ({ default: module.LibraryBooks })))
+const LibraryFilms = lazy(() => import('./pages/LibraryFilms').then(module => ({ default: module.LibraryFilms })))
+const LibrarySeries = lazy(() => import('./pages/LibrarySeries').then(module => ({ default: module.LibrarySeries })))
+const LibraryMusic = lazy(() => import('./pages/LibraryMusic').then(module => ({ default: module.LibraryMusic })))
+const Diary = lazy(() => import('./pages/Diary').then(module => ({ default: module.Diary })))
+const Wishlist = lazy(() => import('./pages/Wishlist').then(module => ({ default: module.Wishlist })))
+const MediaDetail = lazy(() => import('./pages/MediaDetail').then(module => ({ default: module.MediaDetail })))
+const Wrap = lazy(() => import('./pages/Wrap').then(module => ({ default: module.Wrap })))
+const Settings = lazy(() => import('./pages/Settings').then(module => ({ default: module.Settings })))
+const Integrations = lazy(() => import('./pages/Integrations').then(module => ({ default: module.Integrations })))
+const ImportExport = lazy(() => import('./pages/ImportExport').then(module => ({ default: module.ImportExport })))
+const Lists = lazy(() => import('./pages/Lists').then(module => ({ default: module.Lists })))
+const ListDetail = lazy(() => import('./pages/ListDetail').then(module => ({ default: module.ListDetail })))
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 60_000, retry: 1 } },

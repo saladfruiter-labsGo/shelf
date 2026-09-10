@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react'
+import { Suspense, useState, useCallback, useEffect, useRef } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useHotkey } from '../hooks/useHotkey'
@@ -418,7 +418,13 @@ export function Layout() {
 
       {/* Main content */}
       <main style={{ paddingTop: 'calc(var(--nav-h) + var(--npbar-h, 0px))', paddingBottom: 'var(--bottomnav-h)', minHeight: '100vh', transition: 'padding-top .2s' }}>
-        <Outlet />
+        <Suspense fallback={
+          <div className="min-h-[45vh] grid place-items-center text-sm text-muted" role="status" aria-live="polite">
+            Carregando página…
+          </div>
+        }>
+          <Outlet />
+        </Suspense>
       </main>
 
       {/* Floating "Add" button (mobile only) */}
