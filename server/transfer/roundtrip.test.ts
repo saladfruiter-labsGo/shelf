@@ -1,0 +1,138 @@
+import { test, before } from 'node:test'
+import assert from 'node:assert/strict'
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
+const dataDir = mkdtempSync(join(tmpdir(), 'shelf-roundtrip-'))
+process.env.DATA_DIR = dataDir
+process.env.BACKUP_DIR = join(dataDir, 'backups')
+
+let db: import('better-sqlite3').Database
+let buildExport: typeof import('./export.js').buildExport
+let importShelfBackup: typeof import('./importer.js').importShelfBackup
+
+before(async () => {
+  db = (await import('../db.js')).db
+  buildExport = (await import('./export.js')).buildExport
+  importShelfBackup = (await import('./importer.js')).importShelfBackup
+})
+
+test('export v2 restaura tiers, atividade musical e histórico de preços sem credenciais', () => {
+  db.prepare("INSERT INTO settings (key, value) VALUES ('PLEX_TOKEN', 'nao-exportar')").run()
+  const mediaId = Number(db.prepare(`
+    INSERT INTO media_items (external_id, type, title, status, rating, notes)
+    VALUES ('game-1', 'game', 'Jogo de teste', 'completed', 4.5, 'nota pessoal')
+  `).run().lastInsertRowid)
+  db.prepare(`
+    INSERT INTO diary_entries (media_item_id, watched_at, rating, comment, source)
+    VALUES (?, '2026-08-01T20:00:00.000Z', 4.5, 'ótimo', 'manual')
+  `).run(mediaId)
+
+  const listId = Number(db.prepare(`
+    INSERT INTO lists (name, description, mode, dim_seen) VALUES ('Favoritos', 'ranking pessoal', 'tier', 1)
+  `).run().lastInsertRowid)
+  db.prepare("INSERT INTO lists (name, description, mode) VALUES ('Lista vazia', 'também é dado', 'list')").run()
+  const tierId = Number(db.prepare(`
+    INSERT INTO list_tiers (list_id, name, color, position) VALUES (?, 'S', 'movies', 0)
+  `).run(listId).lastInsertRowid)
+  db.prepare(`
+    INSERT INTO list_items (list_id, media_item_id, position, tier_id) VALUES (?, ?, 3, ?)
+  `).run(listId, mediaId, tierId)
+
+  db.prepare(`
+    INSERT INTO activity_events
+      (source, event_type, media_type, external_ref, title, subtitle, duration_ms, genre, occurred_at, raw)
+    VALUES ('lastfm', 'listen', 'music', 'artista|faixa', 'Faixa', 'Artista', 180000, 'Rock',
+            '2026-08-02T10:00:00.000Z', '{"segredo":"nao-portar"}')
+  `).run()
+  db.prepare(`
+    INSERT INTO music_tracks
+      (artist, track, album, duration_ms, genre, play_count, first_played, last_played, enriched)
+    VALUES ('Artista', 'Faixa', 'Álbum', 180000, 'Rock', 7,
+            '2026-01-01T00:00:00.000Z', '2026-08-02T10:00:00.000Z', 1)
+  `).run()
+
+  const productId = Number(db.prepare(`
+    INSERT INTO game_price_products
+      (media_item_id, provider, platform, provider_game_id, matched_title, match_status, currency)
+    VALUES (?, 'itad', 'pc', 'itad-1', 'Jogo de teste', 'resolved', 'BRL')
+  `).run(mediaId).lastInsertRowid)
+  db.prepare(`
+    INSERT INTO game_price_offers
+      (game_price_product_id, shop_id, shop_name, price_minor, regular_minor, currency,
+       discount_percent, url, observed_at, last_seen_at)
+    VALUES (?, 61, 'Steam', 4990, 9990, 'BRL', 50, 'https://example.test/deal',
+            '2026-08-03T00:00:00.000Z', '2026-08-03T00:00:00.000Z')
+  `).run(productId)
+  db.prepare(`
+    INSERT INTO game_price_history
+      (game_price_product_id, shop_id, shop_name, price_minor, regular_minor, currency,
+       discount_percent, observed_at, observed_day, source)
+    VALUES (?, 61, 'Steam', 4990, 9990, 'BRL', 50,
+            '2026-08-03T00:00:00.000Z', '2026-08-03', 'shelf_poll')
+  `).run(productId)
+
+  const exported = buildExport('all')
+  assert.equal(exported.shelf_export, 2)
+  assert.equal('id' in exported.items[0], false)
+  assert.equal(JSON.stringify(exported).includes('nao-exportar'), false)
+  assert.equal(JSON.stringify(exported).includes('nao-portar'), false)
+  assert.equal((exported.lists[0] as any).tiers[0].name, 'S')
+  assert.equal((exported.lists[0] as any).items[0].tier_key, (exported.lists[0] as any).tiers[0].key)
+  assert.equal(exported.lists.some((list: any) => list.name === 'Lista vazia' && list.items.length === 0), true)
+
+  db.exec(`
+    DELETE FROM game_price_history;
+    DELETE FROM game_price_offers;
+    DELETE FROM game_price_products;
+    DELETE FROM diary_entries;
+    DELETE FROM list_items;
+    DELETE FROM list_tiers;
+    DELETE FROM lists;
+    DELETE FROM activity_events;
+    DELETE FROM music_tracks;
+    DELETE FROM media_items;
+  `)
+
+  const report = importShelfBackup(exported, 'replace')
+  assert.deepEqual(report.errors, [])
+  assert.equal(report.created, 1)
+  assert.deepEqual(report.restored, { lists: 2, activity: 1, tracks: 1, prices: 1 })
+  assert.equal((db.prepare('SELECT COUNT(*) n FROM diary_entries').get() as any).n, 1)
+  assert.deepEqual(
+    db.prepare(`
+      SELECT l.mode, l.dim_seen, t.name tier, li.position
+        FROM lists l JOIN list_tiers t ON t.list_id = l.id
+        JOIN list_items li ON li.list_id = l.id AND li.tier_id = t.id
+    `).get(),
+    { mode: 'tier', dim_seen: 1, tier: 'S', position: 3 },
+  )
+  assert.equal((db.prepare('SELECT play_count FROM music_tracks').get() as any).play_count, 7)
+  assert.equal((db.prepare('SELECT COUNT(*) n FROM activity_events').get() as any).n, 1)
+  assert.equal((db.prepare('SELECT COUNT(*) n FROM game_price_offers').get() as any).n, 1)
+  assert.equal((db.prepare('SELECT COUNT(*) n FROM game_price_history').get() as any).n, 1)
+
+  // Reimportar é idempotente para estruturas auxiliares.
+  const again = importShelfBackup(exported, 'replace')
+  assert.deepEqual(again.errors, [])
+  assert.equal((db.prepare('SELECT COUNT(*) n FROM activity_events').get() as any).n, 1)
+  assert.equal((db.prepare('SELECT COUNT(*) n FROM list_tiers').get() as any).n, 1)
+  assert.equal((db.prepare('SELECT COUNT(*) n FROM game_price_history').get() as any).n, 1)
+})
+
+test('importador continua aceitando o formato v1', () => {
+  const report = importShelfBackup({
+    shelf_export: 1,
+    items: [{ external_id: 'movie-v1', type: 'movie', title: 'Filme antigo', status: 'wishlist' }],
+    lists: [{ name: 'Lista antiga', mode: 'list', items: [{ external_id: 'movie-v1', type: 'movie' }] }],
+  }, 'merge')
+  assert.deepEqual(report.errors, [])
+  assert.equal(report.created, 1)
+  assert.equal((db.prepare("SELECT COUNT(*) n FROM media_items WHERE external_id = 'movie-v1'").get() as any).n, 1)
+})
+
+test('importador rejeita versões futuras em vez de tentar interpretá-las', () => {
+  const report = importShelfBackup({ shelf_export: 99, items: [] })
+  assert.match(report.errors[0], /não suportada/)
+})

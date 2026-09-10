@@ -4,7 +4,7 @@ import type {
   SearchResult, WrapData, SeriesView, SeriesPreview, DiaryEntry, TmdbMediaPreview,
   IntegrationStatus, NowPlaying, ActivityEvent, ActivityMediaType, MusicStats, TrendingItem,
   GamePriceBacklog, GamePriceDetails, GamePriceRange, GamePriceCandidate,
-  SteamSyncResult, ExportScope, ExportSummary, ImportReport,
+  SteamSyncResult, ExportScope, ExportSummary, ImportReport, BackupStatus, DatabaseBackupInfo,
   LetterboxdKind, LetterboxdPlan, LetterboxdPreview, LetterboxdApplyResult,
   PlexFilenameSyncResult,
 } from '../types'
@@ -196,6 +196,8 @@ export const api = {
 
   transfer: {
     summary: (): Promise<ExportSummary> => request('/transfer/export/summary'),
+    backupStatus: (): Promise<BackupStatus> => request('/transfer/backup/status'),
+    backupNow: (): Promise<DatabaseBackupInfo> => request('/transfer/backup', { method: 'POST' }),
     /** URL de download direto — o navegador baixa o arquivo, sem passar pelo fetch. */
     exportUrl: (scope: ExportScope, format: 'json' | 'csv'): string =>
       `/api/transfer/export?scope=${scope}&format=${format}`,

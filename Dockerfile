@@ -24,10 +24,11 @@ COPY --from=build /app/server ./server
 COPY --from=build /app/package.json ./package.json
 COPY --from=build /app/tsconfig.json ./tsconfig.json
 
-VOLUME ["/app/data"]
+VOLUME ["/app/data", "/app/backups"]
 
 ENV PORT=3000
 ENV DATA_DIR=/app/data
+ENV BACKUP_DIR=/app/backups
 
 EXPOSE 3000
 
