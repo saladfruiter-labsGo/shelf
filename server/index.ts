@@ -2,7 +2,6 @@ import 'dotenv/config'
 import { serve } from '@hono/node-server'
 import { serveStatic } from '@hono/node-server/serve-static'
 import { Hono } from 'hono'
-import { cors } from 'hono/cors'
 import { logger } from 'hono/logger'
 import searchRoutes   from './routes/search.js'
 import mediaRoutes    from './routes/media.js'
@@ -18,12 +17,16 @@ import pricesRoutes    from './routes/prices.js'
 import transferRoutes  from './routes/transfer.js'
 import { startPriceSync } from './prices/sync.js'
 import { startSteamSync } from './steam/sync.js'
+import { limitedApiBody, noStoreDynamicApi, sameOriginApi, shelfSecurityHeaders } from './security.js'
 import { startBackupScheduler } from './backup.js'
 
 const app = new Hono()
 
 app.use('*', logger())
-app.use('/api/*', cors())
+app.use('*', shelfSecurityHeaders)
+app.use('/api/*', sameOriginApi)
+app.use('/api/*', limitedApiBody)
+app.use('/api/*', noStoreDynamicApi)
 
 app.route('/api/search',   searchRoutes)
 app.route('/api/media',    mediaRoutes)

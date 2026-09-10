@@ -1297,7 +1297,9 @@ app.get('/', (c) => {
       api_key_set:      !!cfg('STEAM_API_KEY'),
       api_key_masked:   mask(cfg('STEAM_API_KEY')),
       cookie_set:       steamClient.steamCanWrite(),
-      session_id:       cfg('STEAM_SESSION_ID'),
+      login_secure_set: !!cfg('STEAM_LOGIN_SECURE'),
+      session_id_set:   !!cfg('STEAM_SESSION_ID'),
+      session_id_masked: mask(cfg('STEAM_SESSION_ID')),
       sync_mode:        (cfg('STEAM_SYNC_MODE') || 'both') as 'pull' | 'push' | 'both',
       sync_removals:    cfg('STEAM_SYNC_REMOVALS') === '1',
       running:          steamSyncRunning(),
@@ -1339,7 +1341,6 @@ app.patch('/', async (c) => {
     ['ITAD_COUNTRY', str(b.itad_country)?.toUpperCase().slice(0, 2)],
     ['STEAM_ENABLED', bool(b.steam_enabled)],
     ['STEAM_ID', str(b.steam_id)],
-    ['STEAM_SESSION_ID', str(b.steam_session_id)],
     ['STEAM_SYNC_MODE', ['pull', 'push', 'both'].includes(String(b.steam_sync_mode)) ? String(b.steam_sync_mode) : undefined],
     ['STEAM_SYNC_REMOVALS', bool(b.steam_sync_removals)],
   ]
@@ -1361,7 +1362,12 @@ app.patch('/', async (c) => {
   if (b.steam_api_key_clear === true) setCfg('STEAM_API_KEY', '')
   const steamCookie = str(b.steam_login_secure)
   if (steamCookie !== undefined && steamCookie !== '') setCfg('STEAM_LOGIN_SECURE', steamCookie)
-  if (b.steam_login_secure_clear === true) setCfg('STEAM_LOGIN_SECURE', '')
+  const steamSession = str(b.steam_session_id)
+  if (steamSession !== undefined && steamSession !== '') setCfg('STEAM_SESSION_ID', steamSession)
+  if (b.steam_cookies_clear === true) {
+    setCfg('STEAM_LOGIN_SECURE', '')
+    setCfg('STEAM_SESSION_ID', '')
+  }
   // credenciais do Kavita podem ter mudado → força re-autenticação no próximo ciclo
   kavitaToken = null
 
@@ -1381,7 +1387,11 @@ app.get('/activity', (c) => {
   const limit = Math.min(parseInt(c.req.query('limit') ?? '30'), 500)
   const source = c.req.query('source')
   const mediaType = c.req.query('media_type')
-  let sql = 'SELECT * FROM activity_events WHERE 1=1'
+  // `raw` é útil só para diagnóstico no servidor; o feed recebe apenas os
+  // campos normalizados que o frontend realmente usa.
+  let sql = `SELECT id, source, event_type, media_type, external_ref, title,
+                    subtitle, cover_url, rating, duration_ms, genre, occurred_at
+               FROM activity_events WHERE 1=1`
   const params: unknown[] = []
   if (source)    { sql += ' AND source = ?';     params.push(source) }
   if (mediaType) { sql += ' AND media_type = ?'; params.push(mediaType) }

@@ -77,6 +77,7 @@ O servidor, em produção, também serve o build estático do frontend (ver `ser
 |---|---|
 | `PORT` | Porta do servidor (default `3000`) |
 | `DATA_DIR` | Diretório do banco (default `./data`) |
+| `IMG_PROXY_ALLOWED_HOSTS` | Hosts HTTPS extras aceitos pelo proxy de capas, separados por vírgula |
 | `BACKUP_ENABLED` | `0` desativa os snapshots automáticos (default `1`) |
 | `BACKUP_DIR` | Diretório persistente dos snapshots (default `DATA_DIR/backups`) |
 | `BACKUP_INTERVAL_HOURS` | Intervalo entre snapshots automáticos (default `24`) |
@@ -114,6 +115,14 @@ O compose sobe o container na porta `3000` e persiste o banco em `/app/data` e o
 O Shelf cria um snapshot consistente pela Online Backup API do SQLite, abre a cópia com `PRAGMA quick_check` e só então publica o arquivo definitivo. Também cria uma cópia preventiva antes de atualizar um schema antigo e antes de aplicar importações. A tela **Importação/Exportação** mostra o último snapshot e permite criar um sob demanda.
 
 Saúde: `GET /api/health` → `{ "ok": true }`
+
+### Segurança de acesso
+
+O Shelf ainda é uma aplicação de instância única, sem login. Use-o apenas numa LAN confiável ou por uma VPN como o Tailscale; não publique a porta `3000` diretamente na internet. Se precisar colocá-lo atrás de um domínio público antes da autenticação multiusuário, aplique autenticação no reverse proxy.
+
+A API aceita navegadores apenas no mesmo host do Shelf e não habilita CORS. Clientes de webhook sem cabeçalho `Origin` continuam funcionando com o token próprio. Respostas dinâmicas da API não são gravadas no cache do navegador/service worker; chaves de API e cookies configurados são devolvidos à interface somente como estado e máscara. Os tokens que aparecem nas URLs de webhook são credenciais: compartilhe-os apenas com o Plex ou o Playnite correspondente.
+
+O proxy usado para desenhar capas nos Stories aceita apenas HTTPS dos provedores conhecidos. Para uma capa hospedada em outro serviço público, acrescente apenas o hostname necessário em `IMG_PROXY_ALLOWED_HOSTS`; endereços arbitrários e redirects para a rede interna são bloqueados.
 
 ## 🌐 API
 

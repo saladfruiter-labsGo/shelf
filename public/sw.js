@@ -1,8 +1,7 @@
 /* Shelved. service worker — app-shell + runtime caching */
-const VERSION = 'shelved-v1'
+const VERSION = 'shelved-v2'
 const SHELL = `${VERSION}-shell`
 const RUNTIME = `${VERSION}-runtime`
-const API = `${VERSION}-api`
 
 const SHELL_ASSETS = [
   '/',
@@ -53,17 +52,9 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
-  // API → network-first, cache fallback when offline
+  // Dados pessoais e segredos da API nunca são persistidos pelo service worker.
   if (sameOrigin && url.pathname.startsWith('/api/')) {
-    event.respondWith(
-      fetch(request)
-        .then((res) => {
-          const copy = res.clone()
-          caches.open(API).then((c) => c.put(request, copy))
-          return res
-        })
-        .catch(() => caches.match(request))
-    )
+    event.respondWith(fetch(request, { cache: 'no-store' }))
     return
   }
 

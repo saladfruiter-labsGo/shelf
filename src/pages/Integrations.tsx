@@ -2,9 +2,10 @@ import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../lib/api'
 import { timeAgo } from '../lib/utils'
+import type { SearchApiKey } from '../types'
 
 interface ApiEntry {
-  key: string
+  key: SearchApiKey
   label: string
   description: string
   docsUrl: string
@@ -35,11 +36,6 @@ const API_ENTRIES: ApiEntry[] = [
   },
 ]
 
-function maskKey(val: string): string {
-  if (!val || val.length <= 8) return val
-  return val.slice(0, 4) + '•'.repeat(Math.min(val.length - 8, 20)) + val.slice(-4)
-}
-
 /**
  * Integrações: as chaves de API que alimentam a busca e os serviços que
  * alimentam a biblioteca sozinhos (Plex, Last.fm, Kavita, Playnite, Steam,
@@ -62,24 +58,23 @@ export function Integrations() {
 function ApiKeysSection() {
   const qc = useQueryClient()
 
-  const { data: saved = {} } = useQuery({
+  const { data: saved } = useQuery({
     queryKey: ['settings'],
     queryFn: api.settings.get,
   })
 
   const [form, setForm] = useState<Record<string, string>>({})
+  const [cleared, setCleared] = useState<Record<string, boolean>>({})
   const [visible, setVisible] = useState<Record<string, boolean>>({})
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null)
-
-  useEffect(() => {
-    setForm(saved)
-  }, [saved])
 
   const mutation = useMutation({
     mutationFn: api.settings.update,
     onSuccess: (data) => {
       qc.setQueryData(['settings'], data)
-      setForm(data)
+      setForm({})
+      setCleared({})
+      setVisible({})
       setToast({ msg: 'Configurações salvas!', ok: true })
       setTimeout(() => setToast(null), 3000)
     },
@@ -90,9 +85,11 @@ function ApiKeysSection() {
   })
 
   const handleSave = () => {
-    const toSave: Record<string, string> = {}
+    const toSave: Record<string, unknown> = {}
     for (const entry of API_ENTRIES) {
-      toSave[entry.key] = form[entry.key] ?? ''
+      const value = form[entry.key]?.trim()
+      if (value) toSave[entry.key] = value
+      if (cleared[entry.key]) toSave[`${entry.key}_clear`] = true
     }
     mutation.mutate(toSave)
   }
@@ -107,8 +104,8 @@ function ApiKeysSection() {
       <div className="space-y-4">
         {API_ENTRIES.map((entry) => {
           const currentVal = form[entry.key] ?? ''
-          const savedVal   = saved[entry.key] ?? ''
-          const isConfigured = !!savedVal
+          const savedState = saved?.[entry.key]
+          const isConfigured = !!savedState?.set && !cleared[entry.key]
           const show = visible[entry.key] ?? false
 
           return (
@@ -144,8 +141,11 @@ function ApiKeysSection() {
                 <input
                   type={show ? 'text' : 'password'}
                   value={currentVal}
-                  onChange={(e) => setForm((f) => ({ ...f, [entry.key]: e.target.value }))}
-                  placeholder={isConfigured ? maskKey(savedVal) : entry.placeholder}
+                  onChange={(e) => {
+                    setForm((f) => ({ ...f, [entry.key]: e.target.value }))
+                    setCleared((state) => ({ ...state, [entry.key]: false }))
+                  }}
+                  placeholder={isConfigured ? savedState?.masked : entry.placeholder}
                   className="w-full bg-card border border-border rounded-lg px-3 py-2.5 pr-10 text-sm text-primary placeholder:text-muted outline-none focus:border-accent transition-colors font-mono"
                   autoComplete="off"
                   spellCheck={false}
@@ -170,13 +170,16 @@ function ApiKeysSection() {
               </div>
 
               {/* Clear button */}
-              {isConfigured && (
+              {(savedState?.set || cleared[entry.key]) && (
                 <button
                   type="button"
-                  onClick={() => setForm((f) => ({ ...f, [entry.key]: '' }))}
+                  onClick={() => {
+                    setForm((f) => ({ ...f, [entry.key]: '' }))
+                    setCleared((state) => ({ ...state, [entry.key]: !state[entry.key] }))
+                  }}
                   className="mt-1.5 text-xs text-muted hover:text-red-400 transition-colors"
                 >
-                  Remover chave
+                  {cleared[entry.key] ? 'Desfazer remoção' : 'Remover chave'}
                 </button>
               )}
             </div>
@@ -211,7 +214,7 @@ function ApiKeysSection() {
       {/* Info box */}
       <div className="mt-8 bg-card border border-border rounded-xl p-4 text-xs text-muted space-y-1">
         <p className="font-medium text-secondary">Sobre as chaves de API</p>
-        <p>As chaves são armazenadas no banco de dados local da aplicação. Elas nunca saem do seu servidor.</p>
+        <p>As chaves ficam no banco local e são usadas pelo servidor nas consultas aos provedores; os valores salvos nunca são devolvidos ao navegador.</p>
         <p>Você também pode configurá-las via variáveis de ambiente no arquivo <code className="bg-surface px-1 py-0.5 rounded font-mono">.env</code>. As chaves salvas aqui têm prioridade.</p>
       </div>
     </div>
@@ -293,7 +296,8 @@ function IntegrationsSection() {
       steam_id: status.steam.steam_id,
       steam_api_key: '',
       steam_login_secure: '',
-      steam_session_id: status.steam.session_id,
+      steam_session_id: '',
+      steam_cookies_clear: false,
       steam_sync_mode: status.steam.sync_mode,
       steam_sync_removals: status.steam.sync_removals,
       itad_enabled: status.prices.enabled,
@@ -319,7 +323,6 @@ function IntegrationsSection() {
         playnite_enabled: form.playnite_enabled,
         steam_enabled: form.steam_enabled,
         steam_id: form.steam_id,
-        steam_session_id: form.steam_session_id,
         steam_sync_mode: form.steam_sync_mode,
         steam_sync_removals: form.steam_sync_removals,
         itad_enabled: form.itad_enabled,
@@ -332,11 +335,17 @@ function IntegrationsSection() {
       if (form.itad_api_key)   payload.itad_api_key   = form.itad_api_key
       if (form.steam_api_key)  payload.steam_api_key  = form.steam_api_key
       if (form.steam_login_secure) payload.steam_login_secure = form.steam_login_secure
+      if (form.steam_session_id) payload.steam_session_id = form.steam_session_id
+      if (form.steam_cookies_clear) payload.steam_cookies_clear = true
       return api.integrations.update(payload)
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['integrations'] })
-      setForm(f => ({ ...f, plex_token: '', lastfm_api_key: '', kavita_api_key: '', itad_api_key: '', steam_api_key: '', steam_login_secure: '' }))
+      setForm(f => ({
+        ...f,
+        plex_token: '', lastfm_api_key: '', kavita_api_key: '', itad_api_key: '', steam_api_key: '',
+        steam_login_secure: '', steam_session_id: '', steam_cookies_clear: false,
+      }))
       setMsg('Integrações salvas!')
       setTimeout(() => setMsg(''), 3000)
     },
@@ -834,14 +843,26 @@ function IntegrationsSection() {
             <div>
               <label className="text-xs text-secondary mb-1 block">steamLoginSecure</label>
               <input className={inputCls + ' font-mono'} type="password" autoComplete="off"
-                placeholder={status?.steam.cookie_set ? '•••• (salvo)' : '76561198000000000%7C%7C...'}
-                value={String(form.steam_login_secure ?? '')} onChange={e => set('steam_login_secure')(e.target.value)} spellCheck={false} />
+                placeholder={status?.steam.login_secure_set ? '•••• (salvo)' : '76561198000000000%7C%7C...'}
+                value={String(form.steam_login_secure ?? '')}
+                onChange={e => setForm(f => ({ ...f, steam_login_secure: e.target.value, steam_cookies_clear: false }))}
+                spellCheck={false} />
             </div>
             <div>
               <label className="text-xs text-secondary mb-1 block">sessionid</label>
-              <input className={inputCls + ' font-mono'} autoComplete="off" placeholder="a1b2c3d4e5f6..."
-                value={String(form.steam_session_id ?? '')} onChange={e => set('steam_session_id')(e.target.value)} spellCheck={false} />
+              <input className={inputCls + ' font-mono'} type="password" autoComplete="off"
+                placeholder={status?.steam.session_id_set ? status.steam.session_id_masked : 'a1b2c3d4e5f6...'}
+                value={String(form.steam_session_id ?? '')}
+                onChange={e => setForm(f => ({ ...f, steam_session_id: e.target.value, steam_cookies_clear: false }))}
+                spellCheck={false} />
             </div>
+            {(status?.steam.login_secure_set || status?.steam.session_id_set) && (
+              <button type="button"
+                onClick={() => setForm(f => ({ ...f, steam_login_secure: '', steam_session_id: '', steam_cookies_clear: !f.steam_cookies_clear }))}
+                className="text-xs text-muted hover:text-red-400 transition-colors">
+                {form.steam_cookies_clear ? 'Desfazer remoção dos cookies' : 'Remover cookies salvos'}
+              </button>
+            )}
           </div>
         </details>
 
