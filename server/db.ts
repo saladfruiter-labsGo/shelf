@@ -1,15 +1,66 @@
 import Database from 'better-sqlite3'
 import path from 'path'
 import fs from 'fs'
+import { writeVerifiedDatabaseBackup } from './database-backup.js'
 
-const dataDir = process.env.DATA_DIR ?? './data'
+export const dataDir = path.resolve(process.env.DATA_DIR ?? './data')
 fs.mkdirSync(dataDir, { recursive: true })
 
-const dbPath = path.join(dataDir, 'shelf.db')
+export const dbPath = path.join(dataDir, 'shelf.db')
+const databaseExisted = fs.existsSync(dbPath) && fs.statSync(dbPath).size > 0
 export const db = new Database(dbPath)
 
 db.pragma('journal_mode = WAL')
 db.pragma('foreign_keys = ON')
+
+/**
+ * O schema anterior não tinha marcador de versão. Enquanto as migrations
+ * versionadas não chegam, detectamos qualquer estrutura antiga antes do primeiro
+ * DDL e guardamos uma cópia integral. Falhar o backup impede a migration.
+ */
+function schemaNeedsUpgrade(): boolean {
+  if (!databaseExisted) return false
+  const tables = new Set(
+    (db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all() as { name: string }[]).map(r => r.name),
+  )
+  if (!tables.has('media_items')) return false
+
+  const requiredTables = [
+    'settings', 'lists', 'list_items', 'list_tiers', 'activity_events', 'music_tracks',
+    'series_seasons', 'series_episodes', 'diary_entries', 'game_price_products',
+    'game_price_offers', 'game_price_history',
+  ]
+  if (requiredTables.some(table => !tables.has(table))) return true
+
+  const columns = (table: string) => new Set(
+    (db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map(r => r.name),
+  )
+  const media = columns('media_items')
+  const requiredMedia = [
+    'synopsis', 'creators', 'author', 'release_date', 'hype', 'completed_at', 'tmdb_id',
+    'original_filename', 'pages_total', 'pages_read', 'playtime_seconds', 'game_status',
+    'last_played_at', 'publisher', 'library', 'steam_appid', 'favorite',
+  ]
+  if (requiredMedia.some(column => !media.has(column))) return true
+
+  return !columns('lists').has('mode')
+    || !columns('lists').has('dim_seen')
+    || !columns('list_items').has('position')
+    || !columns('list_items').has('tier_id')
+    || !columns('diary_entries').has('season_number')
+    || !columns('diary_entries').has('episode_number')
+}
+
+if (schemaNeedsUpgrade()) {
+  const destination = path.resolve(process.env.BACKUP_DIR ?? path.join(dataDir, 'backups'))
+  try {
+    const backup = await writeVerifiedDatabaseBackup(db, destination, 'before-migration')
+    console.log(`[backup] snapshot antes da migration: ${backup.filename}`)
+  } catch (error) {
+    db.close()
+    throw new Error(`Não foi possível proteger o banco antes da migration: ${(error as Error).message}`)
+  }
+}
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS media_items (

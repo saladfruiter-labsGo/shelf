@@ -11,6 +11,7 @@ import {
 import { readZip, looksLikeZip, stripRoot } from '../transfer/zip.js'
 import { importSteamWishlist } from '../steam/sync.js'
 import * as steam from '../steam/client.js'
+import { backupStatus, createDatabaseBackup } from '../backup.js'
 
 const app = new Hono()
 
@@ -54,12 +55,28 @@ app.get('/export', (c) => {
 /** Prévia (contagens) sem baixar nada — alimenta a tela de exportação. */
 app.get('/export/summary', (c) => c.json(exportSummary()))
 
+/** Estado dos snapshots integrais e criação manual sob demanda. */
+app.get('/backup/status', async (c) => c.json(await backupStatus()))
+
+app.post('/backup', async (c) => {
+  try {
+    return c.json(await createDatabaseBackup('manual'), 201)
+  } catch (error) {
+    return c.json({ error: `Não foi possível criar o snapshot: ${(error as Error).message}` }, 500)
+  }
+})
+
 /* ─────────────────────────────── Importação ──────────────────────────────── */
 
 app.post('/import/shelf', async (c) => {
   const body = (await c.req.json().catch(() => null)) as { payload?: unknown; mode?: ImportMode } | null
   if (!body?.payload) return c.json({ error: 'Envie o conteúdo do arquivo em "payload".' }, 400)
   const mode: ImportMode = body.mode === 'replace' ? 'replace' : 'merge'
+  try {
+    await createDatabaseBackup('before-import')
+  } catch (error) {
+    return c.json({ error: `Importação cancelada porque o backup preventivo falhou: ${(error as Error).message}` }, 503)
+  }
   return c.json(importShelfBackup(body.payload as any, mode))
 })
 
@@ -204,12 +221,17 @@ app.post('/import/letterboxd/apply', async (c) => {
   const stored = plans.get(planId)
   if (!stored) return c.json({ error: 'A prévia expirou ou já foi usada. Envie o arquivo de novo.' }, 404)
 
-  plans.delete(planId)
+  try {
+    await createDatabaseBackup('before-import')
+  } catch (error) {
+    return c.json({ error: `Importação cancelada porque o backup preventivo falhou: ${(error as Error).message}` }, 503)
+  }
 
   try {
+    plans.delete(planId)
     return c.json(await applyLetterboxdPlan(stored.sources, stored.plan, { redo: body?.redo === true }))
-  } catch (e) {
-    return c.json({ error: (e as Error).message }, 400)
+  } catch (error) {
+    return c.json({ error: (error as Error).message }, 400)
   }
 })
 

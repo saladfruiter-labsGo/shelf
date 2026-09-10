@@ -7,8 +7,10 @@ services:
       - "3000:3000"
     volumes:
       - /mnt/user/appdata/shelf/data:/app/data
+      - /mnt/user/appdata/shelf/backups:/app/backups
     env_file:
       - .env
     environment:
       - PORT=3000
       - DATA_DIR=/app/data
+      - BACKUP_DIR=/app/backups

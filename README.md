@@ -15,7 +15,7 @@ Um app de biblioteca pessoal para rastrear **filmes, séries, games e livros** e
 - **Tema claro/escuro** — alternável, com preferência salva no navegador.
 - **Wrap** — relatório anual ou mensal gerado como imagem (canvas 1080×1920, formato de story) com suas estatísticas do período: totais por tipo, nota média, top itens e linha do tempo de atividade.
 - **Configurações** — preferências do app (tema). As chaves de API e os serviços conectados moram em **Integrações**.
-- **Importação/Exportação** — exporta biblioteca, backlog ou tudo em **JSON** (backup completo e re-importável: itens, diário, temporadas/episódios e listas) ou **CSV** (uma linha por item, para planilha). Importa o **Letterboxd** (`diary`, `ratings`, `watched`, `watchlist` — cada filme é casado com o TMDB, então o card importado é o mesmo que o Plex e a busca manual usam) e a **wishlist da Steam** (uma passada avulsa para o backlog). Reimportar não duplica nada, e a `watchlist` nunca rebaixa um filme já assistido de volta ao backlog.
+- **Proteção e portabilidade** — cria snapshots integrais e verificados do SQLite, com retenção automática, e exporta biblioteca, backlog ou tudo em **JSON v2** (itens, diário, séries, listas/tierlists, atividade musical e preços, sem credenciais) ou **CSV**. Importa exports v1/v2 do Shelf, o **Letterboxd** (`diary`, `ratings`, `watched`, `watchlist`) e a **wishlist da Steam**. Reimportar não duplica nada, e a `watchlist` nunca rebaixa um filme já assistido de volta ao backlog.
 - **Steam (backlog bidirecional)** — mantém a wishlist da Steam e o backlog de jogos do Shelf em sincronia nos dois sentidos, a cada 6 horas. **A Steam mexe só no backlog** — jogo consumido é assunto do Playnite. Detalhes em [Steam: o que sincroniza e o que exige cookie](#steam-o-que-sincroniza-e-o-que-exige-cookie).
 - **Integrações** — as chaves de API (TMDB, RAWG, Google Books) ficam salvas no próprio banco, sem depender só do ambiente. Monitoramento automático via **Plex** (webhook: registra o que foi assistido até o fim e a nota dada) e **YouTube Music via Last.fm** (registra músicas ouvidas, com horas e gêneros). Uma barra "assistindo agora" sob a navbar mostra a reprodução do Plex em tempo real, com progresso. Notificações via **Telegram** avisam sobre atividades da biblioteca (adicionado, concluído, abandonado, nota) — apenas filmes, séries, games e livros.
 - **Preços do backlog** — jogos de PC marcados como backlog têm o preço acompanhado no [IsThereAnyDeal](https://isthereanydeal.com/) na região configurada (padrão `BR`). A **home abre com as promoções do backlog**; o card do backlog mostra a melhor oferta, o desconto e o selo de menor histórico; e a página do jogo traz os indicadores (melhor preço, menor histórico, menor do mês, menor em 30 dias), gráfico do menor preço por dia — com tabela equivalente para leitores de tela —, a **lista completa de lojas** (preço atual, menor histórico daquela loja e há quanto tempo cada um foi visto, inclusive de lojas que já não ofertam) e correspondência manual quando a edição é ambígua. Sincroniza a cada 6 horas.
@@ -78,6 +78,12 @@ O servidor, em produção, também serve o build estático do frontend (ver `ser
 | `PORT` | Porta do servidor (default `3000`) |
 | `DATA_DIR` | Diretório do banco (default `./data`) |
 | `IMG_PROXY_ALLOWED_HOSTS` | Hosts HTTPS extras aceitos pelo proxy de capas, separados por vírgula |
+| `BACKUP_ENABLED` | `0` desativa os snapshots automáticos (default `1`) |
+| `BACKUP_DIR` | Diretório persistente dos snapshots (default `DATA_DIR/backups`) |
+| `BACKUP_INTERVAL_HOURS` | Intervalo entre snapshots automáticos (default `24`) |
+| `BACKUP_RETENTION_DAYS` | Janela de snapshots diários (default `14`) |
+| `BACKUP_RETENTION_WEEKLY` | Quantidade de semanas preservadas (default `8`) |
+| `BACKUP_RETENTION_SAFETY` | Cópias manuais/pré-importação preservadas por tipo (default `5`) |
 | `TMDB_API_KEY` | Chave do TMDB (filmes e séries) |
 | `RAWG_API_KEY` | Chave do RAWG (games) |
 | `GOOGLE_BOOKS_KEY` | Chave do Google Books (livros) |
@@ -104,7 +110,9 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
-O compose sobe o container na porta `3000` e persiste os dados em um volume em `/app/data` (mapeado, no exemplo, para `/mnt/user/appdata/shelf/data` — ajuste conforme seu host).
+O compose sobe o container na porta `3000` e persiste o banco em `/app/data` e os snapshots integrais em `/app/backups`. No exemplo, ambos ficam sob `/mnt/user/appdata/shelf`; inclua a pasta `backups` na sua cópia externa do appdata. Snapshots no mesmo servidor protegem contra corrupção e importações ruins, mas não substituem uma cópia em outro dispositivo.
+
+O Shelf cria um snapshot consistente pela Online Backup API do SQLite, abre a cópia com `PRAGMA quick_check` e só então publica o arquivo definitivo. Também cria uma cópia preventiva antes de atualizar um schema antigo e antes de aplicar importações. A tela **Importação/Exportação** mostra o último snapshot e permite criar um sob demanda.
 
 Saúde: `GET /api/health` → `{ "ok": true }`
 
@@ -131,6 +139,8 @@ O proxy usado para desenhar capas nos Stories aceita apenas HTTPS dos provedores
 | `GET/PATCH /api/integrations` | Status e configuração de Plex/Last.fm/Telegram/Kavita/Playnite/Steam/preços |
 | `GET /api/transfer/export?scope=&format=` | Baixa o export (`scope`: `all`, `library`, `backlog`; `format`: `json`, `csv`) |
 | `GET /api/transfer/export/summary` | Contagens por escopo, para a tela de exportação |
+| `GET /api/transfer/backup/status` | Estado, retenção e último snapshot integral |
+| `POST /api/transfer/backup` | Cria e verifica um snapshot integral sob demanda |
 | `POST /api/transfer/import/shelf` | Restaura um export JSON do Shelf (`mode`: `merge` ou `replace`) |
 | `POST /api/transfer/import/letterboxd` | Importa um CSV do Letterboxd (`kind`: `diary`, `ratings`, `watched`, `watchlist`) |
 | `POST /api/transfer/import/letterboxd/detect` | Detecta o tipo do CSV pelo cabeçalho e pelo nome do arquivo |

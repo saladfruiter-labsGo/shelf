@@ -284,6 +284,25 @@ export interface ImportReport {
   diary:      number
   unresolved: string[]
   errors:     string[]
+  restored?:  { lists: number; activity: number; tracks: number; prices: number }
+}
+
+export interface DatabaseBackupInfo {
+  filename:    string
+  reason:      'automatic' | 'before-import' | 'before-migration' | 'manual'
+  created_at:  string
+  size_bytes:  number
+}
+
+export interface BackupStatus {
+  enabled:        boolean
+  directory:      string
+  interval_hours: number
+  retention:      { daily_days: number; weekly_weeks: number; safety_copies: number }
+  latest:         DatabaseBackupInfo | null
+  count:          number
+  running:        boolean
+  last_error:     { at: string; message: string } | null
 }
 
 /* ── Letterboxd: prévia antes de escrever, e o resultado depois ── */
