@@ -623,6 +623,7 @@ function IntegrationsSection() {
 
         <p className="text-xs text-muted mb-4">
           Recebe no Telegram as atividades da sua biblioteca — adicionado, concluído, abandonado e notas.
+          Conclusões sem nota chegam com botões de meia a 5 estrelas para avaliar sem abrir o Shelf.
           Só filmes, séries, games e livros. Crie um bot com o <a href="https://t.me/BotFather" target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">@BotFather</a> e cole o token abaixo.
         </p>
 

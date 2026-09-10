@@ -80,7 +80,7 @@ app.post('/:id/watched-batch', async (c) => {
       for (const e of list) insert.run(id, watchedAt, rating, comment, e.season_number, e.episode_number)
     })
     tx(episodes)
-    notifyLibraryActivity({ event: 'completed', type: 'series', title: item.title, rating: rating ?? item.rating })
+    notifyLibraryActivity({ event: 'completed', type: 'series', title: item.title, rating: rating ?? item.rating, mediaItemId: item.id })
   }
 
   return c.json(getSeriesView(id))

@@ -15,6 +15,7 @@ import plexLiveIntegrationRoutes, { getPlexNowPlaying, pollPlexSessions } from '
 import plexWebhookIntegrationRoutes, { ensurePlexWebhookSecret } from './integrations/plex-webhook.js'
 import priceIntegrationRoutes from './integrations/prices.js'
 import steamIntegrationRoutes from './integrations/steam.js'
+import { pollTelegramRatings } from '../telegram-rating.js'
 
 const app = new Hono()
 app.route('/', kavitaIntegrationRoutes)
@@ -31,15 +32,17 @@ app.route('/', steamIntegrationRoutes)
 let plexBusy = false
 let lastfmBusy = false
 let kavitaBusy = false
+let telegramBusy = false
 let pollTimers: NodeJS.Timeout[] = []
 const activePolls = new Set<Promise<void>>()
 
-function runPoll(name: 'plex' | 'lastfm' | 'kavita', poll: () => Promise<void>): void {
-  const busy = name === 'plex' ? plexBusy : name === 'lastfm' ? lastfmBusy : kavitaBusy
+function runPoll(name: 'plex' | 'lastfm' | 'kavita' | 'telegram', poll: () => Promise<void>): void {
+  const busy = name === 'plex' ? plexBusy : name === 'lastfm' ? lastfmBusy : name === 'kavita' ? kavitaBusy : telegramBusy
   if (busy) return
   if (name === 'plex') plexBusy = true
   else if (name === 'lastfm') lastfmBusy = true
-  else kavitaBusy = true
+  else if (name === 'kavita') kavitaBusy = true
+  else telegramBusy = true
 
   let task: Promise<void>
   task = poll()
@@ -47,7 +50,8 @@ function runPoll(name: 'plex' | 'lastfm' | 'kavita', poll: () => Promise<void>):
     .finally(() => {
       if (name === 'plex') plexBusy = false
       else if (name === 'lastfm') lastfmBusy = false
-      else kavitaBusy = false
+      else if (name === 'kavita') kavitaBusy = false
+      else telegramBusy = false
       activePolls.delete(task)
     })
   activePolls.add(task)
@@ -64,6 +68,7 @@ export function startIntegrationPolling(): void {
   every(5_000, () => runPoll('plex', pollPlexSessions))
   every(30_000, () => runPoll('lastfm', pollLastfm))
   every(60_000, () => runPoll('kavita', pollKavita))
+  every(10_000, () => runPoll('telegram', pollTelegramRatings))
 }
 
 /** Para novos polls e aguarda os que já estavam falando com os provedores. */
@@ -173,7 +178,10 @@ app.patch('/', async (c) => {
   if (tk !== undefined && tk !== '') setCfg('PLEX_TOKEN', tk)
   if (b.plex_token_clear === true) setCfg('PLEX_TOKEN', '')
   const bot = str(b.telegram_bot_token)
-  if (bot !== undefined && bot !== '') setCfg('TELEGRAM_BOT_TOKEN', bot)
+  if (bot !== undefined && bot !== '') {
+    if (bot !== cfg('TELEGRAM_BOT_TOKEN')) setCfg('TELEGRAM_UPDATE_OFFSET', '0')
+    setCfg('TELEGRAM_BOT_TOKEN', bot)
+  }
   const kavitaKey = str(b.kavita_api_key)
   if (kavitaKey !== undefined && kavitaKey !== '') setCfg('KAVITA_API_KEY', kavitaKey)
   if (b.kavita_api_key_clear === true) setCfg('KAVITA_API_KEY', '')

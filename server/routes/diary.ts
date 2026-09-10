@@ -61,7 +61,7 @@ app.post('/', async (c) => {
     WHERE id = ?
   `).run(watched_at, watched_at, rating, rating, mediaId)
 
-  notifyLibraryActivity({ event: 'completed', type: media.type, title: media.title, rating: rating ?? media.rating })
+  notifyLibraryActivity({ event: 'completed', type: media.type, title: media.title, rating: rating ?? media.rating, mediaItemId: media.id })
 
   const created = db.prepare(`${SELECT_ENTRY} WHERE d.id = ?`).get(res.lastInsertRowid)
   return c.json(created, 201)

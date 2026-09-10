@@ -138,7 +138,7 @@ app.post('/playnite/webhook', async (c) => {
       cover_url: coverUrl, rating: rating || null, genre, occurred_at: lastPlayedIso ?? nowIso,
     })
     insertDiary.run(row.id, lastPlayedIso ?? nowIso, rating || null)
-    notifyLibraryActivity({ event: 'completed', type: 'game', title: name, rating: rating || null })
+    notifyLibraryActivity({ event: 'completed', type: 'game', title: name, rating: row.rating || null, mediaItemId: row.id })
   } else if (!previous && gameStatus === 'jogando') {
     insertActivity.run({
       source: 'playnite', event_type: 'playing', external_ref: externalId, title: name,

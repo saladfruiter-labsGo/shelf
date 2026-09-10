@@ -246,7 +246,7 @@ app.patch('/:id', async (c) => {
   // Notifica mudança de status (concluído, abandonado, ...) e/ou nova nota
   if (before) {
     if (fields.includes('status') && before.status !== item.status) {
-      notifyLibraryActivity({ event: item.status, type: item.type, title: item.title, rating: item.rating })
+      notifyLibraryActivity({ event: item.status, type: item.type, title: item.title, rating: item.rating, mediaItemId: item.id })
     }
     if (fields.includes('rating') && before.rating !== item.rating && item.rating > 0) {
       notifyLibraryActivity({ event: 'rated', type: item.type, title: item.title, rating: item.rating })

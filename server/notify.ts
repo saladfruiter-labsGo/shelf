@@ -1,4 +1,5 @@
 import { db } from './db.js'
+import { telegramRatingKeyboard } from './telegram-rating.js'
 
 /* Base da API do Telegram (sobrescrevível em testes via env). */
 const TG_BASE = process.env.TELEGRAM_API_BASE ?? 'https://api.telegram.org'
@@ -40,7 +41,10 @@ export function notifiableType(type: string): boolean {
 }
 
 /** Envia texto (HTML) ao Telegram usando a config salva. Fire-and-forget. */
-export async function sendTelegram(text: string): Promise<{ ok: boolean; error?: string }> {
+export async function sendTelegram(
+  text: string,
+  options?: { replyMarkup?: Record<string, unknown> },
+): Promise<{ ok: boolean; error?: string }> {
   const token = cfg('TELEGRAM_BOT_TOKEN')
   const chatId = cfg('TELEGRAM_CHAT_ID')
   const threadId = cfg('TELEGRAM_THREAD_ID')
@@ -49,6 +53,7 @@ export async function sendTelegram(text: string): Promise<{ ok: boolean; error?:
     const payload: Record<string, unknown> = { chat_id: chatId, text, parse_mode: 'HTML', disable_web_page_preview: true }
     // Tópico de grupo (modo fórum) — só inclui se for um id numérico válido
     if (threadId && /^\d+$/.test(threadId)) payload.message_thread_id = Number(threadId)
+    if (options?.replyMarkup) payload.reply_markup = options.replyMarkup
     const r = await fetch(`${TG_BASE}/bot${token}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -99,6 +104,7 @@ export function notifyLibraryActivity(opts: {
   type: string
   title: string
   rating?: number | null
+  mediaItemId?: number
 }) {
   if (cfg('TELEGRAM_ENABLED') !== '1') return
   if (!notifiableType(opts.type)) return
@@ -117,5 +123,8 @@ export function notifyLibraryActivity(opts: {
   const text = `${emoji} <b>${esc(action)}</b>\n${typeLabel}: <b>${esc(opts.title)}</b>${stars}`
 
   // fire-and-forget
-  sendTelegram(text).catch(() => {})
+  const replyMarkup = opts.event === 'completed' && !opts.rating && opts.mediaItemId
+    ? telegramRatingKeyboard(opts.mediaItemId)
+    : undefined
+  sendTelegram(text, { replyMarkup }).catch(() => {})
 }
