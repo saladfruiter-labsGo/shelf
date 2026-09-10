@@ -123,7 +123,16 @@ app.post('/', async (c) => {
     notifyLibraryActivity({ event: 'added', type: created.type, title: created.title, rating: created.rating })
     return c.json(created, 201)
   } catch (e: any) {
-    if (e.message?.includes('UNIQUE')) return c.json({ error: 'Already in library' }, 409)
+    if (e.message?.includes('UNIQUE')) {
+      const existing = db.prepare(
+        'SELECT status FROM media_items WHERE external_id = ? AND type = ?',
+      ).get(external_id, type) as { status: string } | undefined
+      return c.json({
+        error: existing?.status === 'wishlist'
+          ? 'Esta mídia já está no Backlog.'
+          : 'Esta mídia já está na biblioteca.',
+      }, 409)
+    }
     throw e
   }
 })

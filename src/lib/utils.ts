@@ -44,7 +44,11 @@ export const GAME_STATUS_STYLE: Record<GameStatus, { color: string; bg: string }
 
 /** game_status do item; se ausente (jogo adicionado à mão), deriva do status base. */
 export function gameStatusOf(item: Pick<MediaItem, 'game_status' | 'status'>): GameStatus {
-  if (item.game_status) return item.game_status
+  // Bancos antigos podem conter valores que não pertencem mais ao domínio.
+  // Não deixe um valor externo quebrar o acesso aos mapas de label/estilo.
+  if (item.game_status && Object.prototype.hasOwnProperty.call(GAME_STATUS_LABEL, item.game_status)) {
+    return item.game_status
+  }
   switch (item.status) {
     case 'completed': return 'zerado'
     case 'dropped':   return 'abandonado'
@@ -79,7 +83,14 @@ export function cn(...classes: (string | false | null | undefined)[]): string {
 }
 
 export function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })
+  const dateOnly = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  const date = dateOnly
+    ? new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]))
+    : new Date(iso)
+  // A Steam pode enviar datas textuais como "Coming Soon" ou "Q4 2026".
+  // Preserve esse valor em vez de expor "Invalid Date" na interface.
+  if (Number.isNaN(date.getTime())) return iso.trim() || '—'
+  return date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
 /** Data de hoje no formato YYYY-MM-DD (local), para inputs type="date". */
