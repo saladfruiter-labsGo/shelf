@@ -1,6 +1,11 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mapPlexMetadata, originalFilenameFromPlex, tmdbIdFromGuid } from '../plex.js'
+import {
+  mapPlexMetadata,
+  originalFilenameFromPlex,
+  plexEventOccurredAt,
+  tmdbIdFromGuid,
+} from '../plex.js'
 
 test('extrai id TMDB dos formatos de guid usados pelo Plex', () => {
   assert.equal(tmdbIdFromGuid('tmdb://550'), '550')
@@ -41,4 +46,15 @@ test('normaliza episódio para a série e preserva o episódio no subtítulo', (
     external_ref: 'plex://episode/2',
     kind: 'episode',
   })
+})
+
+test('usa o timestamp estável do Plex para identificar retries', () => {
+  assert.equal(
+    plexEventOccurredAt({ lastViewedAt: 1_789_038_000 }),
+    '2026-09-10T11:00:00.000Z',
+  )
+  assert.equal(
+    plexEventOccurredAt({}, new Date('2026-09-10T12:00:00.000Z')),
+    '2026-09-10T12:00:00.000Z',
+  )
 })
