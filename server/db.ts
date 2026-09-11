@@ -27,7 +27,7 @@ function schemaNeedsUpgrade(): boolean {
   if (!tables.has('media_items')) return false
 
   const requiredTables = [
-    'settings', 'lists', 'list_items', 'list_tiers', 'activity_events', 'music_tracks',
+    'settings', 'lists', 'list_items', 'list_tiers', 'list_only_items', 'activity_events', 'music_tracks',
     'series_seasons', 'series_episodes', 'diary_entries', 'diary_progress', 'game_price_products',
     'game_price_offers', 'game_price_history',
   ]
@@ -410,6 +410,33 @@ db.exec(`
 
       CREATE INDEX IF NOT EXISTS idx_diary_progress_pending
         ON diary_progress(progress_day, finalized_at);
+    `)
+  },
+}, {
+  version: 5,
+  name: 'isolated-list-media',
+  up: () => {
+    // Resultados pesquisados dentro de uma lista não são mídia da biblioteca:
+    // guardamos um snapshot local da obra, pertencente somente àquela lista.
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS list_only_items (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        list_id      INTEGER NOT NULL REFERENCES lists(id) ON DELETE CASCADE,
+        external_id  TEXT    NOT NULL,
+        type         TEXT    NOT NULL CHECK (type IN ('movie', 'series', 'game', 'book', 'music')),
+        title        TEXT    NOT NULL,
+        cover_url    TEXT,
+        year         INTEGER,
+        genre        TEXT,
+        author       TEXT,
+        release_date TEXT,
+        position     INTEGER NOT NULL DEFAULT 0,
+        tier_id      INTEGER REFERENCES list_tiers(id) ON DELETE SET NULL,
+        added_at     TEXT    NOT NULL DEFAULT (datetime('now')),
+        UNIQUE(list_id, external_id, type)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_list_only_list ON list_only_items(list_id, position);
     `)
   },
 }]

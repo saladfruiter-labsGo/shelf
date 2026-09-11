@@ -49,6 +49,11 @@ test('export v2 restaura tiers, atividade musical e histórico de preços sem cr
   db.prepare(`
     INSERT INTO list_items (list_id, media_item_id, position, tier_id) VALUES (?, ?, 3, ?)
   `).run(listId, mediaId, tierId)
+  db.prepare(`
+    INSERT INTO list_only_items
+      (list_id, external_id, type, title, cover_url, year, genre, position, tier_id)
+    VALUES (?, 'tmdb-only-1', 'movie', 'Filme só da lista', 'https://example.test/poster.jpg', 2024, 'Drama', 4, ?)
+  `).run(listId, tierId)
 
   db.prepare(`
     INSERT INTO activity_events
@@ -95,6 +100,14 @@ test('export v2 restaura tiers, atividade musical e histórico de preços sem cr
   }])
   assert.equal((exported.lists[0] as any).tiers[0].name, 'S')
   assert.equal((exported.lists[0] as any).items[0].tier_key, (exported.lists[0] as any).tiers[0].key)
+  assert.deepEqual((exported.lists[0] as any).items[1], {
+    external_id: 'tmdb-only-1', type: 'movie', position: 4,
+    tier_key: (exported.lists[0] as any).tiers[0].key,
+    added_at: (exported.lists[0] as any).items[1].added_at,
+    list_only: true, title: 'Filme só da lista',
+    cover_url: 'https://example.test/poster.jpg', year: 2024,
+    genre: 'Drama', author: null, release_date: null,
+  })
   assert.equal(exported.lists.some((list: any) => list.name === 'Lista vazia' && list.items.length === 0), true)
 
   db.exec(`
@@ -103,6 +116,7 @@ test('export v2 restaura tiers, atividade musical e histórico de preços sem cr
     DELETE FROM game_price_products;
     DELETE FROM diary_entries;
     DELETE FROM list_items;
+    DELETE FROM list_only_items;
     DELETE FROM list_tiers;
     DELETE FROM lists;
     DELETE FROM activity_events;
@@ -131,10 +145,19 @@ test('export v2 restaura tiers, atividade musical e histórico de preços sem cr
     `).get(),
     { mode: 'tier', dim_seen: 1, tier: 'S', position: 3 },
   )
+  assert.deepEqual(db.prepare(`
+    SELECT loi.external_id, loi.title, loi.year, loi.genre, loi.position, t.name AS tier
+      FROM list_only_items loi
+      JOIN list_tiers t ON t.id = loi.tier_id
+  `).get(), {
+    external_id: 'tmdb-only-1', title: 'Filme só da lista', year: 2024,
+    genre: 'Drama', position: 4, tier: 'S',
+  })
   assert.equal((db.prepare('SELECT play_count FROM music_tracks').get() as any).play_count, 7)
   assert.equal((db.prepare('SELECT COUNT(*) n FROM activity_events').get() as any).n, 1)
   assert.equal((db.prepare('SELECT COUNT(*) n FROM game_price_offers').get() as any).n, 1)
   assert.equal((db.prepare('SELECT COUNT(*) n FROM game_price_history').get() as any).n, 1)
+  assert.equal((db.prepare('SELECT COUNT(*) n FROM list_only_items').get() as any).n, 1)
 
   // Reimportar é idempotente para estruturas auxiliares.
   const again = importShelfBackup(exported, 'replace')

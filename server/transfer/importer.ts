@@ -10,6 +10,7 @@
  */
 import type { Statement } from 'better-sqlite3'
 import { db } from '../db.js'
+import { isMediaType } from '../media-domain.js'
 import { tmdbMovieLookup } from '../routes/search.js'
 import {
   parseLetterboxd, letterboxdSlug,
@@ -287,10 +288,57 @@ export function importShelfBackup(payload: ShelfBackup, mode: ImportMode = 'merg
       }
 
       // A ordem do arquivo é a ordem da lista — vira `position` (usada no ranking).
-      const maxPos = db.prepare('SELECT MAX(position) AS max FROM list_items WHERE list_id = ?')
-        .get(list.id) as { max: number | null }
+      const maxPos = db.prepare(`
+        SELECT MAX(position) AS max
+        FROM (
+          SELECT position FROM list_items WHERE list_id = ?
+          UNION ALL
+          SELECT position FROM list_only_items WHERE list_id = ?
+        )
+      `).get(list.id, list.id) as { max: number | null }
       let pos = (maxPos.max ?? -1) + 1
       for (const li of l.items ?? []) {
+        if (li.list_only) {
+          const externalId = String(li.external_id ?? '').trim()
+          const type = String(li.type ?? '').trim()
+          const title = String(li.title ?? '').trim()
+          if (!externalId || !title || !isMediaType(type)) continue
+
+          const filePosition = Number.isFinite(Number(li.position)) ? Number(li.position) : pos
+          const position = created || mode === 'replace' ? filePosition : pos
+          const tierId = li.tier_key == null ? null : (tierIds.get(String(li.tier_key)) ?? null)
+          const existingOnly = db.prepare(
+            'SELECT id FROM list_only_items WHERE list_id = ? AND external_id = ? AND type = ?',
+          ).get(list.id, externalId, type) as { id: number } | undefined
+
+          if (!existingOnly) {
+            db.prepare(`
+              INSERT INTO list_only_items
+                (list_id, external_id, type, title, cover_url, year, genre, author, release_date, position, tier_id, added_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, datetime('now')))
+            `).run(
+              list.id, externalId, type, title, li.cover_url ?? null,
+              Number.isInteger(li.year) ? li.year : null,
+              li.genre ?? null, li.author ?? null, li.release_date ?? null,
+              position, tierId, li.added_at ?? null,
+            )
+            pos = Math.max(pos, position + 1)
+          } else if (mode === 'replace') {
+            db.prepare(`
+              UPDATE list_only_items
+                 SET title = ?, cover_url = ?, year = ?, genre = ?, author = ?,
+                     release_date = ?, position = ?, tier_id = ?
+               WHERE id = ? AND list_id = ?
+            `).run(
+              title, li.cover_url ?? null, Number.isInteger(li.year) ? li.year : null,
+              li.genre ?? null, li.author ?? null, li.release_date ?? null,
+              position, tierId, existingOnly.id, list.id,
+            )
+          }
+          pos = Math.max(pos, position + 1)
+          continue
+        }
+
         const item = findItem.get(String(li.external_id ?? ''), String(li.type ?? '')) as { id: number } | undefined
         if (!item) continue
         const filePosition = Number.isFinite(Number(li.position)) ? Number(li.position) : pos

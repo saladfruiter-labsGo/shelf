@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../lib/api'
 import { MODES, MODE_LABEL } from '../lib/lists'
 import { TYPE_LABEL, timeAgoLong } from '../lib/utils'
+import { ConfirmDialog } from '../components/ConfirmDialog'
 import type { List, ListMode, MediaType } from '../types'
 import { imageUrl } from '../lib/images'
 
@@ -45,6 +46,7 @@ export function Lists() {
   const [name, setName] = useState('')
   const [desc, setDesc] = useState('')
   const [mode, setMode] = useState<ListMode>('list')
+  const [deleting, setDeleting] = useState<List | null>(null)
 
   const createMutation = useMutation({
     mutationFn: () => api.lists.create({ name: name.trim(), description: desc.trim() || undefined, mode }),
@@ -59,7 +61,10 @@ export function Lists() {
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => api.lists.remove(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['lists'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['lists'] })
+      setDeleting(null)
+    },
   })
 
   const total = lists.reduce((sum, l) => sum + (l.item_count ?? 0), 0)
@@ -186,7 +191,7 @@ export function Lists() {
                   </div>
                 </Link>
                 <button
-                  onClick={() => { if (confirm(`Excluir "${list.name}"?`)) deleteMutation.mutate(list.id) }}
+                  onClick={() => { deleteMutation.reset(); setDeleting(list) }}
                   title={`Excluir ${list.name}`}
                   aria-label={`Excluir ${list.name}`}
                   className="row-fade"
@@ -199,6 +204,22 @@ export function Lists() {
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        open={!!deleting}
+        title="Excluir lista"
+        message={deletingMutationMessage(deleting, deleteMutation.error)}
+        confirmLabel="Excluir"
+        danger
+        busy={deleteMutation.isPending}
+        onCancel={() => { if (!deleteMutation.isPending) setDeleting(null) }}
+        onConfirm={() => { if (deleting) deleteMutation.mutate(deleting.id) }}
+      />
     </div>
   )
+}
+
+function deletingMutationMessage(list: List | null, error: unknown): string {
+  if (error instanceof Error) return `Não foi possível excluir a lista: ${error.message}`
+  return list ? `Excluir "${list.name}" e todos os itens associados? Esta ação não pode ser desfeita.` : ''
 }

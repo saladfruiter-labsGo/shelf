@@ -154,18 +154,36 @@ export function buildExport(scope: ExportScope): ShelfExport {
       tiers: tierRows.map(t => ({ key: tierKeys.get(t.id), name: t.name, color: t.color, position: t.position })),
       // A ordem e o tier usam referências portáteis, nunca ids internos.
       items: (db.prepare(
-        `SELECT m.external_id, m.type, li.position, li.tier_id, li.added_at
+        `SELECT m.external_id, m.type, li.position, li.tier_id, li.added_at,
+                0 AS list_only, NULL AS title, NULL AS cover_url, NULL AS year,
+                NULL AS genre, NULL AS author, NULL AS release_date
            FROM list_items li
            JOIN media_items m ON m.id = li.media_item_id
-          WHERE li.list_id = ? ORDER BY li.position, li.id`,
-      ).all(l.id) as any[])
-        .filter(i => exported.has(`${i.type}::${i.external_id}`))
+          WHERE li.list_id = ?
+          UNION ALL
+         SELECT loi.external_id, loi.type, loi.position, loi.tier_id, loi.added_at,
+                1 AS list_only, loi.title, loi.cover_url, loi.year,
+                loi.genre, loi.author, loi.release_date
+           FROM list_only_items loi
+          WHERE loi.list_id = ?
+          ORDER BY position, added_at`,
+      ).all(l.id, l.id) as any[])
+        .filter(i => i.list_only ? scope === 'all' : exported.has(`${i.type}::${i.external_id}`))
         .map(i => ({
           external_id: i.external_id,
           type: i.type,
           position: i.position,
           tier_key: i.tier_id == null ? null : (tierKeys.get(i.tier_id) ?? null),
           added_at: i.added_at,
+          ...(i.list_only ? {
+            list_only: true,
+            title: i.title,
+            cover_url: i.cover_url,
+            year: i.year,
+            genre: i.genre,
+            author: i.author,
+            release_date: i.release_date,
+          } : {}),
         })),
     }
   }).filter(l => scope === 'all' || l.items.length > 0)
