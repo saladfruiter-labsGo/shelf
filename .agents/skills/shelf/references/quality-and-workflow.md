@@ -60,7 +60,7 @@ O modelo atual é instância única privada por LAN/Tailscale, sem login. Preser
 - webhooks sem `Origin` autenticados por secret próprio;
 - limites de corpo, headers defensivos e `Cache-Control: no-store` na API dinâmica;
 - segredos mascarados na resposta e ausentes de exports portáveis;
-- proxy de imagens com HTTPS allowlist, revalidação de redirects e limite de corpo;
+- proxy de imagens com HTTPS allowlist, revalidação de redirects, limite de corpo e cache persistente fora do SQLite;
 - processo Docker sem root, healthcheck e shutdown gracioso.
 
 Não introduza autenticação improvisada em uma rota isolada. Multiusuário exigirá modelo completo de identidade, autorização e ownership; está deliberadamente adiado.

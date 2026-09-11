@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import type { MediaItem } from '../types'
 import { fmtRating } from '../lib/utils'
+import { imageUrl } from '../lib/images'
 import { StarRating } from './StarRating'
 import { useMediaPreview } from './MediaSummaryModal'
 
@@ -43,7 +44,7 @@ function Poster({ item }: { item: MediaItem }) {
       >
         {showImg ? (
           <img
-            src={item.cover_url!}
+            src={imageUrl(item.cover_url, 640)!}
             alt={item.title}
             loading="lazy"
             draggable={false}

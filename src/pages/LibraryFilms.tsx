@@ -6,6 +6,7 @@ import { LibrarySearch } from '../components/LibrarySearch'
 import { Pager, usePagination } from '../components/Pager'
 import { useMediaPreview } from '../components/MediaSummaryModal'
 import { norm } from '../lib/utils'
+import { imageUrl } from '../lib/images'
 
 export function LibraryFilms() {
   const navigate = useNavigate()
@@ -94,7 +95,7 @@ export function LibraryFilms() {
                 >
                   {item.cover_url
                     ? <img
-                        src={item.cover_url}
+                        src={imageUrl(item.cover_url, 320)!}
                         alt={item.title}
                         title={item.original_filename ? `Arquivo original: ${item.original_filename}` : undefined}
                         style={{ width: '100%', height: '100%', objectFit: 'cover' }}

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
+import { imageUrl } from '../lib/images'
 import { useMediaPreview } from './MediaSummaryModal'
 
 export interface MusicTile {
@@ -48,7 +49,7 @@ function Cover({ tile }: { tile: MusicTile }) {
       >
         {showImg ? (
           <img
-            src={tile.cover_url!}
+            src={imageUrl(tile.cover_url, 640)!}
             alt={tile.title}
             loading="lazy"
             draggable={false}

@@ -1,4 +1,6 @@
+import { createHash } from 'node:crypto'
 import { Hono } from 'hono'
+import { getCachedImage, normalizeImageWidth, type RemoteImage } from '../image-cache.js'
 
 const app = new Hono()
 
@@ -65,19 +67,8 @@ async function bodyWithinLimit(response: Response): Promise<ArrayBuffer> {
   return buffer
 }
 
-/**
- * Proxy de imagens remotas (capas). Serve os bytes na mesma origem para que o
- * <canvas> do gerador de Story não seja "tainted" por CORS — muitos provedores
- * de capa (TMDB, Google Books) não enviam Access-Control-Allow-Origin, o que
- * fazia a capa sumir da imagem gerada.
- *
- * Cada redirect volta a passar pela allowlist; uma URL pública não consegue
- * saltar para o Unraid, roteador ou outro serviço da LAN.
- */
-app.get('/', async (c) => {
-  let url = allowedImageUrl(c.req.query('url') ?? '')
-  if (!url) return c.json({ error: 'Host de imagem não permitido.' }, 403)
-
+async function fetchRemoteImage(initialUrl: URL): Promise<RemoteImage> {
+  let url: URL = initialUrl
   const ctrl = new AbortController()
   const timeout = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS)
   try {
@@ -91,29 +82,66 @@ app.get('/', async (c) => {
       if (response.status >= 300 && response.status < 400) {
         const location = response.headers.get('location')
         await response.body?.cancel().catch(() => {})
-        if (!location || redirect === MAX_REDIRECTS) return c.json({ error: 'Redirect de imagem inválido.' }, 502)
-        url = allowedImageUrl(new URL(location, url).toString())
-        if (!url) return c.json({ error: 'Redirect de imagem bloqueado.' }, 403)
+        if (!location || redirect === MAX_REDIRECTS) throw new Error('Redirect de imagem inválido.')
+        const redirected = allowedImageUrl(new URL(location, url).toString())
+        if (!redirected) throw new Error('Redirect de imagem bloqueado.')
+        url = redirected
         continue
       }
 
-      if (!response.ok) return c.json({ error: 'O provedor não entregou a imagem.' }, 502)
+      if (!response.ok) throw new Error('O provedor não entregou a imagem.')
       const contentType = response.headers.get('content-type')?.split(';')[0].trim().toLowerCase() ?? ''
-      if (!SAFE_IMAGE_TYPES.has(contentType)) return c.json({ error: 'O endereço não retornou uma imagem raster segura.' }, 415)
+      if (!SAFE_IMAGE_TYPES.has(contentType)) throw new Error('O endereço não retornou uma imagem raster segura.')
 
-      const bytes = await bodyWithinLimit(response)
-      return c.body(bytes, 200, {
-        'Content-Type': contentType,
-        'Cache-Control': 'public, max-age=86400',
-      })
+      return { body: await bodyWithinLimit(response), contentType }
     }
-  } catch {
-    return c.json({ error: 'Não foi possível buscar a imagem.' }, 502)
   } finally {
     clearTimeout(timeout)
   }
 
-  return c.body(null, 502)
+  throw new Error('Redirect de imagem inválido.')
+}
+
+function imageHeaders(etag: string, state: 'hit' | 'miss' | 'stale'): Record<string, string> {
+  return {
+    'Content-Type': 'image/webp',
+    'Cache-Control': 'public, max-age=604800, stale-while-revalidate=86400',
+    ETag: etag,
+    'X-Shelf-Image-Cache': state,
+  }
+}
+
+/**
+ * Proxy de imagens remotas (capas). Serve os bytes na mesma origem para que o
+ * <canvas> do gerador de Story não seja "tainted" por CORS — muitos provedores
+ * de capa (TMDB, Google Books) não enviam Access-Control-Allow-Origin, o que
+ * fazia a capa sumir da imagem gerada.
+ *
+ * Cada redirect volta a passar pela allowlist; uma URL pública não consegue
+ * saltar para o Unraid, roteador ou outro serviço da LAN.
+ */
+app.get('/', async (c) => {
+  const url = allowedImageUrl(c.req.query('url') ?? '')
+  if (!url) return c.json({ error: 'Host de imagem não permitido.' }, 403)
+
+  try {
+    const width = normalizeImageWidth(c.req.query('width'))
+    const cached = await getCachedImage(url.toString(), width, () => fetchRemoteImage(url))
+    const etag = `"${createHash('sha256').update(cached.body).digest('hex')}"`
+    const headers = imageHeaders(etag, cached.state)
+    if (c.req.header('if-none-match') === etag) return c.body(null, 304, headers)
+    const body = new Uint8Array(cached.body.byteLength)
+    body.set(cached.body)
+    return c.body(body, 200, headers)
+  } catch (error) {
+    if (error instanceof Error && error.message === 'Redirect de imagem bloqueado.') {
+      return c.json({ error: error.message }, 403)
+    }
+    if (error instanceof Error && error.message === 'O endereço não retornou uma imagem raster segura.') {
+      return c.json({ error: error.message }, 415)
+    }
+    return c.json({ error: 'Não foi possível buscar a imagem.' }, 502)
+  }
 })
 
 export default app

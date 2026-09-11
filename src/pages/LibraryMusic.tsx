@@ -5,6 +5,7 @@ import { api } from '../lib/api'
 import { LibrarySearch } from '../components/LibrarySearch'
 import { useMediaPreview } from '../components/MediaSummaryModal'
 import { norm } from '../lib/utils'
+import { imageUrl } from '../lib/images'
 
 function formatWhen(iso: string): string {
   return new Date(iso).toLocaleString('pt-BR', {
@@ -129,7 +130,7 @@ export function LibraryMusic() {
                     fontSize: 20, overflow: 'hidden', border: '1px solid var(--border)', flexShrink: 0,
                   }}>
                     {play.cover_url
-                      ? <img src={play.cover_url} alt={play.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      ? <img src={imageUrl(play.cover_url, 320)!} alt={play.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                       : '🎵'
                     }
                   </div>

@@ -6,6 +6,7 @@ import { MediaPreviewTrigger } from '../components/MediaSummaryModal'
 import { canShareStory, shareImageBlob } from '../lib/story'
 import type { MediaType } from '../types'
 import { TYPE_LABEL, formatRuntime } from '../lib/utils'
+import { imageUrl } from '../lib/images'
 
 const TYPE_COLOR_HEX: Record<MediaType, string> = {
   movie:  '#D94444',
@@ -375,7 +376,7 @@ export function Wrap() {
                       >
                         <span className="text-muted text-sm w-5">{i + 1}</span>
                         {item.cover_url && (
-                          <img src={item.cover_url} alt="" className="w-8 h-12 object-cover rounded" />
+                          <img src={imageUrl(item.cover_url, 160)!} alt="" className="w-8 h-12 object-cover rounded" />
                         )}
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium text-primary truncate">{item.title}</p>

@@ -2,6 +2,11 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import app, { allowedImageUrl } from './img.js'
 
+const ONE_PIXEL_PNG = new Uint8Array(Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+  'base64',
+))
+
 test('allowlist aceita provedores conhecidos e recusa rede interna, HTTP e porta customizada', () => {
   assert.equal(allowedImageUrl('https://image.tmdb.org/t/p/w500/a.jpg')?.hostname, 'image.tmdb.org')
   assert.equal(allowedImageUrl('http://image.tmdb.org/a.jpg'), null)
@@ -60,19 +65,43 @@ test('proxy revalida redirects e exige resposta de imagem', async () => {
 test('proxy preserva imagem válida e impede corpo acima de 10 MB', async () => {
   const original = globalThis.fetch
   try {
-    globalThis.fetch = async () => new Response(new Uint8Array([1, 2, 3]), {
+    const validUrl = `https://image.tmdb.org/a-${process.pid}.png`
+    globalThis.fetch = async () => new Response(ONE_PIXEL_PNG, {
       headers: { 'Content-Type': 'image/png' },
     })
-    const ok = await app.request('/?url=' + encodeURIComponent('https://image.tmdb.org/a.png'))
+    const ok = await app.request('/?url=' + encodeURIComponent(validUrl))
     assert.equal(ok.status, 200)
     assert.equal(ok.headers.get('access-control-allow-origin'), null)
-    assert.deepEqual(new Uint8Array(await ok.arrayBuffer()), new Uint8Array([1, 2, 3]))
+    assert.equal(ok.headers.get('content-type'), 'image/webp')
+    assert.ok((await ok.arrayBuffer()).byteLength > 0)
 
     globalThis.fetch = async () => new Response(null, {
       headers: { 'Content-Type': 'image/jpeg', 'Content-Length': String(10 * 1024 * 1024 + 1) },
     })
-    const tooLarge = await app.request('/?url=' + encodeURIComponent('https://image.tmdb.org/a.jpg'))
+    const tooLarge = await app.request('/?url=' + encodeURIComponent(`https://image.tmdb.org/large-${process.pid}.jpg`))
     assert.equal(tooLarge.status, 502)
+  } finally {
+    globalThis.fetch = original
+  }
+})
+
+test('proxy persiste a variante WebP e não refaz o download no segundo acesso', async () => {
+  const original = globalThis.fetch
+  let calls = 0
+  const source = `https://image.tmdb.org/cache-${process.pid}-${Date.now()}.png`
+  globalThis.fetch = async () => {
+    calls++
+    return new Response(ONE_PIXEL_PNG, { headers: { 'Content-Type': 'image/png' } })
+  }
+  try {
+    const first = await app.request('/?url=' + encodeURIComponent(source) + '&width=320')
+    const second = await app.request('/?url=' + encodeURIComponent(source) + '&width=320')
+    assert.equal(first.status, 200)
+    assert.equal(second.status, 200)
+    assert.equal(first.headers.get('content-type'), 'image/webp')
+    assert.equal(first.headers.get('x-shelf-image-cache'), 'miss')
+    assert.equal(second.headers.get('x-shelf-image-cache'), 'hit')
+    assert.equal(calls, 1)
   } finally {
     globalThis.fetch = original
   }

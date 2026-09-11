@@ -6,6 +6,7 @@ import type { MediaStatus, MediaType, SearchResult, SeriesPreviewSeason } from '
 import { CategoryTag } from './CategoryTag'
 import { StarRating } from './StarRating'
 import { TYPE_LABEL, todayISODate } from '../lib/utils'
+import { imageUrl } from '../lib/images'
 
 interface Props {
   open:    boolean
@@ -220,7 +221,7 @@ function ConfirmPanel({ result, onBack, onAdd, isPending, error }: ConfirmProps)
       <div className="add-media-confirm-cover">
         <div className="add-media-confirm-art">
           {result.cover_url
-            ? <img src={result.cover_url} alt="" className="w-full h-full object-cover" />
+            ? <img src={imageUrl(result.cover_url, 320)!} alt="" className="w-full h-full object-cover" />
             : <div className="w-full h-full flex items-center justify-center text-7xl text-muted">{emoji}</div>}
         </div>
       </div>
@@ -595,7 +596,7 @@ export function SearchModal({ open, onClose }: Props) {
                       >
                         <div className="w-10 h-14 flex-shrink-0 rounded overflow-hidden bg-card border border-border">
                           {result.cover_url
-                            ? <img src={result.cover_url} alt="" className="w-full h-full object-cover" />
+                            ? <img src={imageUrl(result.cover_url, 160)!} alt="" className="w-full h-full object-cover" />
                             : <div className="w-full h-full flex items-center justify-center text-muted text-lg">
                                 {TYPE_FILTERS.find(f => f.value === result.type)?.emoji}
                               </div>
