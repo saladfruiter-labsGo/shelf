@@ -28,7 +28,7 @@ function schemaNeedsUpgrade(): boolean {
 
   const requiredTables = [
     'settings', 'lists', 'list_items', 'list_tiers', 'activity_events', 'music_tracks',
-    'series_seasons', 'series_episodes', 'diary_entries', 'game_price_products',
+    'series_seasons', 'series_episodes', 'diary_entries', 'diary_progress', 'game_price_products',
     'game_price_offers', 'game_price_history',
   ]
   if (requiredTables.some(table => !tables.has(table))) return true
@@ -44,12 +44,17 @@ function schemaNeedsUpgrade(): boolean {
   ]
   if (requiredMedia.some(column => !media.has(column))) return true
 
+  const diary = columns('diary_entries')
   return !columns('lists').has('mode')
     || !columns('lists').has('dim_seen')
     || !columns('list_items').has('position')
     || !columns('list_items').has('tier_id')
-    || !columns('diary_entries').has('season_number')
-    || !columns('diary_entries').has('episode_number')
+    || !diary.has('season_number')
+    || !diary.has('episode_number')
+    || !diary.has('progress_day')
+    || !diary.has('progress_value')
+    || !diary.has('progress_total')
+    || !diary.has('progress_unit')
 }
 
 const migrations: Migration[] = [{
@@ -373,6 +378,40 @@ db.exec(`
   name: 'allow-music-media-type',
   foreignKeys: 'off',
   up: () => ensureMediaItemsAllowsMusic(db),
+}, {
+  version: 4,
+  name: 'diary-progress-snapshots',
+  up: () => {
+    const diaryCols = (db.prepare('PRAGMA table_info(diary_entries)').all() as { name: string }[]).map(c => c.name)
+    const newDiaryCols: [string, string][] = [
+      ['progress_day', 'TEXT'],
+      ['progress_value', 'INTEGER'],
+      ['progress_total', 'INTEGER'],
+      ['progress_unit', 'TEXT'],
+    ]
+    for (const [col, def] of newDiaryCols) {
+      if (!diaryCols.includes(col)) db.exec(`ALTER TABLE diary_entries ADD COLUMN ${col} ${def}`)
+    }
+
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS diary_progress (
+        media_item_id  INTEGER NOT NULL REFERENCES media_items(id) ON DELETE CASCADE,
+        source         TEXT NOT NULL,                 -- 'kavita' | 'playnite'
+        progress_day   TEXT NOT NULL,                 -- dia civil em SHELF_TIMEZONE
+        progress_value INTEGER NOT NULL CHECK (progress_value >= 0),
+        progress_total INTEGER CHECK (progress_total IS NULL OR progress_total >= 0),
+        progress_unit  TEXT NOT NULL CHECK (progress_unit IN ('pages', 'seconds')),
+        rating         REAL,
+        observed_at    TEXT NOT NULL,                 -- última atualização do provedor no dia
+        finalized_at   TEXT,                          -- preenchido quando vira diário
+        created_at     TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE(media_item_id, source, progress_day)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_diary_progress_pending
+        ON diary_progress(progress_day, finalized_at);
+    `)
+  },
 }]
 
 if (databaseExisted && (hasPendingMigrations(db, migrations) || schemaNeedsUpgrade())) {

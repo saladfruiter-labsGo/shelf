@@ -21,7 +21,7 @@ O Shelf é uma aplicação self-hosted para organizar filmes, séries, jogos, li
 
 - `wishlist` é backlog e nunca pertence à biblioteca. Use as funções e predicados de `server/media-domain.ts`; não replique comparações de status pelas telas.
 - `game_status` deriva o `status` base por `GAME_STATUS_TO_BASE`, centralizado em `server/media-domain.ts`.
-- O diário é histórico N:1: cada consumo pode gerar uma nova linha. Não reduza `diary_entries` a um espelho 1:1 de `media_items`.
+- O diário é histórico N:1: cada consumo pode gerar uma nova linha. Não reduza `diary_entries` a um espelho 1:1 de `media_items`. Filmes/episódios entram ao concluir; livros e jogos acumulam snapshots de progresso somente quando o provedor informa uma atualização real, e o job diário materializa o último snapshot de cada dia.
 - Diário, linhas normalizadas de atividade, agregados musicais e histórico de preços não expiram. A retenção de 30 dias define apenas `activity_events.raw = NULL`.
 - Uma avaliação rápida deve manter mídia e conclusão do diário coerentes; reutilize `server/quick-rating.ts`.
 - A nota do Shelf prevalece sobre o Playnite por padrão. A política configurável fica em `PLAYNITE_RATING_POLICY`.
@@ -45,6 +45,7 @@ server/
   quick-rating.ts         nota atômica em mídia + diário
   routes/integrations.ts  configuração e orquestração explícita dos polls
   routes/integrations/    um módulo por provedor
+  diary-progress.ts       snapshots e fechamento diário de livros/jogos
   integrations/           lógica pura/testável por provedor
   transfer/               snapshots, export/import e importadores externos
   prices/ e steam/        domínios isolados de preço e sincronização

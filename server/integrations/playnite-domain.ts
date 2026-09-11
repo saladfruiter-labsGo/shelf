@@ -20,6 +20,7 @@ export type PlayniteState = Record<string, {
   gameStatus: string
   rating: number
   playtime: number
+  lastPlayedAt?: string | null
 }>
 
 /** CompletionStatus do Playnite -> status granular do Shelf. */

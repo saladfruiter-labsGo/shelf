@@ -8,6 +8,7 @@ import { ConfirmDialog } from '../components/ConfirmDialog'
 import { useIsMobile } from '../hooks/useIsMobile'
 import { useMediaPreview } from '../components/MediaSummaryModal'
 import type { StorySubject } from '../lib/story'
+import { formatPlaytime } from '../lib/utils'
 
 const TYPE_EMOJI: Record<string, string> = {
   game: '🎮', book: '📚', movie: '🎬', series: '📺', music: '🎵',
@@ -69,6 +70,14 @@ function subjectOf(e: DiaryEntry): StorySubject {
     title: e.title, type: e.type, cover_url: e.cover_url,
     year: e.year, genre: e.genre, rating: e.rating ?? 0, comment: e.comment,
   }
+}
+
+function progressLabel(entry: DiaryEntry): string | null {
+  if (entry.progress_value == null || !entry.progress_unit) return null
+  if (entry.progress_unit === 'pages') {
+    return `até a pág. ${entry.progress_value}${entry.progress_total ? ` / ${entry.progress_total}` : ''}`
+  }
+  return `${formatPlaytime(entry.progress_value)} acumulados`
 }
 
 export function Diary() {
@@ -303,6 +312,7 @@ export function Diary() {
                         </p>
                         <p className="diary-item-meta">
                           {entry.year ?? '—'}{entry.genre ? ` · ${entry.genre}` : ''}
+                          {progressLabel(entry) && <span> · {progressLabel(entry)}</span>}
                           {entry.rating && entry.rating > 0 && (
                             <span className="diary-item-rating"> · ★ {entry.rating}</span>
                           )}

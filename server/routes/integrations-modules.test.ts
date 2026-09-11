@@ -25,6 +25,7 @@ let plexWebhookRoutes: typeof import('./integrations/plex-webhook.js').default
 let ensurePlexWebhookSecret: typeof import('./integrations/plex-webhook.js').ensurePlexWebhookSecret
 let priceRoutes: typeof import('./integrations/prices.js').default
 let steamRoutes: typeof import('./integrations/steam.js').default
+let runDiaryProgressJob: typeof import('../diary-progress.js').runDiaryProgressJob
 
 before(async () => {
   db = (await import('../db.js')).db
@@ -49,6 +50,7 @@ before(async () => {
   ensurePlexWebhookSecret = plexWebhook.ensurePlexWebhookSecret
   priceRoutes = (await import('./integrations/prices.js')).default
   steamRoutes = (await import('./integrations/steam.js')).default
+  runDiaryProgressJob = (await import('../diary-progress.js')).runDiaryProgressJob
 })
 
 after(() => db.close())
@@ -103,10 +105,16 @@ test('webhook repetido do Playnite não duplica conclusão, atividade ou diário
 
   assert.equal((await send()).status, 200)
   assert.equal((await send()).status, 200)
+  assert.equal((db.prepare("SELECT COUNT(*) AS n FROM diary_entries WHERE source = 'playnite'").get() as { n: number }).n, 0)
+  assert.equal(runDiaryProgressJob(new Date('2026-09-11T04:00:00.000Z')), 1)
 
   assert.equal((db.prepare("SELECT COUNT(*) AS n FROM media_items WHERE external_id = 'playnite:game-1'").get() as { n: number }).n, 1)
   assert.equal((db.prepare("SELECT COUNT(*) AS n FROM activity_events WHERE source = 'playnite' AND event_type = 'played'").get() as { n: number }).n, 1)
   assert.equal((db.prepare("SELECT COUNT(*) AS n FROM diary_entries WHERE source = 'playnite'").get() as { n: number }).n, 1)
+  assert.deepEqual(db.prepare(`
+    SELECT progress_day, progress_value, progress_unit
+      FROM diary_entries WHERE source = 'playnite'
+  `).get(), { progress_day: '2026-09-10', progress_value: 7200, progress_unit: 'seconds' })
 })
 
 test('política de nota do Playnite preserva o Shelf por padrão e permite optar pelo Playnite', async () => {
@@ -128,7 +136,7 @@ test('política de nota do Playnite preserva o Shelf por padrão e permite optar
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
       gameId: 'rating-policy-game', name: 'Jogo com curadoria', completionStatus: 'Playing',
-      playtimeSeconds: 120, userScore,
+      playtimeSeconds: 60, userScore,
     }),
   })
 
@@ -174,6 +182,8 @@ test('poll repetido do Kavita preserva progresso sem duplicar conclusão', async
   } finally {
     globalThis.fetch = originalFetch
   }
+  assert.equal((db.prepare("SELECT COUNT(*) AS n FROM diary_entries WHERE source = 'kavita'").get() as { n: number }).n, 0)
+  assert.equal(runDiaryProgressJob(new Date('2026-09-11T04:00:00.000Z')), 1)
 
   const book = db.prepare(`
     SELECT status, rating, pages_total, pages_read, author
@@ -184,6 +194,10 @@ test('poll repetido do Kavita preserva progresso sem duplicar conclusão', async
   })
   assert.equal((db.prepare("SELECT COUNT(*) AS n FROM activity_events WHERE source = 'kavita' AND event_type = 'read'").get() as { n: number }).n, 1)
   assert.equal((db.prepare("SELECT COUNT(*) AS n FROM diary_entries WHERE source = 'kavita'").get() as { n: number }).n, 1)
+  assert.deepEqual(db.prepare(`
+    SELECT progress_day, progress_value, progress_total, progress_unit
+      FROM diary_entries WHERE source = 'kavita'
+  `).get(), { progress_day: '2026-09-10', progress_value: 200, progress_total: 200, progress_unit: 'pages' })
 })
 
 test('sync repetido do Last.fm não duplica scrobble e atualiza tocando agora', async () => {

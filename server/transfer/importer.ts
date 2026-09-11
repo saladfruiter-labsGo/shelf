@@ -51,22 +51,43 @@ function prep(sql: string): Statement<unknown[]> {
 }
 
 const insertDiary = db.prepare(`
-  INSERT INTO diary_entries (media_item_id, watched_at, rating, comment, source, season_number, episode_number)
-  VALUES (@media_item_id, @watched_at, @rating, @comment, @source, @season_number, @episode_number)
+  INSERT INTO diary_entries
+    (media_item_id, watched_at, rating, comment, source, season_number, episode_number,
+     progress_day, progress_value, progress_total, progress_unit)
+  VALUES (@media_item_id, @watched_at, @rating, @comment, @source, @season_number, @episode_number,
+          @progress_day, @progress_value, @progress_total, @progress_unit)
+`)
+
+const insertDiaryProgress = db.prepare(`
+  INSERT INTO diary_progress
+    (media_item_id, source, progress_day, progress_value, progress_total,
+     progress_unit, rating, observed_at)
+  VALUES (@media_item_id, @source, @progress_day, @progress_value, @progress_total,
+          @progress_unit, @rating, @observed_at)
+  ON CONFLICT(media_item_id, source, progress_day) DO UPDATE SET
+    progress_value = excluded.progress_value,
+    progress_total = excluded.progress_total,
+    progress_unit  = excluded.progress_unit,
+    rating         = excluded.rating,
+    observed_at    = excluded.observed_at
+  WHERE diary_progress.finalized_at IS NULL
+    AND excluded.observed_at >= diary_progress.observed_at
 `)
 
 /** Mesma mídia + mesma data + mesma origem = mesma sessão; não duplica ao reimportar. */
 const diaryExists = db.prepare(`
   SELECT 1 FROM diary_entries
-   WHERE media_item_id = ? AND date(watched_at) = date(?) AND source = ?
+   WHERE media_item_id = ? AND source = ?
+     AND (progress_day = ? OR (progress_day IS NULL AND date(watched_at) = date(?)))
    LIMIT 1
 `)
 
 function addDiary(mediaItemId: number, watchedAt: string, rating: number | null, comment: string | null, source: string): boolean {
-  if (diaryExists.get(mediaItemId, watchedAt, source)) return false
+  if (diaryExists.get(mediaItemId, source, null, watchedAt)) return false
   insertDiary.run({
     media_item_id: mediaItemId, watched_at: watchedAt, rating, comment,
     source, season_number: null, episode_number: null,
+    progress_day: null, progress_value: null, progress_total: null, progress_unit: null,
   })
   return true
 }
@@ -87,6 +108,7 @@ export interface ShelfBackup {
   shelf_export?: number
   items?: Record<string, unknown>[]
   diary?: Record<string, unknown>[]
+  diary_progress?: Record<string, unknown>[]
   series?: any[]
   lists?: any[]
   activity?: any[]
@@ -150,17 +172,43 @@ export function importShelfBackup(payload: ShelfBackup, mode: ImportMode = 'merg
       const item = findItem.get(String(d.external_id ?? ''), String(d.type ?? '')) as { id: number } | undefined
       if (!item || !d.watched_at) continue
       const source = String(d.source ?? 'manual')
-      if (diaryExists.get(item.id, String(d.watched_at), source)) continue
+      const watchedAt = String(d.watched_at)
+      const progressDay = typeof d.progress_day === 'string' ? d.progress_day : null
+      if (diaryExists.get(item.id, source, progressDay, watchedAt)) continue
       insertDiary.run({
         media_item_id: item.id,
-        watched_at: String(d.watched_at),
+        watched_at: watchedAt,
         rating: (d.rating as number) ?? null,
         comment: (d.comment as string) ?? null,
         source,
         season_number: (d.season_number as number) ?? null,
         episode_number: (d.episode_number as number) ?? null,
+        progress_day: progressDay,
+        progress_value: (d.progress_value as number) ?? null,
+        progress_total: (d.progress_total as number) ?? null,
+        progress_unit: (d.progress_unit as string) ?? null,
       })
       report.diary++
+    }
+
+    for (const p of payload.diary_progress ?? []) {
+      const item = findItem.get(String(p.external_id ?? ''), String(p.type ?? '')) as { id: number } | undefined
+      const unit = String(p.progress_unit ?? '')
+      const source = String(p.source ?? '')
+      const value = Number(p.progress_value)
+      const total = p.progress_total == null ? null : Number(p.progress_total)
+      if (!item || !p.progress_day || !p.observed_at || !['kavita', 'playnite'].includes(source) || !['pages', 'seconds'].includes(unit)) continue
+      if (!Number.isInteger(value) || value < 0 || (total != null && (!Number.isInteger(total) || total < 0))) continue
+      insertDiaryProgress.run({
+        media_item_id: item.id,
+        source,
+        progress_day: String(p.progress_day),
+        progress_value: value,
+        progress_total: total,
+        progress_unit: unit,
+        rating: p.rating == null ? null : Number(p.rating),
+        observed_at: String(p.observed_at),
+      })
     }
 
     for (const s of payload.series ?? []) {
