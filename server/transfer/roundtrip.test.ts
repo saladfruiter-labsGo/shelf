@@ -28,6 +28,16 @@ test('export v2 restaura tiers, atividade musical e histórico de preços sem cr
     INSERT INTO diary_entries (media_item_id, watched_at, rating, comment, source)
     VALUES (?, '2026-08-01T20:00:00.000Z', 4.5, 'ótimo', 'manual')
   `).run(mediaId)
+  db.prepare(`
+    INSERT INTO diary_entries
+      (media_item_id, watched_at, rating, source, progress_day, progress_value, progress_total, progress_unit)
+    VALUES (?, '2026-08-02T01:00:00.000Z', 4, 'playnite', '2026-08-01', 5400, NULL, 'seconds')
+  `).run(mediaId)
+  db.prepare(`
+    INSERT INTO diary_progress
+      (media_item_id, source, progress_day, progress_value, progress_total, progress_unit, rating, observed_at)
+    VALUES (?, 'playnite', '2026-08-04', 6000, NULL, 'seconds', 4.5, '2026-08-05T01:00:00.000Z')
+  `).run(mediaId)
 
   const listId = Number(db.prepare(`
     INSERT INTO lists (name, description, mode, dim_seen) VALUES ('Favoritos', 'ranking pessoal', 'tier', 1)
@@ -78,6 +88,11 @@ test('export v2 restaura tiers, atividade musical e histórico de preços sem cr
   assert.equal('id' in exported.items[0], false)
   assert.equal(JSON.stringify(exported).includes('nao-exportar'), false)
   assert.equal(JSON.stringify(exported).includes('nao-portar'), false)
+  assert.deepEqual(exported.diary_progress, [{
+    external_id: 'game-1', type: 'game', source: 'playnite', progress_day: '2026-08-04',
+    progress_value: 6000, progress_total: null, progress_unit: 'seconds', rating: 4.5,
+    observed_at: '2026-08-05T01:00:00.000Z',
+  }])
   assert.equal((exported.lists[0] as any).tiers[0].name, 'S')
   assert.equal((exported.lists[0] as any).items[0].tier_key, (exported.lists[0] as any).tiers[0].key)
   assert.equal(exported.lists.some((list: any) => list.name === 'Lista vazia' && list.items.length === 0), true)
@@ -99,7 +114,15 @@ test('export v2 restaura tiers, atividade musical e histórico de preços sem cr
   assert.deepEqual(report.errors, [])
   assert.equal(report.created, 1)
   assert.deepEqual(report.restored, { lists: 2, activity: 1, tracks: 1, prices: 1 })
-  assert.equal((db.prepare('SELECT COUNT(*) n FROM diary_entries').get() as any).n, 1)
+  assert.equal((db.prepare('SELECT COUNT(*) n FROM diary_entries').get() as any).n, 2)
+  assert.deepEqual(db.prepare(`
+    SELECT progress_day, progress_value, progress_unit
+      FROM diary_entries WHERE source = 'playnite'
+  `).get(), { progress_day: '2026-08-01', progress_value: 5400, progress_unit: 'seconds' })
+  assert.deepEqual(db.prepare(`
+    SELECT source, progress_day, progress_value, progress_unit, finalized_at
+      FROM diary_progress
+  `).get(), { source: 'playnite', progress_day: '2026-08-04', progress_value: 6000, progress_unit: 'seconds', finalized_at: null })
   assert.deepEqual(
     db.prepare(`
       SELECT l.mode, l.dim_seen, t.name tier, li.position

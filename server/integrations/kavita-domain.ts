@@ -13,6 +13,7 @@ export type KavitaState = Record<string, {
   status: string
   pagesRead: number
   rating: number
+  lastReadAt?: string | null
 }>
 
 export function kavitaRating(series: Pick<KavitaSeries, 'hasUserRated' | 'userRating'>): number {

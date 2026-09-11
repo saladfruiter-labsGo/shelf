@@ -22,6 +22,7 @@ import { startBackupScheduler, stopBackupScheduler } from './backup.js'
 import { db } from './db.js'
 import { shutdownServices } from './lifecycle.js'
 import { startActivityRetention, stopActivityRetention } from './activity-retention.js'
+import { startDiaryProgressJob, stopDiaryProgressJob } from './diary-progress.js'
 
 const app = new Hono()
 let shuttingDown = false
@@ -76,6 +77,9 @@ startBackupScheduler()
 // Polls de Plex/Last.fm/Kavita começam explicitamente no bootstrap.
 startIntegrationPolling()
 
+// Fecha o último progresso diário de livros e jogos após a virada do dia.
+startDiaryProgressJob()
+
 // Payloads brutos são diagnósticos temporários; o histórico normalizado permanece.
 startActivityRetention()
 
@@ -93,6 +97,7 @@ function requestShutdown(reason: string, exitCode: number): void {
       stopSteamSync,
       stopBackupScheduler,
       stopActivityRetention,
+      stopDiaryProgressJob,
     ],
   }).then(() => {
     console.log('[shutdown] SQLite fechado após checkpoint do WAL.')

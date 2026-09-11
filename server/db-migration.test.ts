@@ -66,6 +66,7 @@ test('adota banco sem versão, preserva dados e cria snapshot antes da migration
     { version: 1, name: 'baseline-schema' },
     { version: 2, name: 'media-domain-checks' },
     { version: 3, name: 'allow-music-media-type' },
+    { version: 4, name: 'diary-progress-snapshots' },
   ])
 
   const item = db.prepare("SELECT title, status FROM media_items WHERE external_id = 'legacy-1'").get()
@@ -75,6 +76,12 @@ test('adota banco sem versão, preserva dados e cria snapshot antes da migration
   assert.ok(mediaColumns.includes('game_status'))
   assert.ok(mediaColumns.includes('favorite'))
   assert.ok(db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'game_price_history'").get())
+  assert.ok(db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'diary_progress'").get())
+  const diaryColumns = (db.prepare('PRAGMA table_info(diary_entries)').all() as { name: string }[]).map(c => c.name)
+  assert.ok(diaryColumns.includes('progress_day'))
+  assert.ok(diaryColumns.includes('progress_value'))
+  assert.ok(diaryColumns.includes('progress_total'))
+  assert.ok(diaryColumns.includes('progress_unit'))
   assert.deepEqual(db.prepare('SELECT list_id, media_item_id FROM list_items').all(), [{ list_id: 1, media_item_id: 1 }])
   assert.deepEqual(db.pragma('foreign_key_check'), [])
   assert.deepEqual(db.pragma('quick_check'), [{ quick_check: 'ok' }])

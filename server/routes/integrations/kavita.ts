@@ -7,6 +7,7 @@ import {
   type KavitaSeries,
   type KavitaState,
 } from '../../integrations/kavita-domain.js'
+import { recordDiaryProgress } from '../../diary-progress.js'
 import { notifyLibraryActivity } from '../../notify.js'
 
 const app = new Hono()
@@ -36,10 +37,6 @@ const setBookRating = db.prepare(`
   UPDATE media_items SET rating = ?, updated_at = datetime('now')
   WHERE external_id = ? AND type = 'book'
 `)
-const insertDiary = db.prepare(`
-  INSERT INTO diary_entries (media_item_id, watched_at, rating, comment, source)
-  VALUES (?, ?, ?, NULL, 'kavita')
-`)
 const insertActivity = db.prepare(`
   INSERT OR IGNORE INTO activity_events
     (source, event_type, media_type, external_ref, title, subtitle, cover_url, rating, duration_ms, genre, occurred_at, raw)
@@ -62,6 +59,13 @@ function writeState(state: KavitaState): void {
 
 function baseUrl(): string {
   return cfg('KAVITA_URL').replace(/\/$/, '')
+}
+
+function parseKavitaTimestamp(value: string | null): string | null {
+  if (!value) return null
+  const normalized = value + (value.includes('Z') || /[+-]\d\d:?\d\d$/.test(value) ? '' : 'Z')
+  const parsed = new Date(normalized)
+  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString()
 }
 
 async function authenticate(): Promise<boolean> {
@@ -143,9 +147,8 @@ export async function pollKavita(): Promise<void> {
     const rating = kavitaRating(entry)
     const externalId = `kavita:${entry.id}`
     const now = new Date().toISOString()
-    const occurredAt = entry.latestReadDate
-      ? new Date(entry.latestReadDate + (entry.latestReadDate.includes('Z') ? '' : 'Z')).toISOString()
-      : now
+    const latestReadAt = parseKavitaTimestamp(entry.latestReadDate)
+    const occurredAt = latestReadAt ?? now
     const coverUrl = `/api/integrations/kavita/image?seriesId=${entry.id}`
 
     const existing = getBook.get(externalId) as { id: number; author: string | null; rating: number } | undefined
@@ -165,6 +168,21 @@ export async function pollKavita(): Promise<void> {
     if (!book) continue
 
     const previous = state[String(entry.id)]
+    const progressUpdated = latestReadAt
+      ? previous?.lastReadAt !== latestReadAt || previous?.pagesRead !== pagesRead
+      : !previous || previous.pagesRead !== pagesRead || previous.status !== status
+    if (progressUpdated) {
+      recordDiaryProgress({
+        mediaItemId: book.id,
+        source: 'kavita',
+        value: pagesRead,
+        total: pages || null,
+        unit: 'pages',
+        rating,
+        observedAt: occurredAt,
+      })
+    }
+
     if (status === 'completed') {
       completeBook.run({ external_id: externalId, completed_at: occurredAt })
       if (previous?.status !== 'completed') {
@@ -172,7 +190,6 @@ export async function pollKavita(): Promise<void> {
           event_type: 'read', external_ref: externalId, title: entry.name, subtitle: author,
           cover_url: coverUrl, rating: rating || null, occurred_at: occurredAt,
         })
-        insertDiary.run(book.id, occurredAt, rating || null)
         notifyLibraryActivity({ event: 'completed', type: 'book', title: entry.name, rating: book.rating || null, mediaItemId: book.id })
       }
     } else if (!previous) {
@@ -192,7 +209,7 @@ export async function pollKavita(): Promise<void> {
       notifyLibraryActivity({ event: 'rated', type: 'book', title: entry.name, rating })
     }
 
-    state[String(entry.id)] = { status, pagesRead, rating }
+    state[String(entry.id)] = { status, pagesRead, rating, lastReadAt: latestReadAt ?? previous?.lastReadAt ?? null }
   }
   writeState(state)
 }

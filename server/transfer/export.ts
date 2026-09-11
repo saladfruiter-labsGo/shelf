@@ -4,7 +4,7 @@
  * Dois formatos, com propósitos diferentes:
  *
  * - **JSON** (`shelf_export: 2`) — export portátil e re-importável: itens,
- *   diário, temporadas/episódios, listas completas, atividade e preços. As referências entre tabelas usam
+ *   diário, progresso pendente, temporadas/episódios, listas completas, atividade e preços. As referências entre tabelas usam
  *   `external_id + type` em vez do `id` interno, para que a importação funcione
  *   em outro banco (ids do SQLite não sobrevivem a uma restauração). Segredos
  *   de integração não entram; snapshots operacionais cuidam da cópia integral.
@@ -38,6 +38,8 @@ export interface ShelfExport {
   }
   items: Record<string, unknown>[]
   diary: Record<string, unknown>[]
+  /** Snapshots de progresso ainda não fechados pelo job diário. */
+  diary_progress: Record<string, unknown>[]
   series: Record<string, unknown>[]
   lists: Record<string, unknown>[]
   activity: Record<string, unknown>[]
@@ -63,7 +65,8 @@ export function buildExport(scope: ExportScope): ShelfExport {
 
   const diaryRows = inIds
     ? (db.prepare(
-        `SELECT media_item_id, watched_at, rating, comment, source, season_number, episode_number
+        `SELECT media_item_id, watched_at, rating, comment, source, season_number, episode_number,
+                progress_day, progress_value, progress_total, progress_unit
            FROM diary_entries WHERE media_item_id IN ${inIds} ORDER BY watched_at`,
       ).all(...ids) as any[])
     : []
@@ -75,6 +78,32 @@ export function buildExport(scope: ExportScope): ShelfExport {
     source: d.source,
     season_number: d.season_number,
     episode_number: d.episode_number,
+    progress_day: d.progress_day,
+    progress_value: d.progress_value,
+    progress_total: d.progress_total,
+    progress_unit: d.progress_unit,
+  }))
+
+  // Um export feito antes da meia-noite não pode perder uma atualização que
+  // ainda está no staging. Os snapshots já finalizados vivem no diário.
+  const progressRows = inIds
+    ? (db.prepare(
+        `SELECT media_item_id, source, progress_day, progress_value, progress_total,
+                progress_unit, rating, observed_at
+           FROM diary_progress
+          WHERE media_item_id IN ${inIds} AND finalized_at IS NULL
+          ORDER BY progress_day, media_item_id`,
+      ).all(...ids) as any[])
+    : []
+  const diary_progress = progressRows.map(p => ({
+    ...ref(p.media_item_id),
+    source: p.source,
+    progress_day: p.progress_day,
+    progress_value: p.progress_value,
+    progress_total: p.progress_total,
+    progress_unit: p.progress_unit,
+    rating: p.rating,
+    observed_at: p.observed_at,
   }))
 
   const seasonRows = inIds
@@ -205,6 +234,7 @@ export function buildExport(scope: ExportScope): ShelfExport {
     },
     items,
     diary,
+    diary_progress,
     series,
     lists,
     activity,

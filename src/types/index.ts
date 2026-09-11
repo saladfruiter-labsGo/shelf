@@ -39,7 +39,7 @@ export interface MediaItem {
   tier_id?:          number | null     // só em /lists/:id — tier em que a capa está
 }
 
-/* ─── Diário: registros de "visto/concluído" (N por mídia) ─── */
+/* ─── Diário: registros de consumo (N por mídia) ─── */
 
 export interface DiaryEntry {
   id:            number
@@ -47,10 +47,14 @@ export interface DiaryEntry {
   watched_at:    string
   rating:        number | null
   comment:       string | null
-  source:        'manual' | 'plex' | 'backfill' | string
+  source:        'manual' | 'plex' | 'backfill' | 'kavita' | 'playnite' | string
   created_at:    string
   season_number:  number | null   // séries: episódio registrado
   episode_number: number | null
+  progress_day:  string | null     // dia civil fechado pelo job de progresso
+  progress_value: number | null    // páginas lidas ou segundos jogados
+  progress_total: number | null    // total de páginas; jogos não têm total
+  progress_unit: 'pages' | 'seconds' | null
   // campos da mídia (join)
   title:         string
   type:          MediaType

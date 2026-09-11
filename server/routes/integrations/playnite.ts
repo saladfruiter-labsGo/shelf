@@ -10,6 +10,7 @@ import {
   type PlaynitePayload,
   type PlayniteState,
 } from '../../integrations/playnite-domain.js'
+import { recordDiaryProgress } from '../../diary-progress.js'
 import { GAME_STATUS_TO_BASE } from '../../media-domain.js'
 import { notifyLibraryActivity } from '../../notify.js'
 import { rawgLookup } from '../search.js'
@@ -44,11 +45,6 @@ const insertActivity = db.prepare(`
     (source, event_type, media_type, external_ref, title, subtitle, cover_url, rating, duration_ms, genre, occurred_at, raw)
   VALUES (@source, @event_type, 'game', @external_ref, @title, NULL, @cover_url, @rating, NULL, @genre, @occurred_at, NULL)
 `)
-const insertDiary = db.prepare(`
-  INSERT INTO diary_entries (media_item_id, watched_at, rating, comment, source)
-  VALUES (?, ?, ?, NULL, 'playnite')
-`)
-
 export function ensurePlayniteSecret(): string {
   return ensureSecret('PLAYNITE_WEBHOOK_SECRET')
 }
@@ -132,12 +128,26 @@ app.post('/playnite/webhook', async (c) => {
   if (!row) return c.json({ ok: true })
 
   const wasCompleted = previous?.gameStatus === 'zerado' || previous?.gameStatus === 'platinado'
+  const progressUpdated = lastPlayedIso
+    ? previous?.lastPlayedAt !== lastPlayedIso || previous?.playtime !== playtime
+    : !previous || previous.playtime !== playtime
+  if (progressUpdated && playtime > 0) {
+    recordDiaryProgress({
+      mediaItemId: row.id,
+      source: 'playnite',
+      value: playtime,
+      total: null,
+      unit: 'seconds',
+      rating,
+      observedAt: lastPlayedIso ?? nowIso,
+    })
+  }
+
   if (isCompleted && !wasCompleted) {
     insertActivity.run({
       source: 'playnite', event_type: 'played', external_ref: externalId, title: name,
       cover_url: coverUrl, rating: rating || null, genre, occurred_at: lastPlayedIso ?? nowIso,
     })
-    insertDiary.run(row.id, lastPlayedIso ?? nowIso, rating || null)
     notifyLibraryActivity({ event: 'completed', type: 'game', title: name, rating: row.rating || null, mediaItemId: row.id })
   } else if (!previous && gameStatus === 'jogando') {
     insertActivity.run({
@@ -155,7 +165,7 @@ app.post('/playnite/webhook', async (c) => {
     notifyLibraryActivity({ event: 'rated', type: 'game', title: name, rating: row.rating })
   }
 
-  state[gameId] = { externalId, gameStatus, rating, playtime }
+  state[gameId] = { externalId, gameStatus, rating, playtime, lastPlayedAt: lastPlayedIso ?? previous?.lastPlayedAt ?? null }
   writeState(state)
   return c.json({ ok: true })
 })

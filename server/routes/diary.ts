@@ -9,6 +9,7 @@ const SELECT_ENTRY = `
   SELECT
     d.id, d.media_item_id, d.watched_at, d.rating, d.comment, d.source, d.created_at,
     d.season_number, d.episode_number,
+    d.progress_day, d.progress_value, d.progress_total, d.progress_unit,
     m.title, m.type, m.cover_url, m.year, m.genre, m.external_id
   FROM diary_entries d
   JOIN media_items m ON m.id = d.media_item_id
@@ -29,7 +30,7 @@ app.get('/', (c) => {
   return c.json(rows)
 })
 
-// Cria uma entrada (registro de "visto/concluído")
+// Cria uma entrada manual de consumo/conclusão.
 app.post('/', async (c) => {
   const body = await c.req.json()
   const mediaId = Number(body.media_item_id)
