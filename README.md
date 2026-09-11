@@ -79,6 +79,7 @@ O servidor, em produção, também serve o build estático do frontend (ver `ser
 | `DATA_DIR` | Diretório do banco (default `./data`) |
 | `SHELF_TIMEZONE` | Fuso do fechamento diário de progresso (default `America/Sao_Paulo`) |
 | `IMG_PROXY_ALLOWED_HOSTS` | Hosts HTTPS extras aceitos pelo proxy de capas, separados por vírgula |
+| `IMG_CACHE_TTL_DAYS` | Dias em que uma capa local é considerada fresca antes de uma nova busca (default `30`) |
 | `BACKUP_ENABLED` | `0` desativa os snapshots automáticos (default `1`) |
 | `BACKUP_DIR` | Diretório persistente dos snapshots (default `DATA_DIR/backups`) |
 | `BACKUP_INTERVAL_HOURS` | Intervalo entre snapshots automáticos (default `24`) |
@@ -111,7 +112,7 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
-O compose sobe o container na porta `3000` e persiste o banco em `/app/data` e os snapshots integrais em `/app/backups`. No exemplo, ambos ficam sob `/mnt/user/appdata/shelf`; inclua a pasta `backups` na sua cópia externa do appdata. Snapshots no mesmo servidor protegem contra corrupção e importações ruins, mas não substituem uma cópia em outro dispositivo.
+O compose sobe o container na porta `3000` e persiste o banco e o cache de capas em `/app/data`, além dos snapshots integrais em `/app/backups`. No exemplo, ambos ficam sob `/mnt/user/appdata/shelf`; inclua as pastas `data` e `backups` na sua cópia externa do appdata. Snapshots no mesmo servidor protegem contra corrupção e importações ruins, mas não substituem uma cópia em outro dispositivo.
 
 O Shelf cria um snapshot consistente pela Online Backup API do SQLite, abre a cópia com `PRAGMA quick_check` e só então publica o arquivo definitivo. Também cria uma cópia preventiva antes de atualizar um schema antigo e antes de aplicar importações. A tela **Importação/Exportação** mostra o último snapshot e permite criar um sob demanda.
 
@@ -125,7 +126,7 @@ O Shelf ainda é uma aplicação de instância única, sem login. Use-o apenas n
 
 A API aceita navegadores apenas no mesmo host do Shelf e não habilita CORS. Clientes de webhook sem cabeçalho `Origin` continuam funcionando com o token próprio. Respostas dinâmicas da API não são gravadas no cache do navegador/service worker; chaves de API e cookies configurados são devolvidos à interface somente como estado e máscara. Os tokens que aparecem nas URLs de webhook são credenciais: compartilhe-os apenas com o Plex ou o Playnite correspondente.
 
-O proxy usado para desenhar capas nos Stories aceita apenas HTTPS dos provedores conhecidos. Para uma capa hospedada em outro serviço público, acrescente apenas o hostname necessário em `IMG_PROXY_ALLOWED_HOSTS`; endereços arbitrários e redirects para a rede interna são bloqueados.
+O proxy de capas aceita apenas HTTPS dos provedores conhecidos. Na primeira solicitação, ele baixa a imagem, corrige a orientação, redimensiona para uma variante de até 160, 320, 640 ou 1024 px, converte para WebP e salva em `DATA_DIR/images`. As telas usam essas variantes locais; assim, acessos seguintes não dependem da latência do provedor externo. Se o provedor estiver temporariamente indisponível, uma cópia antiga ainda pode ser servida. Para uma capa hospedada em outro serviço público, acrescente apenas o hostname necessário em `IMG_PROXY_ALLOWED_HOSTS`; endereços arbitrários e redirects para a rede interna são bloqueados.
 
 ## 🌐 API
 
@@ -136,6 +137,7 @@ O proxy usado para desenhar capas nos Stories aceita apenas HTTPS dos provedores
 | `GET /api/media` | Lista itens da biblioteca (filtros `type`, `status`, `limit`) |
 | `GET /api/media/recent` | Itens recentes por tipo |
 | `GET /api/media/:id` | Detalhe de um item |
+| `GET /api/img?url=&width=` | Baixa, normaliza e entrega uma capa WebP em cache persistente (`width`: 160, 320, 640 ou 1024) |
 | `GET /api/details/:type/:external_id` | Sinopse/criador/autor do item na fonte externa (cacheado no banco após a 1ª busca) |
 | `GET /api/wrap?period=&year=&month=` | Estatísticas para o Wrap (`annual`/`monthly`) |
 | `GET/PATCH /api/settings` | Lê/atualiza as chaves de API |

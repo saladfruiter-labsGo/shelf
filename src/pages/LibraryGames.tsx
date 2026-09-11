@@ -7,6 +7,7 @@ import { LibrarySearch } from '../components/LibrarySearch'
 import { Pager, usePagination } from '../components/Pager'
 import { useMediaPreview } from '../components/MediaSummaryModal'
 import { formatPlaytime, formatDate, norm, GAME_STATUS_LABEL, GAME_STATUS_STYLE, gameStatusOf } from '../lib/utils'
+import { imageUrl } from '../lib/images'
 import type { GameStatus } from '../types'
 
 // Estados que aparecem na biblioteca (nunca_jogado = wishlist, fica de fora).
@@ -112,7 +113,7 @@ export function LibraryGames() {
                   fontSize: 64, position: 'relative', overflow: 'hidden',
                 }}>
                   {item.cover_url
-                    ? <img src={item.cover_url} alt={item.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ? <img src={imageUrl(item.cover_url, 320)!} alt={item.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                     : '🎮'
                   }
                 </div>

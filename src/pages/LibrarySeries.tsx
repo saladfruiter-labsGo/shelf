@@ -7,6 +7,7 @@ import { LibraryStats } from '../components/LibraryStats'
 import { LibrarySearch } from '../components/LibrarySearch'
 import { Pager, usePagination } from '../components/Pager'
 import { norm } from '../lib/utils'
+import { imageUrl } from '../lib/images'
 
 const STATUS_LABEL: Record<string, string> = {
   completed:   'Finalizada',
@@ -119,7 +120,7 @@ export function LibrarySeries() {
                   fontSize: 64, overflow: 'hidden',
                 }}>
                   {item.cover_url
-                    ? <img src={item.cover_url} alt={item.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ? <img src={imageUrl(item.cover_url, 320)!} alt={item.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                     : '📺'
                   }
                 </div>

@@ -9,6 +9,7 @@ import { useIsMobile } from '../hooks/useIsMobile'
 import { useMediaPreview } from '../components/MediaSummaryModal'
 import type { StorySubject } from '../lib/story'
 import { formatPlaytime } from '../lib/utils'
+import { imageUrl } from '../lib/images'
 
 const TYPE_EMOJI: Record<string, string> = {
   game: '🎮', book: '📚', movie: '🎬', series: '📺', music: '🎵',
@@ -289,7 +290,7 @@ export function Diary() {
                         }}
                       >
                         {entry.cover_url
-                          ? <img src={entry.cover_url} alt="" loading="lazy" />
+                          ? <img src={imageUrl(entry.cover_url, 320)!} alt="" loading="lazy" />
                           : <span>{TYPE_EMOJI[entry.type] ?? '📌'}</span>}
                       </div>
 

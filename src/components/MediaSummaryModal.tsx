@@ -12,6 +12,7 @@ import {
   GAME_STATUS_LABEL,
   STATUS_LABEL,
 } from '../lib/utils'
+import { imageUrl } from '../lib/images'
 import type { MediaItem, MediaType } from '../types'
 import { CategoryTag } from './CategoryTag'
 import { StarRating } from './StarRating'
@@ -180,7 +181,7 @@ function MediaSummaryModal({ selection, onClose }: { selection: MediaSelection |
           <>
             <div className="media-summary-cover">
               {media.cover_url
-                ? <img src={media.cover_url} alt={`Capa de ${media.title}`} />
+                ? <img src={imageUrl(media.cover_url, 640)!} alt={`Capa de ${media.title}`} />
                 : <span aria-hidden>{media.type === 'movie' ? '🎬' : media.type === 'series' ? '📺' : media.type === 'game' ? '🎮' : media.type === 'music' ? '🎵' : '📚'}</span>
               }
             </div>

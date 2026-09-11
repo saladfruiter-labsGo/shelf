@@ -5,6 +5,7 @@ import { StarRating } from './StarRating'
 import { SeriesSeasons } from './SeriesSeasons'
 import type { MediaStatus } from '../types'
 import { STATUS_LABEL } from '../lib/utils'
+import { imageUrl } from '../lib/images'
 
 const FONT = 'Space Grotesk, sans-serif'
 const STATUSES: MediaStatus[] = ['wishlist', 'in_progress', 'completed', 'dropped']
@@ -72,7 +73,7 @@ export function SeriesModal({ id, onClose }: { id: number; onClose: () => void }
         {/* Banner */}
         <div style={{ position: 'relative', width: '100%', aspectRatio: '16/9', background: 'var(--card-hover)', overflow: 'hidden' }}>
           {item?.cover_url
-            ? <img src={item.cover_url} alt={item.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            ? <img src={imageUrl(item.cover_url, 640)!} alt={item.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
             : <div style={{ width: '100%', height: '100%', display: 'grid', placeItems: 'center', fontSize: 64 }}>📺</div>}
           <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, var(--bg) 2%, transparent 55%)' }} />
           <button

@@ -41,7 +41,7 @@ export const STORY_H = 1920
 
 /** Rota capas remotas pelo proxy da mesma origem, evitando canvas "tainted". */
 function proxiedCover(url: string): string {
-  return /^https?:\/\//i.test(url) ? `/api/img?url=${encodeURIComponent(url)}` : url
+  return /^https?:\/\//i.test(url) ? `/api/img?url=${encodeURIComponent(url)}&width=1024` : url
 }
 
 function loadImage(url: string): Promise<HTMLImageElement> {

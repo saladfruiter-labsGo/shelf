@@ -1,5 +1,6 @@
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import type { MediaItem, MediaType } from '../types'
+import { imageUrl } from '../lib/images'
 
 const TYPE_EMOJI: Record<MediaType, string> = {
   movie: '🎬', series: '📺', game: '🎮', book: '📚', music: '🎵',
@@ -47,7 +48,7 @@ export function ListPosterTile({
       >
         <div className="list-tile-poster">
           {item.cover_url
-            ? <img src={item.cover_url} alt={item.title} loading="lazy" draggable={false} />
+            ? <img src={imageUrl(item.cover_url, 320)!} alt={item.title} loading="lazy" draggable={false} />
             : <div className="list-tile-fallback">{TYPE_EMOJI[item.type]}</div>}
           {rank !== null && (
             <span className={`list-tile-rank${rank <= 3 ? ' is-top' : ''}`}>{rank}</span>

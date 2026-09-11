@@ -10,6 +10,7 @@ import { ConfirmDialog } from '../components/ConfirmDialog'
 import { PricePanel } from '../components/PricePanel'
 import type { MediaStatus, TmdbMediaPreview } from '../types'
 import { STATUS_LABEL, GAME_STATUSES, GAME_STATUS_LABEL, gameStatusOf, formatRuntime, formatPlaytime, formatDate, fmtRating } from '../lib/utils'
+import { imageUrl } from '../lib/images'
 
 const STATUSES: MediaStatus[] = ['wishlist', 'in_progress', 'completed', 'dropped']
 
@@ -146,7 +147,7 @@ function TmdbIdentificationDialog({
           <div className="flex gap-3 p-3 mb-5 rounded-xl bg-card border border-border">
             <div className="w-16 h-24 flex-shrink-0 rounded-md overflow-hidden bg-surface">
               {preview.cover_url
-                ? <img src={preview.cover_url} alt="" className="w-full h-full object-cover" />
+                ? <img src={imageUrl(preview.cover_url, 320)!} alt="" className="w-full h-full object-cover" />
                 : <div className="w-full h-full flex items-center justify-center text-2xl">{preview.type === 'movie' ? '🎬' : '📺'}</div>}
             </div>
             <div className="min-w-0">
@@ -336,7 +337,7 @@ export function MediaDetail() {
         <div className="flex-shrink-0 w-40 md:w-52">
           <div className="w-full aspect-[2/3] rounded-lg overflow-hidden bg-card border border-border">
             {item.cover_url
-              ? <img src={item.cover_url} alt={item.title} className="w-full h-full object-cover" />
+              ? <img src={imageUrl(item.cover_url, 640)!} alt={item.title} className="w-full h-full object-cover" />
               : <div className="w-full h-full flex items-center justify-center text-muted text-4xl">
                   {item.type === 'movie' ? '🎬' : item.type === 'series' ? '📺' : item.type === 'game' ? '🎮' : item.type === 'music' ? '🎵' : '📚'}
                 </div>

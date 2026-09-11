@@ -69,4 +69,4 @@ Tokens como `--page-x`, `--nav-h`, `--bottomnav-h` e grades controlam a adaptaç
 
 ## Wrap e imagens
 
-`src/lib/story.ts` desenha canvas 1080×1920. Capas usadas no canvas passam por `/api/img`; URL externa direta pode contaminar o canvas por CORS. O proxy só aceita hosts HTTPS permitidos e revalida redirects para impedir SSRF.
+`src/lib/images.ts` envia URLs HTTPS externas para `/api/img`, que entrega variantes WebP persistentes de 160, 320, 640 ou 1024 px. Endpoints já locais, como Plex e Kavita, permanecem intactos. `src/lib/story.ts` usa a variante maior do mesmo proxy para desenhar o canvas 1080×1920; URL externa direta pode contaminar o canvas por CORS. O proxy só aceita hosts HTTPS permitidos e revalida redirects para impedir SSRF.

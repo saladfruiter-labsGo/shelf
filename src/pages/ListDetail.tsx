@@ -9,6 +9,7 @@ import { useMediaPreview } from '../components/MediaSummaryModal'
 import { usePosterDrag, type DropTarget } from '../hooks/usePosterDrag'
 import { MODES, MODE_LABEL, isConsumed, orderPayload, reorderItems } from '../lib/lists'
 import { TYPE_LABEL, norm, timeAgoLong } from '../lib/utils'
+import { imageUrl } from '../lib/images'
 import type { ListDetail as ListDetailData, ListMode, ListTier, MediaItem, MediaType } from '../types'
 
 const TYPE_EMOJI: Record<string, string> = {
@@ -588,7 +589,7 @@ export function ListDetail() {
                   <span className="list-row-rank">{mode === 'ranking' ? i + 1 : TYPE_EMOJI[item.type]}</span>
                   <span className="list-row-cover">
                     {item.cover_url
-                      ? <img src={item.cover_url} alt="" loading="lazy" draggable={false} />
+                      ? <img src={imageUrl(item.cover_url, 320)!} alt="" loading="lazy" draggable={false} />
                       : null}
                   </span>
                   <span style={{ minWidth: 0 }}>
@@ -628,7 +629,7 @@ export function ListDetail() {
           }}
         >
           {dnd.drag.cover
-            ? <img src={dnd.drag.cover} alt="" />
+            ? <img src={imageUrl(dnd.drag.cover, 320)!} alt="" />
             : <div style={{ width: '100%', height: '100%', display: 'grid', placeItems: 'center', background: 'var(--card)', color: 'var(--text-muted)', fontSize: 11, padding: 6, textAlign: 'center' }}>{dnd.drag.title}</div>}
         </div>,
         document.body,

@@ -5,6 +5,7 @@ import { api } from '../lib/api'
 import { MODES, MODE_LABEL } from '../lib/lists'
 import { TYPE_LABEL, timeAgoLong } from '../lib/utils'
 import type { List, ListMode, MediaType } from '../types'
+import { imageUrl } from '../lib/images'
 
 /** "32 filmes · 8 séries" — o subtítulo do card. */
 function typeSummary(list: List): string {
@@ -29,7 +30,7 @@ function Collage({ covers }: { covers: string[] }) {
     <div className="list-collage">
       {covers.slice(0, 5).map((cover, i) => (
         <div key={`${cover}-${i}`} className="list-collage-poster">
-          <img src={cover} alt="" loading="lazy" />
+          <img src={imageUrl(cover, 160)!} alt="" loading="lazy" />
         </div>
       ))}
     </div>

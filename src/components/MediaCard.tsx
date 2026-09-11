@@ -1,4 +1,5 @@
 import type { MediaItem } from '../types'
+import { imageUrl } from '../lib/images'
 import { CategoryTag } from './CategoryTag'
 import { StarRating } from './StarRating'
 import { useMediaPreview } from './MediaSummaryModal'
@@ -28,7 +29,7 @@ export function MediaCard({ item, compact = false }: Props) {
       >
         {item.cover_url ? (
           <img
-            src={item.cover_url}
+            src={imageUrl(item.cover_url, 320)!}
             alt={item.title}
             title={originalFilenameTooltip}
             className="w-full h-full object-cover group-hover:scale-[1.04] transition-transform duration-500"

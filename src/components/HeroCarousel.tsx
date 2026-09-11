@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { CATEGORIES } from '../lib/categories'
 import { fmtRating, formatDate } from '../lib/utils'
+import { imageUrl } from '../lib/images'
 import { StarRating } from './StarRating'
 import { useMediaPreview } from './MediaSummaryModal'
 import type { MediaItem } from '../types'
@@ -49,11 +50,12 @@ export function HeroCarousel({ items }: Props) {
         {slides.map(item => {
           const cat = CATEGORIES.find(c => c.key === item.type)
           const when = item.completed_at ?? item.updated_at
+          const cover = imageUrl(item.cover_url, 1024)
           return (
             <div key={item.id} style={{ flex: '0 0 100%', position: 'relative', height: '100%', overflow: 'hidden' }}>
               {/* ambient blurred cover */}
-              {item.cover_url && (
-                <div aria-hidden style={{ position: 'absolute', inset: 0, backgroundImage: `url(${item.cover_url})`, backgroundSize: 'cover', backgroundPosition: 'center', filter: 'blur(24px) brightness(.5)', transform: 'scale(1.15)' }} />
+              {cover && (
+                <div aria-hidden style={{ position: 'absolute', inset: 0, backgroundImage: `url(${cover})`, backgroundSize: 'cover', backgroundPosition: 'center', filter: 'blur(24px) brightness(.5)', transform: 'scale(1.15)' }} />
               )}
               <div aria-hidden style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, var(--bg) 1%, rgba(0,0,0,.15) 40%, rgba(0,0,0,.35) 100%)' }} />
               <div aria-hidden style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to right, rgba(0,0,0,.75) 0%, rgba(0,0,0,.35) 45%, transparent 70%)' }} />
@@ -108,8 +110,8 @@ export function HeroCarousel({ items }: Props) {
                   className="hero-poster"
                   style={{ flex: '0 0 auto', width: 'clamp(200px, 22vw, 320px)', aspectRatio: '2 / 3', borderRadius: 16, overflow: 'hidden', cursor: 'pointer', boxShadow: '0 30px 70px rgba(0,0,0,.6)', border: '1px solid rgba(255,255,255,.14)', background: 'var(--card)' }}
                 >
-                  {item.cover_url ? (
-                    <img src={item.cover_url} alt={item.title} style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center', display: 'block' }} />
+                  {cover ? (
+                    <img src={cover} alt={item.title} style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center', display: 'block' }} />
                   ) : (
                     <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       <span style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '5rem', fontWeight: 900, color: 'var(--dim)', textTransform: 'uppercase' }}>{item.title[0]}</span>

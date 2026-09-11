@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../lib/api'
 import { CATEGORIES } from '../lib/categories'
+import { imageUrl } from '../lib/images'
 import { TYPE_LABEL, TYPE_COLOR, GAME_STATUS_LABEL, gameStatusOf, formatPlaytime, formatRuntime, fmtRating, formatMoney, timeAgo, toISODate, todayISODate, daysUntil } from '../lib/utils'
 import type { MediaItem, MediaType, TrendingItem, DiaryEntry, GamePriceSummary } from '../types'
 import { MediaPreviewTrigger, useMediaPreview } from '../components/MediaSummaryModal'
@@ -33,7 +34,7 @@ function Cover({ url, type, w, h, radius = 8, font = 22 }: { url: string | null;
   const [broken, setBroken] = useState(false)
   const base = { width: w, height: h, borderRadius: radius, flexShrink: 0 } as const
   if (url && !broken)
-    return <img src={url} alt="" onError={() => setBroken(true)} style={{ ...base, objectFit: 'cover', display: 'block' }} />
+    return <img src={imageUrl(url, Math.max(160, w * 2))!} alt="" onError={() => setBroken(true)} style={{ ...base, objectFit: 'cover', display: 'block' }} />
   return <div style={{ ...base, display: 'grid', placeItems: 'center', color: '#fff', fontSize: font, background: coverBg(type) }}>{TYPE_EMOJI[type]}</div>
 }
 
@@ -72,7 +73,7 @@ const Empty = ({ children }: { children: React.ReactNode }) => (
 /** Capa em pôster (2:3) que preenche a largura do card, com o mesmo fallback do Cover. */
 function Poster({ url, type }: { url: string | null; type: MediaType }) {
   const [broken, setBroken] = useState(false)
-  if (url && !broken) return <img className="art" src={url} alt="" onError={() => setBroken(true)} />
+  if (url && !broken) return <img className="art" src={imageUrl(url, 640)!} alt="" onError={() => setBroken(true)} />
   return <div className="art fb" style={{ background: coverBg(type) }}>{TYPE_EMOJI[type]}</div>
 }
 
@@ -228,7 +229,9 @@ function TrendingCarousel({ items }: { items: TrendingItem[] }) {
   return (
     <section className="hc-carousel" onMouseEnter={e => (e.currentTarget.dataset.pause = '1')}>
       <div className="hc-track" style={{ transform: `translateX(-${i * 100}%)` }}>
-        {items.map((t, k) => (
+        {items.map((t, k) => {
+          const cover = imageUrl(t.cover_url, 1024)
+          return (
           <div
             className="hc-slide media-preview-card"
             key={k}
@@ -255,7 +258,7 @@ function TrendingCarousel({ items }: { items: TrendingItem[] }) {
               }
             }}
           >
-            <div className="hc-glow" style={{ background: `radial-gradient(circle at 80% 30%, color-mix(in srgb, ${hue(t.type)} 55%, transparent), transparent 55%), linear-gradient(115deg, color-mix(in srgb, ${hue(t.type)} 22%, #0b0b16), #0b0b16 65%)${t.cover_url ? `, url(${t.cover_url})` : ''}`, backgroundSize: 'cover', backgroundPosition: 'center' }} />
+            <div className="hc-glow" style={{ background: `radial-gradient(circle at 80% 30%, color-mix(in srgb, ${hue(t.type)} 55%, transparent), transparent 55%), linear-gradient(115deg, color-mix(in srgb, ${hue(t.type)} 22%, #0b0b16), #0b0b16 65%)${cover ? `, url(${cover})` : ''}`, backgroundSize: 'cover', backgroundPosition: 'center' }} />
             <div className="hc-inner">
               <span className="hc-flag" style={{ color: hue(t.type) }}>{TYPE_EMOJI[t.type]} Em alta · {TYPE_LABEL[t.type]}</span>
               <h3>{t.title}</h3>
@@ -265,7 +268,8 @@ function TrendingCarousel({ items }: { items: TrendingItem[] }) {
               </div>
             </div>
           </div>
-        ))}
+          )
+        })}
       </div>
       {n > 1 && <>
         <button className="hc-btn prev" aria-label="Anterior" onClick={() => go(i - 1)}>‹</button>

@@ -7,6 +7,7 @@ import { PriceBadge } from '../components/PriceBadge'
 import { Pager, usePagination } from '../components/Pager'
 import { useMediaPreview } from '../components/MediaSummaryModal'
 import { TYPE_LABEL, TYPE_COLOR, formatDate, norm } from '../lib/utils'
+import { imageUrl } from '../lib/images'
 import type { MediaItem, MediaType } from '../types'
 
 /* ─── Ordenações disponíveis ─── */
@@ -372,7 +373,7 @@ export function Wishlist() {
                   }}
                 >
                   {item.cover_url
-                    ? <img src={item.cover_url} alt={item.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ? <img src={imageUrl(item.cover_url, 320)!} alt={item.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                     : TYPE_EMOJI[item.type]
                   }
                   <div style={{ position: 'absolute', top: 8, left: 8 }}>

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../lib/api'
+import { imageUrl } from '../lib/images'
 import type { NowPlayingItem } from '../types'
 import { useMediaPreview } from './MediaSummaryModal'
 
@@ -102,7 +103,7 @@ function NowPlayingRow({ item, source }: { item: NowPlayingItem; source: 'plex' 
       {/* Capa */}
       {item.cover_url && (
         <img
-          src={item.cover_url}
+          src={imageUrl(item.cover_url, 160)!}
           alt=""
           style={{ height: 30, width: item.media_type === 'music' ? 30 : 20, objectFit: 'cover', borderRadius: 3, flexShrink: 0 }}
           onError={(e) => { (e.currentTarget.style.display = 'none') }}
