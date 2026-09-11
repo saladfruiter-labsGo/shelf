@@ -981,6 +981,24 @@ body {
 }
 .list-picker-search::placeholder { color: var(--text-muted); }
 .list-picker-search:focus { border-color: var(--accent); }
+.list-picker-filters {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  padding: 0 16px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.list-picker-filter {
+  padding: 5px 9px;
+  border: 1px solid var(--border); border-radius: 999px;
+  background: var(--card); color: var(--text-muted);
+  font: inherit; font-size: 11px; cursor: pointer;
+}
+.list-picker-filter:hover { color: var(--text-primary); border-color: var(--border-strong); }
+.list-picker-filter.is-active { border-color: var(--accent); background: var(--accent-bg); color: var(--accent); }
+.list-picker-section-title {
+  padding: 12px 14px 6px;
+  font-size: 10px; font-weight: 700; letter-spacing: 1.2px;
+  text-transform: uppercase; color: var(--text-muted);
+}
 .list-picker-body { flex: 1; overflow-y: auto; }
 .list-picker-row {
   display: flex; align-items: center; gap: 10px;

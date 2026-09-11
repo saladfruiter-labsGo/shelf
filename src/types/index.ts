@@ -37,6 +37,7 @@ export interface MediaItem {
   list_added_at?:    string            // só em /lists/:id — quando o item entrou na lista
   list_position?:    number            // só em /lists/:id — ordem manual (ranking)
   tier_id?:          number | null     // só em /lists/:id — tier em que a capa está
+  list_only?:        number            // 1 = snapshot pertencente somente à lista
 }
 
 /* ─── Diário: registros de consumo (N por mídia) ─── */
@@ -177,6 +178,13 @@ export interface ListCheck {
   id:       number
   name:     string
   contains: 0 | 1
+}
+
+export interface ListSearchAddResult {
+  ok:              boolean
+  list_item_id:    number
+  created:         boolean
+  already_in_list: boolean
 }
 
 /* ─── Integrações (Plex + Last.fm) ─── */

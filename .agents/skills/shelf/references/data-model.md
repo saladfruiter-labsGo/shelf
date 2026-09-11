@@ -61,6 +61,10 @@ Histórico N:1 em relação à mídia. Cada consumo pode gerar uma linha com dat
 
 A retenção executada por `server/activity-retention.ts` **não apaga linhas**: após a janela configurada, somente `activity_events.raw` vira `NULL`. Feed, timestamps, notas, títulos, diário e estatísticas continuam por tempo indeterminado.
 
+### Mídia isolada de listas
+
+`list_only_items` guarda snapshots de resultados pesquisados dentro de uma lista. Eles pertencem à lista, não são linhas de `media_items`, não entram na biblioteca, no backlog, no diário, nos preços ou nas integrações. A mesma obra pode existir independentemente em listas diferentes.
+
 ### Preços
 
 `game_price_products`, `game_price_offers` e `game_price_history` guardam identidade no provedor, snapshot atual e histórico. Valores monetários são inteiros em centavos. Ausência/erro do provedor não pode apagar o último preço conhecido, e sair do backlog não apaga o histórico.

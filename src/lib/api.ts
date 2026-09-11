@@ -1,5 +1,5 @@
 import type {
-  Details, List, ListCheck, ListDetail, ListMode, ListTier,
+  Details, List, ListCheck, ListDetail, ListMode, ListTier, ListSearchAddResult,
   MediaItem, MediaStatus, MediaType,
   SearchResult, WrapData, SeriesView, SeriesPreview, DiaryEntry, TmdbMediaPreview,
   IntegrationStatus, NowPlaying, ActivityEvent, ActivityMediaType, MusicStats, TrendingItem,
@@ -129,6 +129,11 @@ export const api = {
       request(`/lists/${id}`, { method: 'DELETE' }),
     addItem: (listId: number, mediaItemId: number, tierId?: number | null): Promise<{ ok: boolean }> =>
       request(`/lists/${listId}/items`, { method: 'POST', body: JSON.stringify({ media_item_id: mediaItemId, tier_id: tierId ?? null }) }),
+    addSearchResult: (listId: number, result: SearchResult, tierId?: number | null): Promise<ListSearchAddResult> =>
+      request(`/lists/${listId}/items/search`, {
+        method: 'POST',
+        body: JSON.stringify({ ...result, tier_id: tierId ?? null }),
+      }),
     removeItem: (listId: number, mediaItemId: number): Promise<{ ok: boolean }> =>
       request(`/lists/${listId}/items/${mediaItemId}`, { method: 'DELETE' }),
     /** Ordem manual completa — serve ao ranking e ao arraste entre tiers. */

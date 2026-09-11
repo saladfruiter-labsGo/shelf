@@ -34,8 +34,10 @@ export function Library() {
   const musicPlays = musicEvents.filter(e => e.event_type === 'scrobble' || e.event_type === 'listen').length
 
   // A wishlist é separada da coleção: itens ainda não adquiridos/consumidos
-  // vivem só na Wishlist e não contam para a biblioteca.
-  const allItems = rawItems
+  // vivem só na Wishlist e não contam para a biblioteca. Música também não é
+  // um item da grade geral: seus registros vivem exclusivamente no histórico
+  // de execuções de /library/music.
+  const allItems = rawItems.filter(item => item.type !== 'music')
 
   const countByType = (key: MediaType) =>
     key === 'music' ? musicPlays : allItems.filter(i => i.type === key).length

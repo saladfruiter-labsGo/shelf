@@ -67,6 +67,7 @@ test('adota banco sem versão, preserva dados e cria snapshot antes da migration
     { version: 2, name: 'media-domain-checks' },
     { version: 3, name: 'allow-music-media-type' },
     { version: 4, name: 'diary-progress-snapshots' },
+    { version: 5, name: 'isolated-list-media' },
   ])
 
   const item = db.prepare("SELECT title, status FROM media_items WHERE external_id = 'legacy-1'").get()
@@ -83,6 +84,7 @@ test('adota banco sem versão, preserva dados e cria snapshot antes da migration
   assert.ok(diaryColumns.includes('progress_total'))
   assert.ok(diaryColumns.includes('progress_unit'))
   assert.deepEqual(db.prepare('SELECT list_id, media_item_id FROM list_items').all(), [{ list_id: 1, media_item_id: 1 }])
+  assert.equal(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'list_only_items'").get() !== undefined, true)
   assert.deepEqual(db.pragma('foreign_key_check'), [])
   assert.deepEqual(db.pragma('quick_check'), [{ quick_check: 'ok' }])
 
