@@ -5,7 +5,7 @@ import { api } from '../lib/api'
 import { CATEGORIES } from '../lib/categories'
 import { imageUrl } from '../lib/images'
 import { TYPE_LABEL, TYPE_COLOR, GAME_STATUS_LABEL, gameStatusOf, formatPlaytime, formatRuntime, fmtRating, formatMoney, timeAgo, toISODate, todayISODate, daysUntil } from '../lib/utils'
-import type { MediaItem, MediaType, TrendingItem, DiaryEntry, GamePriceSummary } from '../types'
+import type { MediaItem, MediaType, TrendingItem, DiaryEntry, GamePriceSummary, UnratedSeason } from '../types'
 import { MediaPreviewTrigger, useMediaPreview } from '../components/MediaSummaryModal'
 import { StarRating } from '../components/StarRating'
 
@@ -288,6 +288,7 @@ export function Dashboard() {
 
   const { data: allItems = [] } = useQuery({ queryKey: ['media-library'], queryFn: () => api.media.listAll({ library: true }) })
   const { data: diary = [] } = useQuery({ queryKey: ['diary-all'], queryFn: () => api.diary.list() })
+  const { data: unratedSeasons = [] } = useQuery({ queryKey: ['series-unrated'], queryFn: api.series.unrated })
   const { data: upcoming } = useQuery({ queryKey: ['media-upcoming'], queryFn: () => api.media.upcoming() })
   const { data: musicStats } = useQuery({ queryKey: ['music-stats'], queryFn: api.integrations.musicStats })
   const { data: lists = [] } = useQuery({ queryKey: ['lists'], queryFn: api.lists.list })
@@ -338,20 +339,15 @@ export function Dashboard() {
     () => allItems.filter(i => i.status === 'dropped').sort(byRecent).slice(0, 4),
     [allItems],
   )
-  const unratedCompleted = useMemo(
-    () => allItems
-      .filter(i => i.type !== 'music' && i.status === 'completed' && i.rating <= 0)
-      .sort((a, b) => new Date(b.completed_at ?? b.updated_at).getTime() - new Date(a.completed_at ?? a.updated_at).getTime()),
-    [allItems],
-  )
-
-  const quickRatingMutation = useMutation({
-    mutationFn: ({ id, rating }: { id: number; rating: number }) => api.media.quickRate(id, rating),
-    onSuccess: updated => {
-      qc.setQueryData<MediaItem[]>(['media-library'], current =>
-        current?.map(item => item.id === updated.id ? { ...item, ...updated } : item) ?? [])
+  const seasonRatingMutation = useMutation({
+    mutationFn: ({ mediaItemId, seasonNumber, rating }: { mediaItemId: number; seasonNumber: number; rating: number }) =>
+      api.series.quickRate(mediaItemId, seasonNumber, rating),
+    onSuccess: (_updated, rated) => {
+      qc.setQueryData<UnratedSeason[]>(['series-unrated'], current =>
+        current?.filter(season => season.media_item_id !== rated.mediaItemId || season.season_number !== rated.seasonNumber) ?? [])
       qc.invalidateQueries({ queryKey: ['diary'] })
       qc.invalidateQueries({ queryKey: ['diary-all'] })
+      qc.invalidateQueries({ queryKey: ['series', rated.mediaItemId] })
       qc.invalidateQueries({ queryKey: ['wrap'] })
     },
   })
@@ -449,31 +445,43 @@ export function Dashboard() {
         </div>
       </div>
 
-      {unratedCompleted.length > 0 && (
+      {unratedSeasons.length > 0 && (
         <div className="band">
           <section className="quick-rate">
             <div className="quick-rate-head">
               <div>
-                <span className="eyebrow">Conclusões sem nota</span>
-                <h2>O que você achou?</h2>
+                <span className="eyebrow">Temporadas concluídas sem avaliação</span>
+                <h2>O que você achou da temporada?</h2>
               </div>
-              <span className="count">{unratedCompleted.length} para avaliar</span>
+              <span className="count">{unratedSeasons.length} para avaliar</span>
             </div>
             <div className="quick-rate-list">
-              {unratedCompleted.slice(0, 4).map(item => (
-                <div className="quick-rate-item" key={item.id}>
-                  <MediaPreviewTrigger media={item} label={`Abrir resumo de ${item.title}`} className="quick-rate-media">
-                    <Cover url={item.cover_url} type={item.type} w={42} h={62} radius={7} font={20} />
+              {unratedSeasons.slice(0, 4).map(season => (
+                <div className="quick-rate-item" key={`${season.media_item_id}-${season.season_number}`}>
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/media/${season.media_item_id}`)}
+                    aria-label={`Abrir ${season.title}`}
+                    className="quick-rate-media"
+                    style={{ background: 'none', border: 0, padding: 0, textAlign: 'left', cursor: 'pointer' }}
+                  >
+                    <Cover url={season.cover_url} type="series" w={42} h={62} radius={7} font={20} />
                     <div>
-                      <span className="kind" style={{ color: hue(item.type) }}>{TYPE_LABEL[item.type]}</span>
-                      <strong>{item.title}</strong>
-                      <small>{item.completed_at ? relTime(item.completed_at) : 'concluído'}</small>
+                      <span className="kind" style={{ color: hue('series') }}>
+                        {season.season_title || `Temporada ${season.season_number}`}
+                      </span>
+                      <strong>{season.title}</strong>
+                      <small>{season.completed_at ? relTime(season.completed_at) : 'concluída'}</small>
                     </div>
-                  </MediaPreviewTrigger>
+                  </button>
                   <StarRating
                     value={0}
                     size="md"
-                    onChange={rating => rating > 0 && quickRatingMutation.mutate({ id: item.id, rating })}
+                    onChange={rating => rating > 0 && seasonRatingMutation.mutate({
+                      mediaItemId: season.media_item_id,
+                      seasonNumber: season.season_number,
+                      rating,
+                    })}
                   />
                 </div>
               ))}
@@ -634,7 +642,9 @@ export function Dashboard() {
                 <Cover url={d.cover_url} type={d.type} w={48} h={72} font={22} />
                 <div className="body">
                   <span className="kind" style={{ color: hue(d.type) }}>{TYPE_LABEL[d.type]}</span>
-                  <div className="name">{d.title}{d.season_number != null ? ` · S${d.season_number}E${d.episode_number}` : ''}</div>
+                  <div className="name">
+                    {d.title}{d.season_number != null ? ` · T${d.season_number}${d.episode_number != null ? `E${d.episode_number}` : ''}` : ''}
+                  </div>
                   <div className="when">{relTime(d.watched_at)}</div>
                   <div className="st">{d.rating != null && d.rating > 0 ? '★'.repeat(Math.round(d.rating)) : <span style={{ color: 'var(--text-muted)' }}>sem nota</span>}</div>
                 </div>

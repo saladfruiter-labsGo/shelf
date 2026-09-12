@@ -42,8 +42,9 @@ Escolha query keys estáveis e invalide todas as visões afetadas por uma mutati
 ## Avaliações e conclusão
 
 - Conclusão manual abre `DiaryEntryModal`, que coleta data, nota e comentário.
-- Conclusões automáticas sem nota aparecem na fila do Dashboard.
+- Temporadas concluídas sem nota aparecem na fila do Dashboard.
 - `PATCH /api/media/:id/quick-rating` mantém mídia e diário coerentes.
+- `PATCH /api/series/:id/season/:seasonNumber/rating` mantém temporada e sua conclusão no diário coerentes.
 - `StarRating` suporta meio ponto com mouse/caneta e estrela inteira por toque. Preserve rótulos acessíveis.
 
 Não crie mutation de avaliação rápida que atualize apenas `media_items.rating`.

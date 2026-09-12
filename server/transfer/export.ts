@@ -108,7 +108,7 @@ export function buildExport(scope: ExportScope): ShelfExport {
 
   const seasonRows = inIds
     ? (db.prepare(
-        `SELECT media_item_id, season_number, title, episode_count, status, completed_at
+        `SELECT media_item_id, season_number, title, episode_count, status, completed_at, rating
            FROM series_seasons WHERE media_item_id IN ${inIds} ORDER BY media_item_id, season_number`,
       ).all(...ids) as any[])
     : []
@@ -127,6 +127,7 @@ export function buildExport(scope: ExportScope): ShelfExport {
       episode_count: s.episode_count,
       status: s.status,
       completed_at: s.completed_at,
+      rating: s.rating,
       episodes: episodeRows
         .filter(e => e.media_item_id === mediaId && e.season_number === s.season_number)
         .map(e => ({ episode_number: e.episode_number, title: e.title, watched: e.watched, watched_at: e.watched_at })),

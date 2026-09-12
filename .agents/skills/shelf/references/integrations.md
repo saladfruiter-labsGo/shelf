@@ -45,9 +45,9 @@ Teste enviando o mesmo payload duas vezes e verificando contagem de mídia, ativ
 
 Webhook multipart em `POST /api/integrations/plex/webhook?token=...`, com `media.scrobble` e `media.rate`. Sessões ativas vêm do poll separado.
 
-Deduplicação tenta identidade Plex, resolve TMDB e só então usa título/ano como fallback não ambíguo. Séries e filmes manuais devem ser reutilizados pelo `tmdb_id`; não crie segundo card porque o Plex usa GUID. Episódio chama a lógica de séries e não conclui a obra sem todos os episódios conhecidos.
+Deduplicação tenta identidade Plex, resolve TMDB e só então usa título/ano como fallback não ambíguo. Séries e filmes manuais devem ser reutilizados pelo `tmdb_id`; não crie segundo card porque o Plex usa GUID. Episódio chama a lógica de séries e não conclui a obra sem todos os episódios conhecidos. O último episódio de uma temporada cria também a conclusão de temporada no diário; retry não duplica essa transição.
 
-Reenvio precisa manter uma única atividade e uma única entrada de diário para a mesma sessão. Capas passam por `/api/integrations/plex/image`, sem expor o token.
+Reenvio precisa manter uma única atividade e uma única entrada de diário por granularidade para a mesma sessão (episódio e, quando aplicável, conclusão da temporada). Capas passam por `/api/integrations/plex/image`, sem expor o token.
 
 ## Last.fm
 

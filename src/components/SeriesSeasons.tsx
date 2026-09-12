@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../lib/api'
 import type { SeriesView, SeriesSeason } from '../types'
+import { DiaryEntryModal, type DiaryEntryValues } from './DiaryEntryModal'
+import { fmtRating } from '../lib/utils'
 
 const FONT = 'Space Grotesk, sans-serif'
 
@@ -27,11 +29,15 @@ function SeasonRow({
   onMutate: (data: SeriesView) => void
 }) {
   const [open, setOpen] = useState(false)
+  const [logging, setLogging] = useState(false)
   const qc = useQueryClient()
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['media'] })
     qc.invalidateQueries({ queryKey: ['recent'] })
+    qc.invalidateQueries({ queryKey: ['diary'] })
+    qc.invalidateQueries({ queryKey: ['diary-all'] })
+    qc.invalidateQueries({ queryKey: ['series-unrated'] })
   }
 
   const toggleEp = useMutation({
@@ -43,6 +49,20 @@ function SeasonRow({
     mutationFn: (watched: boolean) => api.series.toggleSeason(mediaId, season.season_number, watched),
     onSuccess: (data) => { onMutate(data); invalidate() },
   })
+  const logSeason = useMutation({
+    mutationFn: (values: DiaryEntryValues) => api.diary.create({
+      media_item_id: mediaId,
+      season_number: season.season_number,
+      watched_at: values.watched_at,
+      rating: values.rating > 0 ? values.rating : null,
+      comment: values.comment || null,
+    }),
+    onSuccess: () => {
+      setLogging(false)
+      qc.invalidateQueries({ queryKey: ['series', mediaId] })
+      invalidate()
+    },
+  })
 
   const done = season.episode_count > 0 && season.watched_count >= season.episode_count
   const frac = season.episode_count > 0 ? season.watched_count / season.episode_count : 0
@@ -51,7 +71,7 @@ function SeasonRow({
   return (
     <div style={{ borderBottom: '1px solid var(--border)' }}>
       {/* Cabeçalho da temporada */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 4px' }}>
+      <div className="season-header" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 4px' }}>
         <button
           onClick={() => setOpen(o => !o)}
           aria-label={open ? 'Recolher' : 'Expandir'}
@@ -74,26 +94,40 @@ function SeasonRow({
           </p>
           <p style={{ fontFamily: FONT, fontSize: 13, color: 'var(--text-muted)', margin: '4px 0 0' }}>
             {season.watched_count}/{season.episode_count || season.episodes.length} episódios
+            {season.rating > 0 && <span style={{ color: 'var(--gold)', marginLeft: 8 }}>★ {fmtRating(season.rating)}</span>}
           </p>
         </button>
 
-        <div style={{ width: 90, flexShrink: 0 }}>
+        <div className="season-progress" style={{ width: 90, flexShrink: 0 }}>
           <ProgressBar value={frac} />
         </div>
 
-        <button
-          onClick={() => toggleSeason.mutate(!allWatched)}
-          disabled={toggleSeason.isPending || season.episodes.length === 0}
-          style={{
-            flexShrink: 0, fontFamily: FONT, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-            padding: '6px 12px', borderRadius: 999, border: '1px solid var(--border)',
-            background: allWatched ? 'var(--series)' : 'transparent',
-            color: allWatched ? '#fff' : 'var(--text-muted)',
-            opacity: season.episodes.length === 0 ? 0.4 : 1,
-          }}
-        >
-          {allWatched ? 'Vista' : 'Marcar tudo'}
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+          <button
+            onClick={() => setLogging(true)}
+            style={{
+              flexShrink: 0, fontFamily: FONT, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+              padding: '6px 10px', borderRadius: 999, border: '1px solid var(--border)',
+              background: 'transparent', color: 'var(--text-muted)',
+            }}
+          >
+            Diário
+          </button>
+
+          <button
+            onClick={() => toggleSeason.mutate(!allWatched)}
+            disabled={toggleSeason.isPending || season.episodes.length === 0}
+            style={{
+              flexShrink: 0, fontFamily: FONT, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+              padding: '6px 12px', borderRadius: 999, border: '1px solid var(--border)',
+              background: allWatched ? 'var(--series)' : 'transparent',
+              color: allWatched ? '#fff' : 'var(--text-muted)',
+              opacity: season.episodes.length === 0 ? 0.4 : 1,
+            }}
+          >
+            {allWatched ? 'Vista' : 'Marcar tudo'}
+          </button>
+        </div>
       </div>
 
       {/* Episódios (colapsados) */}
@@ -142,6 +176,17 @@ function SeasonRow({
           )}
         </div>
       )}
+
+      <DiaryEntryModal
+        open={logging}
+        mode="create"
+        title={season.title || `Temporada ${season.season_number}`}
+        subtitle="Registrar temporada no diário"
+        initial={{ rating: season.rating }}
+        busy={logSeason.isPending}
+        onCancel={() => setLogging(false)}
+        onSubmit={values => logSeason.mutate(values)}
+      />
     </div>
   )
 }
@@ -187,7 +232,13 @@ export function SeriesSeasons({ mediaId }: { mediaId: number }) {
         <SeasonRow key={s.season_number} mediaId={mediaId} season={s} onMutate={setData} />
       ))}
 
-      <style>{`.episode-row:hover { background: var(--card-hover) !important; }`}</style>
+      <style>{`
+        .episode-row:hover { background: var(--card-hover) !important; }
+        @media (max-width: 560px) {
+          .season-header { gap: 7px !important; }
+          .season-progress { display: none; }
+        }
+      `}</style>
     </div>
   )
 }

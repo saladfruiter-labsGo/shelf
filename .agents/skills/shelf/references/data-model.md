@@ -54,6 +54,8 @@ Histórico N:1 em relação à mídia. Cada consumo pode gerar uma linha com dat
 
 `series_seasons` e `series_episodes` pertencem a `media_items` com cascade. `server/series.ts` é responsável por estrutura TMDB, marcação e `recomputeSeriesStatus`. Uma série só conclui quando todos os episódios conhecidos foram vistos; receber um episódio isolado nunca autoriza inventar que a série inteira acabou.
 
+Cada temporada tem sua própria `rating` (0 significa sem nota), independente de `media_items.rating`. Na transição para concluída, a temporada cria uma entrada automática no diário com `season_number` e sem `episode_number`; retries enquanto ela já está concluída não duplicam essa entrada. A avaliação rápida atualiza a temporada e a conclusão de temporada sem nota mais recente.
+
 ### Atividade e música
 
 - `activity_events` mantém o evento normalizado de cada integração. `UNIQUE(source, external_ref, occurred_at)` ajuda a tornar retries idempotentes.

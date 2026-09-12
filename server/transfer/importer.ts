@@ -217,15 +217,18 @@ export function importShelfBackup(payload: ShelfBackup, mode: ImportMode = 'merg
       if (!item) continue
       for (const season of s.seasons ?? []) {
         prep(`
-          INSERT INTO series_seasons (media_item_id, season_number, title, episode_count, status, completed_at)
-          VALUES (?, ?, ?, ?, ?, ?)
+          INSERT INTO series_seasons (media_item_id, season_number, title, episode_count, status, completed_at, rating)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
           ON CONFLICT(media_item_id, season_number) DO UPDATE SET
             title         = COALESCE(series_seasons.title, excluded.title),
             episode_count = MAX(series_seasons.episode_count, excluded.episode_count),
             status        = excluded.status,
-            completed_at  = COALESCE(series_seasons.completed_at, excluded.completed_at)
+            completed_at  = COALESCE(series_seasons.completed_at, excluded.completed_at),
+            rating        = ${mode === 'replace'
+              ? 'excluded.rating'
+              : 'CASE WHEN excluded.rating > 0 THEN excluded.rating ELSE series_seasons.rating END'}
         `).run(item.id, season.season_number, season.title ?? null, season.episode_count ?? 0,
-               season.status ?? 'in_progress', season.completed_at ?? null)
+               season.status ?? 'in_progress', season.completed_at ?? null, season.rating ?? 0)
 
         for (const ep of season.episodes ?? []) {
           prep(`

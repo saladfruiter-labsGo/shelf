@@ -1,7 +1,7 @@
 import type {
   Details, List, ListCheck, ListDetail, ListMode, ListTier, ListSearchAddResult,
   MediaItem, MediaStatus, MediaType,
-  SearchResult, WrapData, SeriesView, SeriesPreview, DiaryEntry, TmdbMediaPreview,
+  SearchResult, WrapData, SeriesView, SeriesPreview, UnratedSeason, SeasonRatingResult, DiaryEntry, TmdbMediaPreview,
   IntegrationStatus, NowPlaying, ActivityEvent, ActivityMediaType, MusicStats, TrendingItem,
   GamePriceBacklog, GamePriceDetails, GamePriceRange, GamePriceCandidate,
   SteamSyncResult, ExportScope, ExportSummary, ImportReport, BackupStatus, DatabaseBackupInfo,
@@ -91,7 +91,7 @@ export const api = {
       const q = qs.toString()
       return request(`/diary${q ? `?${q}` : ''}`)
     },
-    create: (data: { media_item_id: number; watched_at?: string; rating?: number | null; comment?: string | null }): Promise<DiaryEntry> =>
+    create: (data: { media_item_id: number; season_number?: number; watched_at?: string; rating?: number | null; comment?: string | null }): Promise<DiaryEntry> =>
       request('/diary', { method: 'POST', body: JSON.stringify(data) }),
     update: (id: number, data: { watched_at?: string; rating?: number | null; comment?: string | null }): Promise<DiaryEntry> =>
       request(`/diary/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
@@ -100,6 +100,7 @@ export const api = {
   },
 
   series: {
+    unrated: (): Promise<UnratedSeason[]> => request('/series/unrated'),
     get: (id: number): Promise<SeriesView> => request(`/series/${id}`),
     preview: (tmdbId: string): Promise<SeriesPreview> => request(`/series/preview/${tmdbId}`),
     enrich: (id: number): Promise<SeriesView> => request(`/series/${id}/enrich`, { method: 'POST' }),
@@ -115,6 +116,8 @@ export const api = {
       request(`/series/${id}/episode`, { method: 'PATCH', body: JSON.stringify({ season_number, episode_number, watched }) }),
     toggleSeason: (id: number, season_number: number, watched: boolean): Promise<SeriesView> =>
       request(`/series/${id}/season`, { method: 'PATCH', body: JSON.stringify({ season_number, watched }) }),
+    quickRate: (id: number, season_number: number, rating: number): Promise<SeasonRatingResult> =>
+      request(`/series/${id}/season/${season_number}/rating`, { method: 'PATCH', body: JSON.stringify({ rating }) }),
   },
 
   lists: {

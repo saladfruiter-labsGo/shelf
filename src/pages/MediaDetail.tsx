@@ -539,9 +539,11 @@ export function MediaDetail() {
                   {formatDate(entry.watched_at)}
                 </span>
                 <div className="min-w-0 flex-1">
-                  {entry.season_number != null && entry.episode_number != null && (
+                  {entry.season_number != null && (
                     <span className="text-xs font-bold mr-2" style={{ color: 'var(--series)' }}>
-                      T{entry.season_number}E{entry.episode_number}
+                      {entry.episode_number != null
+                        ? `T${entry.season_number}E${entry.episode_number}`
+                        : entry.season_title || `Temporada ${entry.season_number}`}
                     </span>
                   )}
                   {entry.rating != null && entry.rating > 0 && (
