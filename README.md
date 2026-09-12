@@ -8,9 +8,9 @@ Um app de biblioteca pessoal para rastrear **filmes, séries, games e livros** e
 
 - **Busca unificada** — uma busca única consulta filmes e séries (TMDB), games (RAWG) e livros (Google Books) em paralelo.
 - **Biblioteca** — adicione itens e acompanhe o status: `wishlist`, `in_progress`, `completed`, `dropped`, além de nota (estrelas, com meio-ponto) e notas próprias. Também navegável por categoria (`/library/games`, `/library/books`, `/library/films`, `/library/series`, `/library/music`).
-- **Diário** — histórico cronológico do consumo: filmes e episódios entram ao serem concluídos; livros e jogos entram uma vez por dia quando houve uma atualização real de leitura ou jogo, preservando o progresso final daquele dia.
+- **Diário** — histórico cronológico do consumo: filmes e episódios entram ao serem concluídos; ao assistir todos os episódios, a temporada também ganha uma entrada própria e pode receber nota independente. Livros e jogos entram uma vez por dia quando houve uma atualização real de leitura ou jogo, preservando o progresso final daquele dia.
 - **Listas** — crie listas personalizadas para organizar a coleção (ex.: "Favoritos", "Maratona de fim de ano") em três modos: **Lista** (grade de capas), **Ranking** (mesma grade, com a posição em cada capa e reordenação arrastando) e **Tierlist** (tiers que você cria, renomeia, colore e reordena, arrastando as capas entre eles ou adicionando direto em um tier). Cada lista tem filtros de década, gênero e tipo, um interruptor para **esmaecer o que você já consumiu** e a barra de progresso "já consumi X de Y".
-- **Dashboard** — itens recentes por categoria.
+- **Dashboard** — itens recentes por categoria e uma fila para avaliar temporadas concluídas que ainda estão sem nota.
 - **Detalhes enriquecidos** — sinopse, diretor/desenvolvedor/autor buscados sob demanda na fonte externa (TMDB, RAWG, Google Books) e cacheados no banco.
 - **Tema claro/escuro** — alternável, com preferência salva no navegador.
 - **Wrap** — relatório anual ou mensal gerado como imagem (canvas 1080×1920, formato de story) com suas estatísticas do período: totais por tipo, nota média, top itens e linha do tempo de atividade.

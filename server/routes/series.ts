@@ -2,11 +2,15 @@ import { Hono } from 'hono'
 import { db } from '../db.js'
 import {
   ensureSeriesStructure, getSeriesView, setEpisodeWatched, recomputeSeriesStatus,
-  fetchTmdbSeriesStructure, markEpisodesWatched,
+  fetchTmdbSeriesStructure, markEpisodesWatched, getUnratedCompletedSeasons, applySeasonRating,
 } from '../series.js'
+import { isQuickRating } from '../quick-rating.js'
 import { notifyLibraryActivity } from '../notify.js'
 
 const app = new Hono()
+
+/** Fila da home: temporadas concluídas que ainda não receberam nota. */
+app.get('/unrated', (c) => c.json(getUnratedCompletedSeasons()))
 
 /**
  * Preview de temporadas/episódios de uma série do TMDB, SEM gravar no banco.
@@ -43,8 +47,8 @@ app.post('/:id/enrich', async (c) => {
 
 /**
  * Marca um lote de episódios como vistos (usado pelo modal ao adicionar uma série).
- * Se `diary` for true, cria também um registro no diário POR EPISÓDIO
- * (o diário de série é sempre por episódio).
+ * Se `diary` for true, cria também um registro no diário por episódio.
+ * A conclusão da temporada é registrada separadamente pela regra de domínio.
  */
 app.post('/:id/watched-batch', async (c) => {
   const id = parseInt(c.req.param('id'))
@@ -121,6 +125,22 @@ app.patch('/:id/season', async (c) => {
   tx()
   recomputeSeriesStatus(id)
   return c.json(getSeriesView(id))
+})
+
+/** Avaliação rápida de uma temporada concluída. */
+app.patch('/:id/season/:seasonNumber/rating', async (c) => {
+  const id = Number(c.req.param('id'))
+  const seasonNumber = Number(c.req.param('seasonNumber'))
+  const body = await c.req.json().catch(() => ({})) as { rating?: unknown }
+  if (!Number.isInteger(id) || id <= 0 || !Number.isInteger(seasonNumber) || seasonNumber <= 0) {
+    return c.json({ error: 'Invalid series or season' }, 400)
+  }
+  if (!isQuickRating(body.rating)) {
+    return c.json({ error: 'Rating must be between 0.5 and 5 in half-star steps' }, 400)
+  }
+  const result = applySeasonRating(id, seasonNumber, body.rating)
+  if (!result) return c.json({ error: 'Season not found' }, 404)
+  return c.json(result)
 })
 
 export default app

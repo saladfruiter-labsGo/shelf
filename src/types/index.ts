@@ -50,8 +50,9 @@ export interface DiaryEntry {
   comment:       string | null
   source:        'manual' | 'plex' | 'backfill' | 'kavita' | 'playnite' | string
   created_at:    string
-  season_number:  number | null   // séries: episódio registrado
+  season_number:  number | null   // séries: temporada ou episódio registrado
   episode_number: number | null
+  season_title:   string | null
   progress_day:  string | null     // dia civil fechado pelo job de progresso
   progress_value: number | null    // páginas lidas ou segundos jogados
   progress_total: number | null    // total de páginas; jogos não têm total
@@ -80,7 +81,25 @@ export interface SeriesSeason {
   status:        string
   episode_count: number
   watched_count: number
+  rating:        number
   episodes:      SeriesEpisode[]
+}
+
+export interface UnratedSeason {
+  media_item_id: number
+  season_number: number
+  season_title:  string | null
+  completed_at:  string | null
+  title:         string
+  cover_url:     string | null
+  year:          number | null
+}
+
+export interface SeasonRatingResult {
+  media_item_id:  number
+  season_number:  number
+  rating:         number
+  diary_entry_id: number | null
 }
 
 export interface SeriesView {

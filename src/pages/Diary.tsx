@@ -175,6 +175,8 @@ export function Diary() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['diary'] })
       qc.invalidateQueries({ queryKey: ['media'] })
+      qc.invalidateQueries({ queryKey: ['series'] })
+      qc.invalidateQueries({ queryKey: ['series-unrated'] })
       setEditing(null)
     },
   })
@@ -183,6 +185,8 @@ export function Diary() {
     mutationFn: (id: number) => api.diary.remove(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['diary'] })
+      qc.invalidateQueries({ queryKey: ['series'] })
+      qc.invalidateQueries({ queryKey: ['series-unrated'] })
       setRemoving(null)
     },
   })
@@ -306,8 +310,12 @@ export function Diary() {
                       >
                         <p className="diary-item-title">
                           {entry.title}
-                          {entry.season_number != null && entry.episode_number != null && (
-                            <span className="diary-item-ep">T{entry.season_number}E{entry.episode_number}</span>
+                          {entry.season_number != null && (
+                            <span className="diary-item-ep">
+                              {entry.episode_number != null
+                                ? `T${entry.season_number}E${entry.episode_number}`
+                                : entry.season_title || `Temporada ${entry.season_number}`}
+                            </span>
                           )}
                           {entry.source === 'plex' && <span className="diary-item-plex">Plex</span>}
                         </p>

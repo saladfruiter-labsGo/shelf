@@ -1,5 +1,7 @@
 import { db } from './db.js'
 import { tmdbIdFromGuid } from './plex.js'
+import { isQuickRating } from './quick-rating.js'
+import type Database from 'better-sqlite3'
 
 export { tmdbIdFromGuid } from './plex.js'
 
@@ -41,6 +43,22 @@ const markEpisode = db.prepare(`
                       THEN COALESCE(series_episodes.watched_at, excluded.watched_at)
                       ELSE NULL END
 `)
+
+const seasonProgress = db.prepare(`
+  SELECT COUNT(*) AS watched, MAX(watched_at) AS completed_at
+    FROM series_episodes
+   WHERE media_item_id = ? AND season_number = ? AND watched = 1
+`)
+
+const insertSeasonDiary = db.prepare(`
+  INSERT INTO diary_entries
+    (media_item_id, watched_at, rating, comment, source, season_number, episode_number)
+  VALUES (?, ?, ?, NULL, 'automatic', ?, NULL)
+`)
+
+function atomic<T>(operation: () => T): T {
+  return db.inTransaction ? operation() : db.transaction(operation)()
+}
 
 /* ─────────────────────────── enriquecimento TMDB ─────────────────────────── */
 
@@ -199,8 +217,8 @@ export function markEpisodesWatched(
   watchedAt?: string,
 ): number {
   const now = watchedAt ?? new Date().toISOString()
-  const tx = db.transaction((list: { season_number: number; episode_number: number }[]) => {
-    for (const e of list) {
+  atomic(() => {
+    for (const e of episodes) {
       upsertSeason.run({ media_item_id: mediaItemId, season_number: e.season_number, title: null, episode_count: 0 })
       markEpisode.run({
         media_item_id: mediaItemId,
@@ -211,9 +229,8 @@ export function markEpisodesWatched(
         watched_at: now,
       })
     }
+    recomputeSeriesStatus(mediaItemId)
   })
-  tx(episodes)
-  recomputeSeriesStatus(mediaItemId)
   return episodes.length
 }
 
@@ -249,17 +266,19 @@ export function setEpisodeWatched(
   title?: string | null,
   watchedAt?: string,
 ): void {
-  // garante que a temporada exista
-  upsertSeason.run({ media_item_id: mediaItemId, season_number: seasonNumber, title: null, episode_count: 0 })
-  markEpisode.run({
-    media_item_id: mediaItemId,
-    season_number: seasonNumber,
-    episode_number: episodeNumber,
-    title: title ?? null,
-    watched: watched ? 1 : 0,
-    watched_at: watched ? (watchedAt ?? new Date().toISOString()) : null,
+  atomic(() => {
+    // garante que a temporada exista
+    upsertSeason.run({ media_item_id: mediaItemId, season_number: seasonNumber, title: null, episode_count: 0 })
+    markEpisode.run({
+      media_item_id: mediaItemId,
+      season_number: seasonNumber,
+      episode_number: episodeNumber,
+      title: title ?? null,
+      watched: watched ? 1 : 0,
+      watched_at: watched ? (watchedAt ?? new Date().toISOString()) : null,
+    })
+    recomputeSeriesStatus(mediaItemId)
   })
-  recomputeSeriesStatus(mediaItemId)
 }
 
 /**
@@ -268,49 +287,55 @@ export function setEpisodeWatched(
  *  - série concluída quando todas as temporadas conhecidas foram concluídas.
  */
 export function recomputeSeriesStatus(mediaItemId: number): void {
-  const seasons = db.prepare('SELECT * FROM series_seasons WHERE media_item_id = ? ORDER BY season_number').all(mediaItemId) as any[]
-  const now = new Date().toISOString()
+  atomic(() => {
+    const seasons = db.prepare('SELECT * FROM series_seasons WHERE media_item_id = ? ORDER BY season_number').all(mediaItemId) as any[]
+    const now = new Date().toISOString()
 
-  let allSeasonsDone = seasons.length > 0
-  let anyWatched = false
+    let allSeasonsDone = seasons.length > 0
+    let anyWatched = false
 
-  for (const s of seasons) {
-    const watched = (db.prepare('SELECT COUNT(*) AS n FROM series_episodes WHERE media_item_id = ? AND season_number = ? AND watched = 1')
-      .get(mediaItemId, s.season_number) as { n: number }).n
+    for (const s of seasons) {
+      const progress = seasonProgress.get(mediaItemId, s.season_number) as { watched: number; completed_at: string | null }
+      const watched = progress.watched
 
-    if (watched > 0) anyWatched = true
+      if (watched > 0) anyWatched = true
 
-    // Só conclui a temporada com a contagem AUTORITATIVA do TMDB (episode_count > 0).
-    // Sem esse total, ver um episódio nunca conclui a temporada/série (evita o bug de
-    // "1 episódio → série inteira concluída").
-    const done = s.episode_count > 0 && watched >= s.episode_count
-    if (!done) allSeasonsDone = false
+      // Só conclui a temporada com a contagem AUTORITATIVA do TMDB (episode_count > 0).
+      // Sem esse total, ver um episódio nunca conclui a temporada/série (evita o bug de
+      // "1 episódio → série inteira concluída").
+      const done = s.episode_count > 0 && watched >= s.episode_count
+      if (!done) allSeasonsDone = false
 
-    const newStatus = done ? 'completed' : watched > 0 ? 'in_progress' : 'in_progress'
-    if (s.status !== newStatus || (done && !s.completed_at)) {
-      db.prepare('UPDATE series_seasons SET status = ?, completed_at = ? WHERE id = ?')
-        .run(newStatus, done ? (s.completed_at ?? now) : null, s.id)
+      const newStatus = done ? 'completed' : watched > 0 ? 'in_progress' : 'in_progress'
+      const completedAt = done ? (s.completed_at ?? progress.completed_at ?? now) : null
+      if (done && s.status !== 'completed') {
+        insertSeasonDiary.run(mediaItemId, completedAt, s.rating > 0 ? s.rating : null, s.season_number)
+      }
+      if (s.status !== newStatus || (done && !s.completed_at)) {
+        db.prepare('UPDATE series_seasons SET status = ?, completed_at = ? WHERE id = ?')
+          .run(newStatus, completedAt, s.id)
+      }
     }
-  }
 
-  // atualiza a série
-  const item = getItem.get(mediaItemId) as any
-  if (!item) return
-  let status = item.status
-  let completedAt = item.completed_at
+    // atualiza a série
+    const item = getItem.get(mediaItemId) as any
+    if (!item) return
+    let status = item.status
+    let completedAt = item.completed_at
 
-  if (allSeasonsDone) {
-    status = 'completed'
-    completedAt = completedAt ?? now
-  } else if (anyWatched) {
-    if (status === 'wishlist' || status === 'completed') status = 'in_progress'
-    completedAt = null
-  }
+    if (allSeasonsDone) {
+      status = 'completed'
+      completedAt = completedAt ?? now
+    } else if (anyWatched) {
+      if (status === 'wishlist' || status === 'completed') status = 'in_progress'
+      completedAt = null
+    }
 
-  if (status !== item.status || completedAt !== item.completed_at) {
-    db.prepare(`UPDATE media_items SET status = ?, completed_at = ?, updated_at = datetime('now') WHERE id = ?`)
-      .run(status, completedAt, mediaItemId)
-  }
+    if (status !== item.status || completedAt !== item.completed_at) {
+      db.prepare(`UPDATE media_items SET status = ?, completed_at = ?, updated_at = datetime('now') WHERE id = ?`)
+        .run(status, completedAt, mediaItemId)
+    }
+  })
 }
 
 /* ─────────────────────────── leitura (API) ─────────────────────────── */
@@ -321,6 +346,7 @@ export interface SeasonView {
   status: string
   episode_count: number      // total conhecido (TMDB ou episódios registrados)
   watched_count: number
+  rating: number
   episodes: {
     episode_number: number
     title: string | null
@@ -360,6 +386,7 @@ export function getSeriesView(mediaItemId: number): SeriesView {
       status: s.status,
       episode_count: displayTotal,
       watched_count: w,
+      rating: Number(s.rating ?? 0),
       episodes: eps.map(e => ({
         episode_number: e.episode_number,
         title: e.title,
@@ -376,6 +403,87 @@ export function getSeriesView(mediaItemId: number): SeriesView {
     percent: total > 0 ? Math.min(1, watched / total) : 0,
     seasons: out,
   }
+}
+
+export interface UnratedSeasonView {
+  media_item_id: number
+  season_number: number
+  season_title: string | null
+  completed_at: string | null
+  title: string
+  cover_url: string | null
+  year: number | null
+}
+
+/** Temporadas concluídas cuja avaliação ainda não foi preenchida. */
+export function getUnratedCompletedSeasons(database: Database.Database = db): UnratedSeasonView[] {
+  return database.prepare(`
+    SELECT s.media_item_id, s.season_number, s.title AS season_title,
+           s.completed_at, m.title, m.cover_url, m.year
+      FROM series_seasons s
+      JOIN media_items m ON m.id = s.media_item_id AND m.type = 'series'
+     WHERE s.status = 'completed' AND COALESCE(s.rating, 0) <= 0
+     ORDER BY s.completed_at DESC, s.id DESC
+  `).all() as UnratedSeasonView[]
+}
+
+/**
+ * Aplica a nota à temporada e à conclusão de temporada sem nota mais recente.
+ * A avaliação geral da série continua independente.
+ */
+export function applySeasonRating(
+  mediaItemId: number,
+  seasonNumber: number,
+  rating: number,
+  database: Database.Database = db,
+): { media_item_id: number; season_number: number; rating: number; diary_entry_id: number | null } | null {
+  if (!isQuickRating(rating)) throw new RangeError('rating must be a half-step between 0.5 and 5')
+
+  return database.transaction(() => {
+    const season = database.prepare(`
+      SELECT s.id
+        FROM series_seasons s
+        JOIN media_items m ON m.id = s.media_item_id
+       WHERE s.media_item_id = ? AND s.season_number = ? AND m.type = 'series'
+    `).get(mediaItemId, seasonNumber) as { id: number } | undefined
+    if (!season) return null
+
+    database.prepare('UPDATE series_seasons SET rating = ? WHERE id = ?').run(rating, season.id)
+    const diary = database.prepare(`
+      SELECT id FROM diary_entries
+       WHERE media_item_id = ? AND season_number = ? AND episode_number IS NULL
+         AND (rating IS NULL OR rating <= 0)
+       ORDER BY watched_at DESC, id DESC
+       LIMIT 1
+    `).get(mediaItemId, seasonNumber) as { id: number } | undefined
+    if (diary) database.prepare('UPDATE diary_entries SET rating = ? WHERE id = ?').run(rating, diary.id)
+
+    return {
+      media_item_id: mediaItemId,
+      season_number: seasonNumber,
+      rating,
+      diary_entry_id: diary?.id ?? null,
+    }
+  })()
+}
+
+/** Recalcula a nota canônica da temporada a partir do diário após edição/remoção. */
+export function syncSeasonRatingFromDiary(
+  mediaItemId: number,
+  seasonNumber: number,
+  database: Database.Database = db,
+): number {
+  const latest = database.prepare(`
+    SELECT rating FROM diary_entries
+     WHERE media_item_id = ? AND season_number = ? AND episode_number IS NULL AND rating > 0
+     ORDER BY watched_at DESC, id DESC
+     LIMIT 1
+  `).get(mediaItemId, seasonNumber) as { rating: number } | undefined
+  const rating = Number(latest?.rating ?? 0)
+  database.prepare(`
+    UPDATE series_seasons SET rating = ? WHERE media_item_id = ? AND season_number = ?
+  `).run(rating, mediaItemId, seasonNumber)
+  return rating
 }
 
 /** Progresso resumido (0..1) por lista de ids — para os cards da biblioteca. */

@@ -45,6 +45,7 @@ function schemaNeedsUpgrade(): boolean {
   if (requiredMedia.some(column => !media.has(column))) return true
 
   const diary = columns('diary_entries')
+  const seasons = columns('series_seasons')
   return !columns('lists').has('mode')
     || !columns('lists').has('dim_seen')
     || !columns('list_items').has('position')
@@ -55,6 +56,7 @@ function schemaNeedsUpgrade(): boolean {
     || !diary.has('progress_value')
     || !diary.has('progress_total')
     || !diary.has('progress_unit')
+    || !seasons.has('rating')
 }
 
 const migrations: Migration[] = [{
@@ -437,6 +439,53 @@ db.exec(`
       );
 
       CREATE INDEX IF NOT EXISTS idx_list_only_list ON list_only_items(list_id, position);
+    `)
+  },
+}, {
+  version: 6,
+  name: 'season-ratings',
+  up: () => {
+    const seasonCols = (db.prepare('PRAGMA table_info(series_seasons)').all() as { name: string }[]).map(c => c.name)
+    if (!seasonCols.includes('rating')) {
+      db.exec('ALTER TABLE series_seasons ADD COLUMN rating REAL NOT NULL DEFAULT 0')
+    }
+
+    // Aproveita eventuais registros manuais de temporada que já existam e
+    // materializa no diário as temporadas históricas concluídas sem uma linha própria.
+    db.exec(`
+      UPDATE series_seasons
+         SET rating = COALESCE((
+           SELECT d.rating
+             FROM diary_entries d
+            WHERE d.media_item_id = series_seasons.media_item_id
+              AND d.season_number = series_seasons.season_number
+              AND d.episode_number IS NULL
+              AND d.rating > 0
+            ORDER BY d.watched_at DESC, d.id DESC
+            LIMIT 1
+         ), rating, 0);
+
+      INSERT INTO diary_entries
+        (media_item_id, watched_at, rating, comment, source, season_number, episode_number)
+      SELECT s.media_item_id,
+             COALESCE(s.completed_at, m.completed_at, m.updated_at),
+             CASE WHEN s.rating > 0 THEN s.rating ELSE NULL END,
+             NULL,
+             'backfill',
+             s.season_number,
+             NULL
+        FROM series_seasons s
+        JOIN media_items m ON m.id = s.media_item_id
+       WHERE s.status = 'completed'
+         AND NOT EXISTS (
+           SELECT 1 FROM diary_entries d
+            WHERE d.media_item_id = s.media_item_id
+              AND d.season_number = s.season_number
+              AND d.episode_number IS NULL
+         );
+
+      CREATE INDEX IF NOT EXISTS idx_diary_season
+        ON diary_entries(media_item_id, season_number, episode_number, watched_at);
     `)
   },
 }]

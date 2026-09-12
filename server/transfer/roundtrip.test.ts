@@ -39,6 +39,26 @@ test('export v2 restaura tiers, atividade musical e histórico de preços sem cr
     VALUES (?, 'playnite', '2026-08-04', 6000, NULL, 'seconds', 4.5, '2026-08-05T01:00:00.000Z')
   `).run(mediaId)
 
+  const seriesId = Number(db.prepare(`
+    INSERT INTO media_items (external_id, type, title, status)
+    VALUES ('series-1', 'series', 'Série de teste', 'completed')
+  `).run().lastInsertRowid)
+  db.prepare(`
+    INSERT INTO series_seasons
+      (media_item_id, season_number, title, episode_count, status, completed_at, rating)
+    VALUES (?, 1, 'Temporada 1', 1, 'completed', '2026-08-06', 4.5)
+  `).run(seriesId)
+  db.prepare(`
+    INSERT INTO series_episodes
+      (media_item_id, season_number, episode_number, title, watched, watched_at)
+    VALUES (?, 1, 1, 'Final', 1, '2026-08-06T20:00:00.000Z')
+  `).run(seriesId)
+  db.prepare(`
+    INSERT INTO diary_entries
+      (media_item_id, watched_at, rating, source, season_number, episode_number)
+    VALUES (?, '2026-08-06T20:00:00.000Z', 4.5, 'manual', 1, NULL)
+  `).run(seriesId)
+
   const listId = Number(db.prepare(`
     INSERT INTO lists (name, description, mode, dim_seen) VALUES ('Favoritos', 'ranking pessoal', 'tier', 1)
   `).run().lastInsertRowid)
@@ -98,6 +118,7 @@ test('export v2 restaura tiers, atividade musical e histórico de preços sem cr
     progress_value: 6000, progress_total: null, progress_unit: 'seconds', rating: 4.5,
     observed_at: '2026-08-05T01:00:00.000Z',
   }])
+  assert.equal((exported.series[0] as any).seasons[0].rating, 4.5)
   assert.equal((exported.lists[0] as any).tiers[0].name, 'S')
   assert.equal((exported.lists[0] as any).items[0].tier_key, (exported.lists[0] as any).tiers[0].key)
   assert.deepEqual((exported.lists[0] as any).items[1], {
@@ -126,9 +147,14 @@ test('export v2 restaura tiers, atividade musical e histórico de preços sem cr
 
   const report = importShelfBackup(exported, 'replace')
   assert.deepEqual(report.errors, [])
-  assert.equal(report.created, 1)
+  assert.equal(report.created, 2)
   assert.deepEqual(report.restored, { lists: 2, activity: 1, tracks: 1, prices: 1 })
-  assert.equal((db.prepare('SELECT COUNT(*) n FROM diary_entries').get() as any).n, 2)
+  assert.equal((db.prepare('SELECT COUNT(*) n FROM diary_entries').get() as any).n, 3)
+  assert.equal((db.prepare(`
+    SELECT rating FROM series_seasons WHERE media_item_id = (
+      SELECT id FROM media_items WHERE external_id = 'series-1' AND type = 'series'
+    ) AND season_number = 1
+  `).get() as any).rating, 4.5)
   assert.deepEqual(db.prepare(`
     SELECT progress_day, progress_value, progress_unit
       FROM diary_entries WHERE source = 'playnite'
