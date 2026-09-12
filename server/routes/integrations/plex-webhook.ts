@@ -83,13 +83,18 @@ const completeMovieById = db.prepare(`
 const setMediaRatingById = db.prepare(
   "UPDATE media_items SET rating = @rating, updated_at = datetime('now') WHERE id = @id",
 )
+// Um registro de episódio é um registro DE EPISÓDIO: temporada e episódio vão
+// para suas colunas, nunca para o comentário (que pertence ao usuário).
 const insertDiaryEntry = db.prepare(`
-  INSERT INTO diary_entries (media_item_id, watched_at, rating, comment, source)
-  SELECT @media_item_id, @watched_at, NULL, @comment, 'plex'
+  INSERT INTO diary_entries
+    (media_item_id, watched_at, rating, comment, source, season_number, episode_number)
+  SELECT @media_item_id, @watched_at, NULL, NULL, 'plex', @season_number, @episode_number
   WHERE NOT EXISTS (
     SELECT 1 FROM diary_entries
     WHERE media_item_id = @media_item_id AND watched_at = @watched_at
-      AND source = 'plex' AND comment IS @comment
+      AND source = 'plex'
+      AND season_number IS @season_number
+      AND episode_number IS @episode_number
   )
 `)
 
@@ -153,8 +158,10 @@ async function handlePlexEpisode(meta: PlexMeta, occurredAt: string): Promise<vo
 
   await ensureSeriesStructure(mediaId, { guid: meta.grandparentGuid })
   setEpisodeWatched(mediaId, meta.parentIndex, meta.index, true, meta.title ?? null, occurredAt)
-  const comment = `T${meta.parentIndex}E${meta.index}${meta.title ? ` – ${meta.title}` : ''}`
-  insertDiaryEntry.run({ media_item_id: mediaId, watched_at: occurredAt, comment })
+  insertDiaryEntry.run({
+    media_item_id: mediaId, watched_at: occurredAt,
+    season_number: meta.parentIndex, episode_number: meta.index,
+  })
 }
 
 async function tmdbIdForPlexMovie(meta: PlexMeta): Promise<string | null> {
@@ -203,7 +210,10 @@ async function handlePlexMovie(meta: PlexMeta, occurredAt: string): Promise<void
   const mediaId = await findOrCreatePlexMovie(meta, occurredAt)
   if (mediaId == null) return
   completeMovieById.run({ id: mediaId, completed_at: occurredAt })
-  insertDiaryEntry.run({ media_item_id: mediaId, watched_at: occurredAt, comment: null })
+  insertDiaryEntry.run({
+    media_item_id: mediaId, watched_at: occurredAt,
+    season_number: null, episode_number: null,
+  })
 }
 
 app.post('/plex/webhook', async (context) => {

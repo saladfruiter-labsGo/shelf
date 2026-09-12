@@ -46,6 +46,8 @@ Escolha query keys estáveis e invalide todas as visões afetadas por uma mutati
 - `PATCH /api/media/:id/quick-rating` mantém mídia e diário coerentes.
 - `PATCH /api/series/:id/season/:seasonNumber/rating` mantém temporada e sua conclusão no diário coerentes.
 - `StarRating` suporta meio ponto com mouse/caneta e estrela inteira por toque. Preserve rótulos acessíveis.
+- A arte de Story herda o alcance do registro: `StorySubject.badge` troca o selo do tipo por "Temporada"/"Episódio" e `subtitle` imprime `T2E5 · Título`. Um registro de temporada ou episódio compartilha aquilo, não a série inteira.
+- O diário agrupa por dia com `parseLocal`/`dayKey`. Datas só-data (`YYYY-MM-DD`) e datetimes completos convivem na mesma lista, então ordenação, filtros e agrupamento precisam usar a MESMA leitura — misturar `new Date` com `parseLocal` reabre o bug de dias repetidos e fora de ordem.
 
 Não crie mutation de avaliação rápida que atualize apenas `media_items.rating`.
 

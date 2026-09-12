@@ -488,6 +488,70 @@ db.exec(`
         ON diary_entries(media_item_id, season_number, episode_number, watched_at);
     `)
   },
+}, {
+  version: 7,
+  name: 'episode-diary-entries',
+  up: () => {
+    // O webhook do Plex gravava o episódio como um comentário ("T1E4 – Título")
+    // numa entrada da série inteira. Promove esses registros a entradas de
+    // episódio de verdade: temporada e episódio vão para suas colunas e o
+    // comentário volta a ser um campo do usuário.
+    const legacy = db.prepare(`
+      SELECT id, media_item_id, comment FROM diary_entries
+       WHERE source = 'plex' AND season_number IS NULL AND episode_number IS NULL
+         AND comment IS NOT NULL
+    `).all() as { id: number; media_item_id: number; comment: string }[]
+
+    const promote = db.prepare(`
+      UPDATE diary_entries SET season_number = ?, episode_number = ?, comment = NULL WHERE id = ?
+    `)
+    // O título vinha no comentário; ele passa a morar na estrutura da série,
+    // que é de onde o diário o lê agora.
+    const keepEpisodeTitle = db.prepare(`
+      INSERT INTO series_episodes (media_item_id, season_number, episode_number, title, watched, watched_at)
+      VALUES (@media_item_id, @season_number, @episode_number, @title, 1, @watched_at)
+      ON CONFLICT(media_item_id, season_number, episode_number) DO UPDATE SET
+        title = COALESCE(series_episodes.title, excluded.title)
+    `)
+    const ensureSeason = db.prepare(`
+      INSERT INTO series_seasons (media_item_id, season_number) VALUES (?, ?)
+      ON CONFLICT(media_item_id, season_number) DO NOTHING
+    `)
+    const drop = db.prepare('DELETE FROM diary_entries WHERE id = ?')
+    const duplicate = db.prepare(`
+      SELECT 1 FROM diary_entries
+       WHERE media_item_id = @media_item_id AND watched_at = @watched_at AND source = 'plex'
+         AND season_number = @season_number AND episode_number = @episode_number
+         AND id <> @id
+       LIMIT 1
+    `)
+    const readEntry = db.prepare('SELECT watched_at FROM diary_entries WHERE id = ?')
+
+    db.transaction(() => {
+      for (const row of legacy) {
+        const match = /^T(\d+)E(\d+)(?:\s+[–-]\s+(.+))?$/.exec(row.comment.trim())
+        if (!match) continue
+        const season = Number(match[1])
+        const episode = Number(match[2])
+        const episodeTitle = match[3]?.trim() || null
+        const { watched_at } = readEntry.get(row.id) as { watched_at: string }
+        const args = {
+          id: row.id, media_item_id: row.media_item_id, watched_at,
+          season_number: season, episode_number: episode,
+        }
+        // Uma reentrega do webhook já pode ter criado a linha correta.
+        if (duplicate.get(args)) { drop.run(row.id); continue }
+        promote.run(season, episode, row.id)
+        if (episodeTitle) {
+          ensureSeason.run(row.media_item_id, season)
+          keepEpisodeTitle.run({
+            media_item_id: row.media_item_id, season_number: season,
+            episode_number: episode, title: episodeTitle, watched_at,
+          })
+        }
+      }
+    })()
+  },
 }]
 
 if (databaseExisted && (hasPendingMigrations(db, migrations) || schemaNeedsUpgrade())) {

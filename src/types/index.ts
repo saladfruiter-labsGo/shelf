@@ -53,6 +53,7 @@ export interface DiaryEntry {
   season_number:  number | null   // séries: temporada ou episódio registrado
   episode_number: number | null
   season_title:   string | null
+  episode_title:  string | null
   progress_day:  string | null     // dia civil fechado pelo job de progresso
   progress_value: number | null    // páginas lidas ou segundos jogados
   progress_total: number | null    // total de páginas; jogos não têm total

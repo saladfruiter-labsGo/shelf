@@ -5,6 +5,7 @@ import { api } from '../lib/api'
 import { CATEGORIES } from '../lib/categories'
 import { imageUrl } from '../lib/images'
 import { TYPE_LABEL, TYPE_COLOR, GAME_STATUS_LABEL, gameStatusOf, formatPlaytime, formatRuntime, fmtRating, formatMoney, timeAgo, toISODate, todayISODate, daysUntil } from '../lib/utils'
+import { diaryScope } from '../lib/diary'
 import type { MediaItem, MediaType, TrendingItem, DiaryEntry, GamePriceSummary, UnratedSeason } from '../types'
 import { MediaPreviewTrigger, useMediaPreview } from '../components/MediaSummaryModal'
 import { StarRating } from '../components/StarRating'
@@ -643,7 +644,7 @@ export function Dashboard() {
                 <div className="body">
                   <span className="kind" style={{ color: hue(d.type) }}>{TYPE_LABEL[d.type]}</span>
                   <div className="name">
-                    {d.title}{d.season_number != null ? ` · T${d.season_number}${d.episode_number != null ? `E${d.episode_number}` : ''}` : ''}
+                    {d.title}{diaryScope(d) ? ` · ${diaryScope(d)!.tag}` : ''}
                   </div>
                   <div className="when">{relTime(d.watched_at)}</div>
                   <div className="st">{d.rating != null && d.rating > 0 ? '★'.repeat(Math.round(d.rating)) : <span style={{ color: 'var(--text-muted)' }}>sem nota</span>}</div>

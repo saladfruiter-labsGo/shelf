@@ -11,6 +11,7 @@ import { PricePanel } from '../components/PricePanel'
 import type { MediaStatus, TmdbMediaPreview } from '../types'
 import { STATUS_LABEL, GAME_STATUSES, GAME_STATUS_LABEL, gameStatusOf, formatRuntime, formatPlaytime, formatDate, fmtRating } from '../lib/utils'
 import { imageUrl } from '../lib/images'
+import { diaryScope, diaryScopeText } from '../lib/diary'
 
 const STATUSES: MediaStatus[] = ['wishlist', 'in_progress', 'completed', 'dropped']
 
@@ -539,11 +540,9 @@ export function MediaDetail() {
                   {formatDate(entry.watched_at)}
                 </span>
                 <div className="min-w-0 flex-1">
-                  {entry.season_number != null && (
+                  {diaryScopeText(diaryScope(entry)) && (
                     <span className="text-xs font-bold mr-2" style={{ color: 'var(--series)' }}>
-                      {entry.episode_number != null
-                        ? `T${entry.season_number}E${entry.episode_number}`
-                        : entry.season_title || `Temporada ${entry.season_number}`}
+                      {diaryScopeText(diaryScope(entry))}
                     </span>
                   )}
                   {entry.rating != null && entry.rating > 0 && (
