@@ -84,3 +84,54 @@ test('outro episódio da mesma temporada ganha o próprio registro', async () =>
     { season_number: 1, episode_number: 5 },
   ])
 })
+
+const MOVIE_METADATA = {
+  type: 'movie',
+  title: 'Filme do Plex',
+  guid: 'plex://movie/filme-do-plex',
+  year: 2024,
+  lastViewedAt: 1_789_200_000,
+}
+
+function movieDiary() {
+  return db.prepare(`
+    SELECT d.rating AS diary_rating, m.rating AS media_rating
+      FROM diary_entries d JOIN media_items m ON m.id = d.media_item_id
+     WHERE m.external_id = ? AND d.source = 'plex'
+  `).all(MOVIE_METADATA.guid)
+}
+
+test('a nota dada no Plex depois de terminar o filme atualiza a entrada do diário', async () => {
+  await scrobble({ event: 'media.scrobble', Metadata: MOVIE_METADATA })
+  assert.deepEqual(movieDiary(), [{ diary_rating: null, media_rating: 0 }])
+
+  await scrobble({
+    event: 'media.rate',
+    Metadata: { ...MOVIE_METADATA, userRating: 9, lastViewedAt: 1_789_200_600 },
+  })
+  assert.deepEqual(movieDiary(), [{ diary_rating: 4.5, media_rating: 4.5 }])
+})
+
+test('um scrobble que já traz a nota grava a entrada avaliada', async () => {
+  const guid = 'plex://movie/ja-avaliado'
+  await scrobble({ event: 'media.scrobble', Metadata: { ...MOVIE_METADATA, guid, userRating: 7 } })
+  assert.deepEqual(db.prepare(`
+    SELECT d.rating AS diary_rating, m.rating AS media_rating
+      FROM diary_entries d JOIN media_items m ON m.id = d.media_item_id
+     WHERE m.external_id = ?
+  `).all(guid), [{ diary_rating: 3.5, media_rating: 3.5 }])
+})
+
+test('a nota de um episódio vai para o registro daquele episódio', async () => {
+  await scrobble({
+    event: 'media.rate',
+    Metadata: { ...EPISODE_PAYLOAD.Metadata, userRating: 8 },
+  })
+  assert.deepEqual(db.prepare(`
+    SELECT season_number, episode_number, rating FROM diary_entries
+     WHERE source = 'plex' AND season_number IS NOT NULL ORDER BY episode_number
+  `).all(), [
+    { season_number: 1, episode_number: 4, rating: 4 },
+    { season_number: 1, episode_number: 5, rating: null },
+  ])
+})
