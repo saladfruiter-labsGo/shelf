@@ -20,6 +20,10 @@ export interface StorySubject {
   creators?: string | null
   rating:    number
   comment?:  string | null
+  /** Selo do registro (ex.: "Temporada"); sem isso o selo mostra o tipo da mídia. */
+  badge?:    string | null
+  /** Alcance do registro (ex.: "T2E5 · O Encontro"), impresso abaixo do título. */
+  subtitle?: string | null
 }
 
 const TYPE_HEX: Record<MediaType, string> = {
@@ -119,6 +123,28 @@ function wrapText(ctx: CanvasRenderingContext2D, text: string, maxW: number, max
   return lines
 }
 
+/** Texto do selo: o escopo do registro quando existe, senão o tipo da mídia. */
+function badgeText(s: StorySubject): string {
+  return (s.badge?.trim() || TYPE_LABEL_STORY[s.type]).toUpperCase()
+}
+
+/**
+ * Imprime o alcance do registro (temporada/episódio) abaixo do título e devolve
+ * o novo `y`. Sem alcance, a arte segue falando da obra inteira.
+ */
+function scopeLine(
+  ctx: CanvasRenderingContext2D, s: StorySubject, x: number, y: number,
+  maxW: number, size: number, color: string,
+): number {
+  const text = s.subtitle?.trim()
+  if (!text) return y
+  ctx.font = `600 ${size}px system-ui, sans-serif`
+  ctx.fillStyle = color
+  let cur = y
+  for (const line of wrapText(ctx, text, maxW, 2)) { ctx.fillText(line, x, cur); cur += size * 1.25 }
+  return cur + size * 0.3
+}
+
 function metaLine(s: StorySubject): string {
   return [
     s.author ?? (s.creators ? s.creators.split(',')[0].trim() : null),
@@ -152,10 +178,10 @@ async function drawPoster(ctx: CanvasRenderingContext2D, s: StorySubject) {
   await tryCover(ctx, s.cover_url, CX, CY, CW, CH, CR)
 
   ctx.font = 'bold 26px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
-  const badgeText = TYPE_LABEL_STORY[s.type]
-  const badgeW = ctx.measureText(badgeText).width + 52, badgeH = 52, badgeX = (W - badgeW) / 2, badgeY = CY + CH + 44
+  const badge = badgeText(s)
+  const badgeW = ctx.measureText(badge).width + 52, badgeH = 52, badgeX = (W - badgeW) / 2, badgeY = CY + CH + 44
   roundedPath(ctx, badgeX, badgeY, badgeW, badgeH, 26); ctx.fillStyle = typeColor; ctx.fill()
-  ctx.fillStyle = '#0C1118'; ctx.fillText(badgeText, W / 2, badgeY + badgeH / 2)
+  ctx.fillStyle = '#0C1118'; ctx.fillText(badge, W / 2, badgeY + badgeH / 2)
 
   let curY = badgeY + badgeH + 50
   const len = s.title.length
@@ -163,7 +189,10 @@ async function drawPoster(ctx: CanvasRenderingContext2D, s: StorySubject) {
   ctx.font = `bold ${titleSz}px Georgia, serif`; ctx.textBaseline = 'top'; ctx.fillStyle = '#EDF2F8'
   for (const l of wrapText(ctx, s.title, 940, 3)) { ctx.fillText(l, W / 2, curY); curY += titleSz * 1.18 }
 
-  curY += 20
+  curY += 14
+  curY = scopeLine(ctx, s, W / 2, curY, 900, 38, typeColor)
+
+  curY += 12
   const meta = metaLine(s)
   if (meta) { ctx.font = '34px system-ui, sans-serif'; ctx.fillStyle = '#5A7090'; ctx.fillText(meta, W / 2, curY); curY += 52 }
 
@@ -188,7 +217,7 @@ async function drawMinimal(ctx: CanvasRenderingContext2D, s: StorySubject) {
 
   ctx.textAlign = 'left'
   ctx.font = 'bold 30px system-ui, sans-serif'; ctx.fillStyle = typeColor; ctx.textBaseline = 'top'
-  ctx.fillText(TYPE_LABEL_STORY[s.type], 140, 300)
+  ctx.fillText(badgeText(s), 140, 300)
 
   let curY = 360
   const len = s.title.length
@@ -196,7 +225,10 @@ async function drawMinimal(ctx: CanvasRenderingContext2D, s: StorySubject) {
   ctx.font = `bold ${titleSz}px Georgia, serif`; ctx.fillStyle = '#F4F4F6'
   for (const l of wrapText(ctx, s.title, 860, 4)) { ctx.fillText(l, 138, curY); curY += titleSz * 1.1 }
 
-  curY += 24
+  curY += 18
+  curY = scopeLine(ctx, s, 140, curY, 820, 40, typeColor)
+
+  curY += 16
   const meta = metaLine(s)
   if (meta) { ctx.font = '34px system-ui, sans-serif'; ctx.fillStyle = '#7A7A88'; ctx.fillText(meta, 140, curY); curY += 70 }
 
@@ -227,13 +259,19 @@ async function drawGradient(ctx: CanvasRenderingContext2D, s: StorySubject) {
   await tryCover(ctx, s.cover_url, CX, CY, CW, CH, CR)
 
   ctx.textAlign = 'center'; ctx.textBaseline = 'top'
-  let curY = CY + CH + 60
+  let curY = CY + CH + 46
+  ctx.font = 'bold 28px system-ui, sans-serif'; ctx.fillStyle = 'rgba(255,255,255,.85)'
+  ctx.fillText(badgeText(s), W / 2, curY); curY += 46
+
   const len = s.title.length
   const titleSz = len > 32 ? 62 : len > 20 ? 74 : 88
   ctx.font = `bold ${titleSz}px Georgia, serif`; ctx.fillStyle = '#FFFFFF'
   for (const l of wrapText(ctx, s.title, 960, 2)) { ctx.fillText(l, W / 2, curY); curY += titleSz * 1.14 }
 
-  curY += 18
+  curY += 12
+  curY = scopeLine(ctx, s, W / 2, curY, 920, 38, 'rgba(255,255,255,.92)')
+
+  curY += 6
   const meta = metaLine(s)
   if (meta) { ctx.font = '34px system-ui, sans-serif'; ctx.fillStyle = 'rgba(255,255,255,.75)'; ctx.fillText(meta, W / 2, curY); curY += 60 }
 
@@ -254,7 +292,9 @@ async function drawPolaroid(ctx: CanvasRenderingContext2D, s: StorySubject) {
   // Moldura branca (polaroid)
   const FW = 720, FX = (W - FW) / 2, FY = 150
   const IW = FW - 60, IH = IW * 1.32, IX = FX + 30, IY = FY + 30
-  const FH = IH + 30 + 300 // borda inferior grande p/ legenda
+  const scope = s.subtitle?.trim() || ''
+  // Borda inferior grande p/ legenda; o alcance do registro pede mais uma linha.
+  const FH = IH + 30 + 300 + (scope ? 52 : 0)
   ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowBlur = 60; ctx.shadowOffsetY = 24
   roundedPath(ctx, FX, FY, FW, FH, 14); ctx.fillStyle = '#F7F4EC'; ctx.fill(); ctx.restore()
 
@@ -269,6 +309,12 @@ async function drawPolaroid(ctx: CanvasRenderingContext2D, s: StorySubject) {
   const titleSz = len > 28 ? 44 : 54
   ctx.font = `bold ${titleSz}px Georgia, serif`; ctx.fillStyle = '#1A1712'
   for (const l of wrapText(ctx, s.title, IW - 20, 2)) { ctx.fillText(l, W / 2, curY); curY += titleSz * 1.12 }
+
+  if (scope) {
+    curY += 8
+    ctx.font = '600 32px system-ui, sans-serif'; ctx.fillStyle = typeColor
+    for (const l of wrapText(ctx, scope, IW - 40, 1)) { ctx.fillText(l, W / 2, curY); curY += 44 }
+  }
 
   curY += 6
   ratingStars(ctx, W / 2, curY, s.rating, 40, '#D8D2C4', '#E0A02A'); curY += 60
@@ -305,7 +351,11 @@ export async function renderStory(template: StoryTemplate, subject: StorySubject
 }
 
 function storyFileName(template: StoryTemplate, subject: StorySubject): string {
-  return `shelf-${template}-${subject.title.slice(0, 30).replace(/\s+/g, '-').toLowerCase()}.png`
+  const scope = subject.subtitle?.trim() ? `-${subject.subtitle.split('·')[0].trim()}` : ''
+  const slug = `${subject.title.slice(0, 30)}${scope}`
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '').toLowerCase()
+  return `shelf-${template}-${slug}.png`
 }
 
 /** Renderiza fora da tela e retorna o PNG como Blob. */

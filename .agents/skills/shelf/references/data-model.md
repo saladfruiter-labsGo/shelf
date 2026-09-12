@@ -45,6 +45,8 @@ Use `GAME_STATUS_TO_BASE` de `server/media-domain.ts`. Não duplique o mapa.
 
 Histórico N:1 em relação à mídia. Cada consumo pode gerar uma linha com data, nota, comentário e origem. Séries também guardam temporada/episódio.
 
+O alcance de uma entrada mora em `season_number`/`episode_number`, nunca no texto: episódio tem os dois preenchidos, temporada só `season_number`, obra inteira nenhum. `comment` é o campo do usuário e não serve de rótulo — o título do episódio vem do join com `series_episodes` (`episode_title`) e o da temporada de `series_seasons` (`season_title`). No frontend, use `diaryScope()` de `src/lib/diary.ts` em vez de remontar `T2E5` por tela.
+
 - nunca apague entradas por idade;
 - retries de integrações não podem duplicar a mesma sessão;
 - ao avaliar rapidamente uma conclusão automática, use `applyQuickRating()` para atualizar em transação a mídia e a conclusão sem nota mais recente;

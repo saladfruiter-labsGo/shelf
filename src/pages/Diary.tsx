@@ -8,6 +8,7 @@ import { ConfirmDialog } from '../components/ConfirmDialog'
 import { useIsMobile } from '../hooks/useIsMobile'
 import { useMediaPreview } from '../components/MediaSummaryModal'
 import type { StorySubject } from '../lib/story'
+import { diaryScope, diaryScopeText } from '../lib/diary'
 import { formatPlaytime } from '../lib/utils'
 import { imageUrl } from '../lib/images'
 
@@ -66,10 +67,18 @@ const SORT_LABEL: Record<SortField, string> = {
   year:       'Ano de lançamento',
 }
 
+/**
+ * Sujeito da arte de Story. Um registro de temporada ou episódio compartilha a
+ * temporada/episódio — não a série inteira —, então o selo e a linha de escopo
+ * dizem exatamente o que foi avaliado.
+ */
 function subjectOf(e: DiaryEntry): StorySubject {
+  const scope = diaryScope(e)
   return {
     title: e.title, type: e.type, cover_url: e.cover_url,
     year: e.year, genre: e.genre, rating: e.rating ?? 0, comment: e.comment,
+    badge: scope?.label ?? null,
+    subtitle: diaryScopeText(scope),
   }
 }
 
@@ -108,7 +117,7 @@ export function Diary() {
     const ex = new Set<number>()
     const rel = new Set<number>()
     for (const e of items) {
-      const y = new Date(e.watched_at).getFullYear()
+      const y = parseLocal(e.watched_at).getFullYear()
       if (!isNaN(y)) ex.add(y)
       if (e.year) rel.add(e.year)
     }
@@ -122,7 +131,7 @@ export function Diary() {
     const q = nameQ.trim().toLowerCase()
     const out = items.filter(e => {
       if (q && !e.title.toLowerCase().includes(q)) return false
-      const d = new Date(e.watched_at)
+      const d = parseLocal(e.watched_at)
       if (month && d.getMonth() + 1 !== Number(month)) return false
       if (execYear && d.getFullYear() !== Number(execYear)) return false
       if (releaseYear && e.year !== Number(releaseYear)) return false
@@ -142,7 +151,9 @@ export function Diary() {
           cmp = (a.year ?? 0) - (b.year ?? 0)
           break
         default: // watched_at
-          cmp = new Date(a.watched_at).getTime() - new Date(b.watched_at).getTime()
+          // Mesma leitura de data usada pelo agrupamento por dia: misturar
+          // `new Date` com `parseLocal` embaralhava dias e repetia cabeçalhos.
+          cmp = parseLocal(a.watched_at).getTime() - parseLocal(b.watched_at).getTime()
       }
       if (cmp === 0) cmp = a.id - b.id
       return cmp * dir
@@ -155,14 +166,16 @@ export function Diary() {
 
   // Agrupa os registros já ordenados por dia (separadores orgânicos, dia a dia).
   const groups = useMemo(() => {
-    const out: { key: string; label: string; entries: DiaryEntry[] }[] = []
+    // Indexado por dia: um mesmo dia nunca ganha dois cabeçalhos, mesmo que a
+    // ordenação escolhida intercale registros de dias diferentes.
+    const byDay = new Map<string, { key: string; label: string; entries: DiaryEntry[] }>()
     for (const e of filtered) {
       const key = dayKey(e.watched_at)
-      const last = out[out.length - 1]
-      if (last && last.key === key) last.entries.push(e)
-      else out.push({ key, label: formatDayHeader(e.watched_at), entries: [e] })
+      const group = byDay.get(key)
+      if (group) group.entries.push(e)
+      else byDay.set(key, { key, label: formatDayHeader(e.watched_at), entries: [e] })
     }
-    return out
+    return [...byDay.values()]
   }, [filtered])
 
   const updateMutation = useMutation({
@@ -281,6 +294,7 @@ export function Diary() {
               <div className="diary-day-items">
                 {group.entries.map(entry => {
                   const cat = CAT_STYLE[entry.type] ?? { bg: 'rgba(106,106,136,.1)', color: 'var(--text-muted)', label: entry.type }
+                  const scope = diaryScope(entry)
                   return (
                     <div key={entry.id} className="row-fade diary-item">
                       <div
@@ -310,16 +324,11 @@ export function Diary() {
                       >
                         <p className="diary-item-title">
                           {entry.title}
-                          {entry.season_number != null && (
-                            <span className="diary-item-ep">
-                              {entry.episode_number != null
-                                ? `T${entry.season_number}E${entry.episode_number}`
-                                : entry.season_title || `Temporada ${entry.season_number}`}
-                            </span>
-                          )}
+                          {scope && <span className="diary-item-ep">{scope.tag}</span>}
                           {entry.source === 'plex' && <span className="diary-item-plex">Plex</span>}
                         </p>
                         <p className="diary-item-meta">
+                          {scope?.name && <span className="diary-item-scope">{scope.name} · </span>}
                           {entry.year ?? '—'}{entry.genre ? ` · ${entry.genre}` : ''}
                           {progressLabel(entry) && <span> · {progressLabel(entry)}</span>}
                           {entry.rating && entry.rating > 0 && (
@@ -433,6 +442,7 @@ export function Diary() {
           overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
         }
         .diary-item-ep { margin-left: 8px; font-size: 11px; font-weight: 700; color: var(--series); }
+        .diary-item-scope { color: var(--text-secondary); font-weight: 500; }
         .diary-item-plex {
           margin-left: 8px; font-size: 10px; font-weight: 600;
           color: var(--dim); text-transform: uppercase; letter-spacing: .5px;

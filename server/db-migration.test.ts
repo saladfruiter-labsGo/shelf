@@ -65,8 +65,20 @@ legacy.exec(`
   VALUES ('legacy-series', 'series', 'Série preservada', 'completed', '2026-08-10 20:00:00');
   INSERT INTO series_seasons (media_item_id, season_number, title, episode_count, status, completed_at)
   VALUES (2, 1, 'Temporada preservada', 8, 'completed', '2026-08-10 20:00:00');
+  CREATE TABLE diary_entries (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    media_item_id INTEGER NOT NULL REFERENCES media_items(id) ON DELETE CASCADE,
+    watched_at TEXT NOT NULL DEFAULT (datetime('now')),
+    rating REAL,
+    comment TEXT,
+    source TEXT NOT NULL DEFAULT 'manual',
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
   INSERT INTO lists (name) VALUES ('Lista preservada');
   INSERT INTO list_items (list_id, media_item_id) VALUES (1, 1);
+  -- Registro legado do Plex: o episódio ficava escondido no comentário.
+  INSERT INTO diary_entries (media_item_id, watched_at, comment, source)
+  VALUES (2, '2026-08-09T23:10:00.000Z', 'T1E4 – O Encontro', 'plex');
 `)
 legacy.close()
 
@@ -83,6 +95,7 @@ test('adota banco sem versão, preserva dados e cria snapshot antes da migration
     { version: 4, name: 'diary-progress-snapshots' },
     { version: 5, name: 'isolated-list-media' },
     { version: 6, name: 'season-ratings' },
+    { version: 7, name: 'episode-diary-entries' },
   ])
 
   const item = db.prepare("SELECT title, status FROM media_items WHERE external_id = 'legacy-1'").get()
@@ -108,6 +121,16 @@ test('adota banco sem versão, preserva dados e cria snapshot antes da migration
   `).get(), {
     season_number: 1, episode_number: null, watched_at: '2026-08-10 20:00:00', source: 'backfill',
   })
+  // O registro legado do Plex vira uma entrada de episódio; o comentário fica livre.
+  assert.deepEqual(db.prepare(`
+    SELECT season_number, episode_number, comment FROM diary_entries
+     WHERE source = 'plex' AND watched_at = '2026-08-09T23:10:00.000Z'
+  `).get(), { season_number: 1, episode_number: 4, comment: null })
+  assert.equal((db.prepare(`
+    SELECT title FROM series_episodes
+     WHERE media_item_id = 2 AND season_number = 1 AND episode_number = 4
+  `).get() as { title: string }).title, 'O Encontro')
+
   assert.deepEqual(db.prepare('SELECT list_id, media_item_id FROM list_items').all(), [{ list_id: 1, media_item_id: 1 }])
   assert.equal(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'list_only_items'").get() !== undefined, true)
   assert.deepEqual(db.pragma('foreign_key_check'), [])
