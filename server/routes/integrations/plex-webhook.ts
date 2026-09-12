@@ -8,6 +8,7 @@ import {
   tmdbIdFromGuid,
   type PlexMeta,
 } from '../../plex.js'
+import { applyQuickRating, isQuickRating } from '../../quick-rating.js'
 import {
   ensureSeriesStructure,
   resolveTmdbMovieId,
@@ -88,13 +89,26 @@ const setMediaRatingById = db.prepare(
 const insertDiaryEntry = db.prepare(`
   INSERT INTO diary_entries
     (media_item_id, watched_at, rating, comment, source, season_number, episode_number)
-  SELECT @media_item_id, @watched_at, NULL, NULL, 'plex', @season_number, @episode_number
+  SELECT @media_item_id, @watched_at, @rating, NULL, 'plex', @season_number, @episode_number
   WHERE NOT EXISTS (
     SELECT 1 FROM diary_entries
     WHERE media_item_id = @media_item_id AND watched_at = @watched_at
       AND source = 'plex'
       AND season_number IS @season_number
       AND episode_number IS @episode_number
+  )
+`)
+// O Plex conclui antes de o usuário dar a nota: o `media.rate` que chega depois
+// completa o registro de episódio mais recente que ficou sem avaliação.
+const rateEpisodeDiary = db.prepare(`
+  UPDATE diary_entries SET rating = @rating
+  WHERE id = (
+    SELECT id FROM diary_entries
+    WHERE media_item_id = @media_item_id
+      AND season_number = @season_number AND episode_number = @episode_number
+      AND (rating IS NULL OR rating <= 0)
+    ORDER BY watched_at DESC, id DESC
+    LIMIT 1
   )
 `)
 
@@ -127,7 +141,20 @@ async function tmdbIdFromPlexRatingKey(ratingKey?: string): Promise<string | nul
   return null
 }
 
-async function handlePlexEpisode(meta: PlexMeta, occurredAt: string): Promise<void> {
+async function findPlexSeriesId(meta: PlexMeta): Promise<number | null> {
+  let tmdbId = tmdbIdFromGuid(meta.grandparentGuid)
+  if (!tmdbId) tmdbId = await tmdbIdFromPlexRatingKey(meta.grandparentRatingKey)
+  if (tmdbId) {
+    const series = findSeriesByTmdb.get({ tmdb: tmdbId }) as { id: number } | undefined
+    if (series) return series.id
+  }
+  const externalId = meta.grandparentGuid
+    ?? (meta.grandparentRatingKey ? `plex:${meta.grandparentRatingKey}` : null)
+  if (!externalId) return null
+  return (getMediaId.get(externalId, 'series') as { id: number } | undefined)?.id ?? null
+}
+
+async function handlePlexEpisode(meta: PlexMeta, occurredAt: string, rating: number | null): Promise<void> {
   const showTitle = meta.grandparentTitle
   if (!showTitle || meta.parentIndex == null || meta.index == null) return
   const thumb = meta.grandparentThumb ?? null
@@ -159,7 +186,7 @@ async function handlePlexEpisode(meta: PlexMeta, occurredAt: string): Promise<vo
   await ensureSeriesStructure(mediaId, { guid: meta.grandparentGuid })
   setEpisodeWatched(mediaId, meta.parentIndex, meta.index, true, meta.title ?? null, occurredAt)
   insertDiaryEntry.run({
-    media_item_id: mediaId, watched_at: occurredAt,
+    media_item_id: mediaId, watched_at: occurredAt, rating,
     season_number: meta.parentIndex, episode_number: meta.index,
   })
 }
@@ -206,14 +233,23 @@ async function findOrCreatePlexMovie(meta: PlexMeta, occurredAt: string): Promis
   return mediaId
 }
 
-async function handlePlexMovie(meta: PlexMeta, occurredAt: string): Promise<void> {
+async function handlePlexMovie(meta: PlexMeta, occurredAt: string, rating: number | null): Promise<void> {
   const mediaId = await findOrCreatePlexMovie(meta, occurredAt)
   if (mediaId == null) return
   completeMovieById.run({ id: mediaId, completed_at: occurredAt })
+  // Se a nota já existia no Plex quando o scrobble chegou, ela entra junto.
+  if (rating != null) setMediaRatingById.run({ id: mediaId, rating })
   insertDiaryEntry.run({
-    media_item_id: mediaId, watched_at: occurredAt,
+    media_item_id: mediaId, watched_at: occurredAt, rating,
     season_number: null, episode_number: null,
   })
+}
+
+/** Converte a nota 0–10 do Plex em estrelas; 0 ou ausente significa sem nota. */
+function plexStars(userRating?: number): number | null {
+  if (userRating == null || !Number.isFinite(userRating)) return null
+  const stars = Math.round(userRating) / 2
+  return isQuickRating(stars) ? stars : null
 }
 
 app.post('/plex/webhook', async (context) => {
@@ -256,8 +292,9 @@ app.post('/plex/webhook', async (context) => {
       cover_url: mapped.cover_url, rating: null, duration_ms: meta.duration ?? null,
       occurred_at: occurredAt, raw: rawPayload.slice(0, 4000),
     })
-    if (mapped.kind === 'episode') await handlePlexEpisode(meta, occurredAt)
-    else if (mapped.kind === 'movie') await handlePlexMovie(meta, occurredAt)
+    const stars = plexStars(meta.userRating)
+    if (mapped.kind === 'episode') await handlePlexEpisode(meta, occurredAt, stars)
+    else if (mapped.kind === 'movie') await handlePlexMovie(meta, occurredAt, stars)
     else if (mapped.external_ref) {
       upsertMediaItem.run({
         external_id: mapped.external_ref, type: mapped.media_type, title: mapped.title,
@@ -272,21 +309,25 @@ app.post('/plex/webhook', async (context) => {
       cover_url: mapped.cover_url, rating, duration_ms: null,
       occurred_at: occurredAt, raw: rawPayload.slice(0, 4000),
     })
+    const stars = plexStars(meta.userRating)
     if (mapped.kind === 'episode') {
-      let tmdbId = tmdbIdFromGuid(meta.grandparentGuid)
-      if (!tmdbId) tmdbId = await tmdbIdFromPlexRatingKey(meta.grandparentRatingKey)
-      const series = tmdbId
-        ? findSeriesByTmdb.get({ tmdb: tmdbId }) as { id: number } | undefined
-        : undefined
-      if (series) setMediaRatingById.run({ id: series.id, rating })
-      else {
-        const externalId = meta.grandparentGuid
-          ?? (meta.grandparentRatingKey ? `plex:${meta.grandparentRatingKey}` : null)
-        if (externalId) setMediaRating.run(rating, externalId, 'series')
+      const seriesId = await findPlexSeriesId(meta)
+      if (seriesId != null) {
+        setMediaRatingById.run({ id: seriesId, rating })
+        if (stars != null && meta.parentIndex != null && meta.index != null) {
+          rateEpisodeDiary.run({
+            media_item_id: seriesId, rating: stars,
+            season_number: meta.parentIndex, episode_number: meta.index,
+          })
+        }
       }
     } else if (mapped.kind === 'movie') {
       const mediaId = await findOrCreatePlexMovie(meta, occurredAt)
-      if (mediaId != null) setMediaRatingById.run({ id: mediaId, rating })
+      if (mediaId != null) {
+        // Mesma regra da avaliação rápida: nota na mídia e na conclusão sem nota.
+        if (stars != null) applyQuickRating(mediaId, stars)
+        else setMediaRatingById.run({ id: mediaId, rating })
+      }
     } else if (mapped.external_ref) {
       upsertMediaItem.run({
         external_id: mapped.external_ref, type: mapped.media_type, title: mapped.title,
