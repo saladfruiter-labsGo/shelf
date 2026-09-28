@@ -20,7 +20,7 @@ export interface StorySubject {
   creators?: string | null
   rating:    number
   comment?:  string | null
-  /** Selo do registro (ex.: "Temporada"); sem isso o selo mostra o tipo da mídia. */
+  /** Selo do registro (ex.: "Temporada", "Jogo zerado"); sem isso o selo mostra o tipo da mídia. */
   badge?:    string | null
   /** Alcance do registro (ex.: "T2E5 · O Encontro"), impresso abaixo do título. */
   subtitle?: string | null
@@ -292,7 +292,8 @@ async function drawPolaroid(ctx: CanvasRenderingContext2D, s: StorySubject) {
   // Moldura branca (polaroid)
   const FW = 720, FX = (W - FW) / 2, FY = 150
   const IW = FW - 60, IH = IW * 1.32, IX = FX + 30, IY = FY + 30
-  const scope = s.subtitle?.trim() || ''
+  // A polaroid não tem selo: sem alcance, um selo explícito ("Jogo zerado") vira a linha.
+  const scope = s.subtitle?.trim() || s.badge?.trim() || ''
   // Borda inferior grande p/ legenda; o alcance do registro pede mais uma linha.
   const FH = IH + 30 + 300 + (scope ? 52 : 0)
   ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowBlur = 60; ctx.shadowOffsetY = 24

@@ -8,7 +8,7 @@ import { ConfirmDialog } from '../components/ConfirmDialog'
 import { useIsMobile } from '../hooks/useIsMobile'
 import { useMediaPreview } from '../components/MediaSummaryModal'
 import type { StorySubject } from '../lib/story'
-import { diaryScope, diaryScopeText } from '../lib/diary'
+import { diaryScope, diaryScopeText, isGameCompletion } from '../lib/diary'
 import { formatPlaytime } from '../lib/utils'
 import { imageUrl } from '../lib/images'
 
@@ -70,14 +70,14 @@ const SORT_LABEL: Record<SortField, string> = {
 /**
  * Sujeito da arte de Story. Um registro de temporada ou episódio compartilha a
  * temporada/episódio — não a série inteira —, então o selo e a linha de escopo
- * dizem exatamente o que foi avaliado.
+ * dizem exatamente o que foi avaliado. A conclusão de um jogo diz que ele foi zerado.
  */
 function subjectOf(e: DiaryEntry): StorySubject {
   const scope = diaryScope(e)
   return {
     title: e.title, type: e.type, cover_url: e.cover_url,
     year: e.year, genre: e.genre, rating: e.rating ?? 0, comment: e.comment,
-    badge: scope?.label ?? null,
+    badge: scope?.label ?? (isGameCompletion(e) ? 'Jogo zerado' : null),
     subtitle: diaryScopeText(scope),
   }
 }
