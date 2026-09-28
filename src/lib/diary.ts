@@ -38,3 +38,12 @@ export function diaryScopeText(scope: DiaryScope | null): string | null {
   if (!scope) return null
   return scope.name ? `${scope.tag} · ${scope.name}` : scope.tag
 }
+
+/**
+ * Registro que marca o jogo como zerado. Jogos entram no diário de dois jeitos:
+ * a conclusão (manual, importada) e os snapshots diários de tempo jogado do
+ * Playnite/Steam — estes têm `progress_unit` e não significam que o jogo acabou.
+ */
+export function isGameCompletion(entry: Pick<DiaryEntry, 'type' | 'progress_unit'>): boolean {
+  return entry.type === 'game' && !entry.progress_unit
+}
