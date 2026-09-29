@@ -67,7 +67,7 @@ Conclusões idempotentes gravam diário e podem oferecer avaliação pelo Telegr
 
 ## Playnite
 
-O webhook recebe identidade, nome, playtime, completion status, user score, datas, biblioteca, developers e publishers. O domínio normaliza status, converte score 0–100 para estrelas 0–5 em meio ponto e aceita string/array do PowerShell. Capa/gênero vêm do RAWG quando possível; estado serializado evita eventos duplicados.
+O webhook recebe identidade, nome, playtime, completion status, user score, datas, biblioteca, developers e publishers. O domínio normaliza status, converte score 0–100 para estrelas 0–5 em meio ponto e aceita string/array do PowerShell. Capa/gênero vêm do RAWG quando possível; estado serializado evita eventos duplicados. A transição para `zerado`/`platinado` grava uma conclusão no diário (`source = 'playnite'`, `progress_unit` nulo, `watched_at` = `lastPlayed`), deduplicada por mídia + horário; o envio posterior com nota preenche a conclusão sem nota mais recente. Sem estado anterior (primeira sincronização ou estado perdido), só conta como conclusão nova o jogo com última sessão nas últimas 48 h — senão a primeira varredura inventaria "zerados" de anos atrás.
 
 ### Conflito de notas
 
