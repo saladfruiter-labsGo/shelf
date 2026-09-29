@@ -49,7 +49,7 @@ Deduplicação tenta identidade Plex, resolve TMDB e só então usa título/ano 
 
 O registro de episódio grava `season_number` e `episode_number` e deixa `comment` nulo; o título do episódio vai para `series_episodes`. Reenvio precisa manter uma única atividade e uma única entrada de diário por granularidade para a mesma sessão (episódio e, quando aplicável, conclusão da temporada), deduplicando por mídia, data e alcance.
 
-O Plex dispara o scrobble ao atingir o limite de tempo assistido, normalmente antes de o usuário dar a nota. Por isso o `media.rate` de filme passa por `applyQuickRating()` (mídia + conclusão sem nota mais recente) e o de episódio preenche o registro sem nota daquele episódio. Se o scrobble já trouxer `userRating`, a entrada nasce avaliada. Capas passam por `/api/integrations/plex/image`, sem expor o token.
+O Plex dispara o scrobble ao atingir o limite de tempo assistido, normalmente antes de o usuário dar a nota. Por isso o `media.rate` de filme passa por `applyQuickRating()` (mídia + conclusão sem nota mais recente) e o de episódio preenche o registro sem nota daquele episódio. Se o scrobble já trouxer `userRating`, a entrada nasce avaliada. Capas passam por `/api/integrations/plex/image`, sem expor o token. Como o proxy envia o token de admin, `fetchPlexImage()` (em `server/plex.ts`) só aceita `/library/metadata/<id>/thumb|art[/<ts>]` (sem query, `..` ou outro prefixo) e só repassa resposta `image/*`; qualquer outro caminho volta 400 sem tocar no Plex. Ao gravar capa de outro formato, amplie `isPlexImagePath()` e os testes junto.
 
 ## Last.fm
 
