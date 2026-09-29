@@ -77,3 +77,39 @@ export function originalFilenameFromPlex(meta: Pick<PlexMediaFileMetadata, 'Medi
   const normalized = file.replace(/[\\/]+$/, '')
   return normalized.split(/[\\/]/).pop() || normalized
 }
+
+/**
+ * Caminhos de imagem que o proxy aceita: só as capas que o próprio Shelf grava
+ * (`thumb`/`grandparentThumb` do Plex) e a arte de fundo do mesmo item. O proxy
+ * envia o token de admin ao Plex, então qualquer outro caminho seria uma porta
+ * aberta para a API inteira (histórico, contas, sessões).
+ */
+const PLEX_IMAGE_PATH = /^\/library\/metadata\/\d+\/(?:thumb|art)(?:\/\d+)?$/
+
+export function isPlexImagePath(path: unknown): path is string {
+  return typeof path === 'string' && PLEX_IMAGE_PATH.test(path)
+}
+
+export type PlexImageResult =
+  | { ok: true; body: ArrayBuffer; contentType: string }
+  | { ok: false; status: 400 | 404 | 502 }
+
+/** Busca uma capa no Plex, recusando caminho fora do formato e resposta que não é imagem. */
+export async function fetchPlexImage(
+  path: unknown,
+  { url, token, fetcher = fetch }: { url: string; token: string; fetcher?: typeof fetch },
+): Promise<PlexImageResult> {
+  if (!url || !token) return { ok: false, status: 404 }
+  if (!isPlexImagePath(path)) return { ok: false, status: 400 }
+  try {
+    const response = await fetcher(`${url.replace(/\/$/, '')}${path}`, {
+      headers: { 'X-Plex-Token': token },
+      redirect: 'error',
+    })
+    const contentType = response.headers.get('content-type') ?? ''
+    if (!response.ok || !/^image\//i.test(contentType)) return { ok: false, status: 502 }
+    return { ok: true, body: await response.arrayBuffer(), contentType }
+  } catch {
+    return { ok: false, status: 502 }
+  }
+}

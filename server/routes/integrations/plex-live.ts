@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { cfg } from '../../integrations/config.js'
 import type { NowPlaying } from '../../integrations/now-playing.js'
-import { mapPlexMetadata, type PlexMeta } from '../../plex.js'
+import { fetchPlexImage, mapPlexMetadata, type PlexMeta } from '../../plex.js'
 
 interface PlexSession extends PlexMeta {
   Player?: { state?: string }
@@ -17,22 +17,15 @@ export function getPlexNowPlaying(): NowPlaying | null {
 }
 
 app.get('/plex/image', async (context) => {
-  const path = context.req.query('path')
-  const url = cfg('PLEX_URL')
-  const token = cfg('PLEX_TOKEN')
-  if (!path || !url || !token) return context.body(null, 404)
-  try {
-    const response = await fetch(`${url.replace(/\/$/, '')}${path}`, {
-      headers: { 'X-Plex-Token': token },
-    })
-    if (!response.ok) return context.body(null, 502)
-    return context.body(await response.arrayBuffer(), 200, {
-      'Content-Type': response.headers.get('content-type') ?? 'image/jpeg',
-      'Cache-Control': 'public, max-age=86400',
-    })
-  } catch {
-    return context.body(null, 502)
-  }
+  const result = await fetchPlexImage(context.req.query('path'), {
+    url: cfg('PLEX_URL'),
+    token: cfg('PLEX_TOKEN'),
+  })
+  if (!result.ok) return context.body(null, result.status)
+  return context.body(result.body, 200, {
+    'Content-Type': result.contentType,
+    'Cache-Control': 'public, max-age=86400',
+  })
 })
 
 export async function pollPlexSessions(): Promise<void> {

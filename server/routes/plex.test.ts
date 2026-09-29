@@ -1,6 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  fetchPlexImage,
+  isPlexImagePath,
   mapPlexMetadata,
   originalFilenameFromPlex,
   plexEventOccurredAt,
@@ -57,4 +59,66 @@ test('usa o timestamp estável do Plex para identificar retries', () => {
     plexEventOccurredAt({}, new Date('2026-09-10T12:00:00.000Z')),
     '2026-09-10T12:00:00.000Z',
   )
+})
+
+test('proxy de imagem aceita só os caminhos de capa que o Shelf grava', () => {
+  assert.equal(isPlexImagePath('/library/metadata/103451/thumb/1790069259'), true)
+  assert.equal(isPlexImagePath('/library/metadata/1/thumb'), true)
+  assert.equal(isPlexImagePath('/library/metadata/1/art/1790069259'), true)
+
+  for (const path of [
+    undefined,
+    '',
+    '/status/sessions/history/all',
+    '/library/onDeck',
+    '/myplex/account',
+    '/library/metadata/1',
+    '/library/metadata/1/thumb/1?X-Plex-Token=x',
+    '/library/metadata/1/thumb/1#x',
+    '/library/metadata/1/thumb/../../../status/sessions',
+    '/library/metadata/../../status/sessions/thumb/1',
+    '/library/metadata/1/thumb/1\n/status/sessions',
+    '//evil.test/library/metadata/1/thumb',
+    'library/metadata/1/thumb',
+    '/photo/:/transcode?url=/status/sessions',
+    '/LIBRARY/metadata/1/thumb',
+  ]) {
+    assert.equal(isPlexImagePath(path), false, String(path))
+  }
+})
+
+function stubFetch(contentType: string, calls: string[] = []): typeof fetch {
+  return (async (input: string | URL | Request) => {
+    calls.push(String(input))
+    return new Response(new Uint8Array([1, 2, 3]), { status: 200, headers: { 'Content-Type': contentType } })
+  }) as typeof fetch
+}
+
+test('proxy recusa caminho fora do formato sem chamar o Plex', async () => {
+  const calls: string[] = []
+  const result = await fetchPlexImage('/status/sessions/history/all', {
+    url: 'http://plex.test:32400', token: 'secret', fetcher: stubFetch('image/jpeg', calls),
+  })
+  assert.deepEqual(result, { ok: false, status: 400 })
+  assert.deepEqual(calls, [])
+})
+
+test('proxy repassa capa válida e recusa resposta que não é imagem', async () => {
+  const calls: string[] = []
+  const ok = await fetchPlexImage('/library/metadata/7/thumb/123', {
+    url: 'http://plex.test:32400/', token: 'secret', fetcher: stubFetch('image/jpeg', calls),
+  })
+  assert.equal(ok.ok, true)
+  assert.equal(ok.ok && ok.contentType, 'image/jpeg')
+  assert.deepEqual(calls, ['http://plex.test:32400/library/metadata/7/thumb/123'])
+
+  const xml = await fetchPlexImage('/library/metadata/7/thumb/123', {
+    url: 'http://plex.test:32400', token: 'secret', fetcher: stubFetch('text/xml;charset=utf-8'),
+  })
+  assert.deepEqual(xml, { ok: false, status: 502 })
+})
+
+test('proxy sem Plex configurado responde 404', async () => {
+  const result = await fetchPlexImage('/library/metadata/7/thumb/123', { url: '', token: '' })
+  assert.deepEqual(result, { ok: false, status: 404 })
 })
