@@ -117,6 +117,62 @@ test('webhook repetido do Playnite não duplica conclusão, atividade ou diário
   `).get(), { progress_day: '2026-09-10', progress_value: 7200, progress_unit: 'seconds' })
 })
 
+test('Playnite zerado vira conclusão no diário, com a nota que chegar depois', async () => {
+  setCfg('PLAYNITE_ENABLED', '1')
+  setCfg('PLAYNITE_RATING_POLICY', 'shelf')
+  const secret = ensureSecret('PLAYNITE_WEBHOOK_SECRET')
+  const lastPlayed = new Date(Date.now() - 60 * 60 * 1000).toISOString()
+  const send = (completionStatus: string, userScore: number | null, playtimeSeconds: number) =>
+    playniteRoutes.request(`/playnite/webhook?token=${secret}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        gameId: 'game-zerado', name: 'Jogo zerado', completionStatus,
+        playtimeSeconds, userScore, lastPlayed,
+      }),
+    })
+  const completions = () => db.prepare(`
+    SELECT d.watched_at, d.rating FROM diary_entries d
+      JOIN media_items m ON m.id = d.media_item_id
+     WHERE m.external_id = 'playnite:game-zerado' AND d.source = 'playnite' AND d.progress_unit IS NULL
+  `).all() as { watched_at: string; rating: number | null }[]
+
+  assert.equal((await send('Playing', null, 3_600)).status, 200)
+  assert.deepEqual(completions(), [])
+
+  // Zerou: a conclusão entra na hora, ainda sem nota (o usuário avalia depois).
+  assert.equal((await send('Completed', null, 7_200)).status, 200)
+  assert.deepEqual(completions(), [{ watched_at: lastPlayed, rating: null }])
+
+  // Envio das 21h com a nota: completa o mesmo registro, sem criar outro.
+  assert.equal((await send('Completed', 100, 7_200)).status, 200)
+  assert.equal((await send('Completed', 100, 7_200)).status, 200)
+  assert.deepEqual(completions(), [{ watched_at: lastPlayed, rating: 5 }])
+  assert.equal((db.prepare(
+    "SELECT rating FROM media_items WHERE external_id = 'playnite:game-zerado'",
+  ).get() as { rating: number }).rating, 5)
+})
+
+test('primeira sincronização não inventa conclusão para jogo zerado há tempos', async () => {
+  setCfg('PLAYNITE_ENABLED', '1')
+  const secret = ensureSecret('PLAYNITE_WEBHOOK_SECRET')
+  const response = await playniteRoutes.request(`/playnite/webhook?token=${secret}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      gameId: 'game-antigo', name: 'Jogo antigo', completionStatus: 'Completed',
+      playtimeSeconds: 36_000, userScore: 90, lastPlayed: '2024-01-10T20:00:00.000Z',
+    }),
+  })
+  assert.equal(response.status, 200)
+  // Fecha aqui o snapshot de 2024 para não vazar no job dos testes seguintes.
+  assert.equal(runDiaryProgressJob(new Date('2024-01-11T12:00:00.000Z')), 1)
+  assert.equal((db.prepare(`
+    SELECT COUNT(*) AS n FROM diary_entries d JOIN media_items m ON m.id = d.media_item_id
+     WHERE m.external_id = 'playnite:game-antigo' AND d.progress_unit IS NULL
+  `).get() as { n: number }).n, 0)
+})
+
 test('política de nota do Playnite preserva o Shelf por padrão e permite optar pelo Playnite', async () => {
   setCfg('PLAYNITE_ENABLED', '1')
   setCfg('PLAYNITE_RATING_POLICY', 'shelf')

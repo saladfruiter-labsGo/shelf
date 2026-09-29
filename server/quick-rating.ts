@@ -12,6 +12,8 @@ export function isQuickRating(value: unknown): value is number {
 /**
  * Aplica a nota à mídia e à sessão concluída mais recente que ainda não tinha
  * avaliação. Assim o card, o diário e as estatísticas contam a mesma história.
+ * Snapshots de progresso (livro/jogo em andamento) não são conclusões e ficam
+ * de fora: a nota de um jogo zerado pertence ao registro de "zerado".
  */
 export function applyQuickRating(
   mediaItemId: number,
@@ -32,6 +34,7 @@ export function applyQuickRating(
     const diary = database.prepare(`
       SELECT id FROM diary_entries
       WHERE media_item_id = ? AND (rating IS NULL OR rating <= 0)
+        AND progress_unit IS NULL
       ORDER BY watched_at DESC, id DESC
       LIMIT 1
     `).get(mediaItemId) as { id: number } | undefined

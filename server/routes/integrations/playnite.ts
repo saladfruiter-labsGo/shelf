@@ -45,6 +45,34 @@ const insertActivity = db.prepare(`
     (source, event_type, media_type, external_ref, title, subtitle, cover_url, rating, duration_ms, genre, occurred_at, raw)
   VALUES (@source, @event_type, 'game', @external_ref, @title, NULL, @cover_url, @rating, NULL, @genre, @occurred_at, NULL)
 `)
+// Zerar/platinar vira um registro DE CONCLUSÃO no diário (sem campos de
+// progresso), separado do snapshot diário de tempo de jogo. Retry com o mesmo
+// lastPlayed não duplica; zerar de novo numa data posterior é outro registro.
+const insertCompletionDiary = db.prepare(`
+  INSERT INTO diary_entries (media_item_id, watched_at, rating, comment, source)
+  SELECT @media_item_id, @watched_at, @rating, NULL, 'playnite'
+  WHERE NOT EXISTS (
+    SELECT 1 FROM diary_entries
+    WHERE media_item_id = @media_item_id AND source = 'playnite'
+      AND progress_unit IS NULL AND watched_at = @watched_at
+  )
+`)
+// A nota costuma vir depois de zerar (o usuário avalia após fechar o jogo):
+// completa a conclusão mais recente que ficou sem nota.
+const rateCompletionDiary = db.prepare(`
+  UPDATE diary_entries SET rating = @rating
+  WHERE id = (
+    SELECT id FROM diary_entries
+    WHERE media_item_id = @media_item_id AND source = 'playnite'
+      AND progress_unit IS NULL AND (rating IS NULL OR rating <= 0)
+    ORDER BY watched_at DESC, id DESC
+    LIMIT 1
+  )
+`)
+
+/** Sem estado anterior, só conta como conclusão nova o que foi jogado há pouco. */
+const FRESH_COMPLETION_MS = 48 * 60 * 60 * 1000
+
 export function ensurePlayniteSecret(): string {
   return ensureSecret('PLAYNITE_WEBHOOK_SECRET')
 }
@@ -143,6 +171,19 @@ app.post('/playnite/webhook', async (c) => {
     })
   }
 
+  // Na primeira vez que o Shelf vê um jogo (primeira sincronização ou estado
+  // perdido), "zerado" pode ser de anos atrás: sem transição observada, só
+  // entra no diário se a última sessão for recente.
+  const completedAt = lastPlayedIso ?? nowIso
+  const freshCompletion = previous != null || (
+    lastPlayedIso != null && Date.parse(nowIso) - Date.parse(lastPlayedIso) <= FRESH_COMPLETION_MS
+  )
+  if (isCompleted && !wasCompleted && freshCompletion) {
+    insertCompletionDiary.run({
+      media_item_id: row.id, watched_at: completedAt, rating: row.rating > 0 ? row.rating : null,
+    })
+  }
+
   if (isCompleted && !wasCompleted) {
     insertActivity.run({
       source: 'playnite', event_type: 'played', external_ref: externalId, title: name,
@@ -155,6 +196,10 @@ app.post('/playnite/webhook', async (c) => {
       cover_url: coverUrl, rating: null, genre, occurred_at: lastPlayedIso ?? nowIso,
     })
     notifyLibraryActivity({ event: 'in_progress', type: 'game', title: name })
+  }
+
+  if (isCompleted && row.rating > 0) {
+    rateCompletionDiary.run({ media_item_id: row.id, rating: row.rating })
   }
 
   if (rating > 0 && previous && previous.rating !== rating && before?.rating !== row.rating) {
