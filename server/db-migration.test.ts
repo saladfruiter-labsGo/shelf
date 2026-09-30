@@ -96,6 +96,7 @@ test('adota banco sem versão, preserva dados e cria snapshot antes da migration
     { version: 5, name: 'isolated-list-media' },
     { version: 6, name: 'season-ratings' },
     { version: 7, name: 'episode-diary-entries' },
+    { version: 8, name: 'custom-covers' },
   ])
 
   const item = db.prepare("SELECT title, status FROM media_items WHERE external_id = 'legacy-1'").get()

@@ -51,6 +51,10 @@ Escolha query keys estáveis e invalide todas as visões afetadas por uma mutati
 
 Não crie mutation de avaliação rápida que atualize apenas `media_items.rating`.
 
+## Arte de capa personalizada
+
+`CoverPickerModal` (aberto pelo botão 🖼 de cada registro do diário) lista a capa padrão, a atual e as alternativas do provedor (`GET /api/media/:id/covers`: pôsteres do TMDB para filme/série; arte vertical da Steam e capturas da RAWG para jogo) e aceita envio do dispositivo. Após trocar, invalida todas as queries, porque a capa aparece em quase toda tela. O `StoryModal` usa a arte escolhida e, quando `StorySubject.default_cover_url` existe, oferece o toggle "Arte escolhida / Padrão".
+
 ## CSS e tema
 
 O projeto combina `src/index.css`, CSS local em template literal dentro de páginas grandes e Tailwind com cores mapeadas para CSS variables. Siga o padrão vizinho. Prefira tokens (`--bg`, `--surface`, `--card`, `--text-*`, `--accent`, `--gold` e cores das categorias) e `color-mix`.

@@ -101,7 +101,7 @@ const ITEM_COLUMNS = [
   'status', 'notes', 'synopsis', 'creators', 'author', 'release_date', 'hype', 'favorite',
   'completed_at', 'tmdb_id', 'pages_total', 'pages_read', 'playtime_seconds',
   'game_status', 'last_played_at', 'publisher', 'library', 'steam_appid',
-  'original_filename',
+  'original_filename', 'default_cover_url', 'cover_custom',
   'added_at', 'updated_at',
 ] as const
 

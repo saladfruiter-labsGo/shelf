@@ -22,6 +22,7 @@ Uma linha por obra, com `UNIQUE(external_id, type)`.
 - jogos: `playtime_seconds`, `game_status`, `last_played_at`, publisher, library, `steam_appid`;
 - filmes/séries do Plex podem usar GUID como `external_id`; `tmdb_id` mantém a identidade comum para deduplicação;
 - `favorite`: 0 fora dos favoritos, 1 favorito, 2 destaque coroado da categoria.
+- arte de capa personalizada: com `cover_custom = 1`, `cover_url` é a arte escolhida pelo usuário e `default_cover_url` guarda a capa do provedor. A capa é da mídia, não do registro do diário — trocar no diário troca na biblioteca e no Story. Regras em `server/custom-cover.ts`; integrações gravam capa com `COALESCE(media_items.cover_url, excluded.cover_url)` e por isso nunca sobrescrevem a escolha. Quem reescreve a capa do provedor (ex.: `tmdb-identification`) atualiza `default_cover_url` quando há arte personalizada.
 
 O schema impõe `CHECK` para type/status/game_status. Valide também na borda HTTP para devolver 400 claro em vez de depender do erro do SQLite.
 

@@ -11,22 +11,34 @@ interface Props {
 export function StoryModal({ open, subject, onClose }: Props) {
   const canvasRefs = useRef<Record<string, HTMLCanvasElement | null>>({})
   const [busy, setBusy] = useState<StoryTemplate | null>(null)
+  const [useDefaultCover, setUseDefaultCover] = useState(false)
   const shareable = useMemo(() => canShareStory(), [])
 
-  // Renderiza os previews sempre que abrir (ou mudar o item)
+  // Com arte personalizada, o Story usa a escolhida; a capa padrão fica a um toque.
+  const hasCustomCover = !!subject?.default_cover_url && subject.default_cover_url !== subject.cover_url
+  // Quem abre o modal recria o `subject` a cada render; a escolha só volta ao
+  // padrão quando muda de fato o item compartilhado.
+  const subjectKey = subject ? `${subject.title}|${subject.subtitle ?? ''}|${subject.cover_url ?? ''}` : ''
+  useEffect(() => { if (open) setUseDefaultCover(false) }, [open, subjectKey])
+  const story = useMemo<StorySubject | null>(() => {
+    if (!subject) return null
+    return hasCustomCover && useDefaultCover ? { ...subject, cover_url: subject.default_cover_url ?? null } : subject
+  }, [subject, hasCustomCover, useDefaultCover])
+
+  // Renderiza os previews sempre que abrir (ou mudar o item ou a capa)
   useEffect(() => {
-    if (!open || !subject) return
+    if (!open || !story) return
     let cancelled = false
     ;(async () => {
       for (const t of STORY_TEMPLATES) {
         const el = canvasRefs.current[t.id]
         if (el && !cancelled) {
-          try { await renderStory(t.id, subject, el) } catch { /* ignora */ }
+          try { await renderStory(t.id, story, el) } catch { /* ignora */ }
         }
       }
     })()
     return () => { cancelled = true }
-  }, [open, subject])
+  }, [open, story])
 
   useEffect(() => {
     if (!open) return
@@ -35,13 +47,13 @@ export function StoryModal({ open, subject, onClose }: Props) {
     return () => window.removeEventListener('keydown', onKey)
   }, [open, onClose])
 
-  if (!open || !subject) return null
+  if (!open || !subject || !story) return null
 
   const handleAction = async (t: StoryTemplate) => {
     setBusy(t)
     try {
-      if (shareable) await shareStory(t, subject)
-      else await downloadStory(t, subject)
+      if (shareable) await shareStory(t, story)
+      else await downloadStory(t, story)
     } finally { setBusy(null) }
   }
 
@@ -59,6 +71,26 @@ export function StoryModal({ open, subject, onClose }: Props) {
         <p className="text-sm text-muted mb-5">
           {shareable ? 'Escolha um modelo e compartilhe' : 'Escolha um modelo para baixar'} (1080×1920).
         </p>
+
+        {hasCustomCover && (
+          <div className="flex items-center gap-2 mb-5" role="group" aria-label="Capa usada no Story">
+            <span className="text-xs text-muted uppercase tracking-wide mr-1">Capa</span>
+            {([false, true] as const).map(isDefault => (
+              <button
+                key={String(isDefault)}
+                onClick={() => setUseDefaultCover(isDefault)}
+                aria-pressed={useDefaultCover === isDefault}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+                  useDefaultCover === isDefault
+                    ? 'bg-accent text-bg border-accent'
+                    : 'text-muted border-border hover:text-primary hover:border-border-strong'
+                }`}
+              >
+                {isDefault ? 'Padrão' : 'Arte escolhida'}
+              </button>
+            ))}
+          </div>
+        )}
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {STORY_TEMPLATES.map(t => (

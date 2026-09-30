@@ -5,6 +5,15 @@ import { getSeriesView } from '../series.js'
 import { fetchTmdbMediaDetails, type TmdbMediaType } from '../tmdb.js'
 import { applyQuickRating, isQuickRating } from '../quick-rating.js'
 import {
+  CoverUploadError,
+  acceptableCoverUrl,
+  applyCover,
+  coverChoices,
+  getCoverRow,
+  restoreDefaultCover,
+  saveUploadedCover,
+} from '../custom-cover.js'
+import {
   GAME_STATUS_TO_BASE,
   LIBRARY_STATUS_PREDICATE,
   isGameStatus,
@@ -171,17 +180,70 @@ app.patch('/:id/tmdb-identification', async (c) => {
   if ('error' in result) return c.json({ error: result.error }, result.status)
 
   const { details } = result
+  // Com arte personalizada, a nova identificação troca só a capa padrão guardada.
   db.prepare(`
     UPDATE media_items SET
-      tmdb_id = ?, title = ?, cover_url = ?, year = ?, genre = ?, runtime = ?,
+      tmdb_id = ?, title = ?,
+      cover_url = CASE WHEN cover_custom = 1 THEN cover_url ELSE ? END,
+      default_cover_url = CASE WHEN cover_custom = 1 THEN ? ELSE default_cover_url END,
+      year = ?, genre = ?, runtime = ?,
       synopsis = ?, creators = ?, author = ?, release_date = ?, updated_at = datetime('now')
     WHERE id = ?
   `).run(
-    details.tmdb_id, details.title, details.cover_url, details.year, details.genre, details.runtime,
+    details.tmdb_id, details.title, details.cover_url, details.cover_url, details.year, details.genre, details.runtime,
     details.synopsis, details.creators, details.author, details.release_date, c.req.param('id'),
   )
 
   return c.json(db.prepare('SELECT * FROM media_items WHERE id = ?').get(c.req.param('id')))
+})
+
+function coverTarget(raw: string) {
+  const id = Number(raw)
+  return Number.isInteger(id) && id > 0 ? getCoverRow(id) : undefined
+}
+
+/** Galeria de artes para escolher a capa: padrão, atual e alternativas do provedor. */
+app.get('/:id/covers', async (c) => {
+  const row = coverTarget(c.req.param('id'))
+  if (!row) return c.json({ error: 'Not found' }, 404)
+  return c.json(await coverChoices(row))
+})
+
+/** Troca a capa do item — vale para biblioteca, diário e Story. */
+app.put('/:id/cover', async (c) => {
+  const row = coverTarget(c.req.param('id'))
+  if (!row) return c.json({ error: 'Not found' }, 404)
+  const body = await c.req.json().catch(() => ({})) as { url?: unknown }
+  const url = typeof body.url === 'string' ? body.url.trim() : ''
+  if (!url || !(await acceptableCoverUrl(row, url))) {
+    return c.json({ error: 'Essa imagem não pode ser usada como capa.' }, 400)
+  }
+  await applyCover(row, url)
+  return c.json(db.prepare('SELECT * FROM media_items WHERE id = ?').get(row.id))
+})
+
+/** Envia uma arte do dispositivo e já a aplica ao item. */
+app.post('/:id/cover/upload', async (c) => {
+  const row = coverTarget(c.req.param('id'))
+  if (!row) return c.json({ error: 'Not found' }, 404)
+  const body = await c.req.parseBody().catch(() => null)
+  const file = body?.file
+  if (!(file instanceof File)) return c.json({ error: 'Envie a imagem no campo "file".' }, 400)
+  try {
+    await applyCover(row, await saveUploadedCover(file))
+  } catch (error) {
+    if (error instanceof CoverUploadError) return c.json({ error: error.message }, 400)
+    throw error
+  }
+  return c.json(db.prepare('SELECT * FROM media_items WHERE id = ?').get(row.id))
+})
+
+/** Volta para a capa do provedor. */
+app.delete('/:id/cover', async (c) => {
+  const row = coverTarget(c.req.param('id'))
+  if (!row) return c.json({ error: 'Not found' }, 404)
+  await restoreDefaultCover(row)
+  return c.json(db.prepare('SELECT * FROM media_items WHERE id = ?').get(row.id))
 })
 
 /** Vagas de favorito por categoria (o banner da home mostra exatamente estas). */

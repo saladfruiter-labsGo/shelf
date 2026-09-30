@@ -14,6 +14,8 @@ export interface StorySubject {
   title:     string
   type:      MediaType
   cover_url: string | null
+  /** Capa do provedor quando `cover_url` é uma arte personalizada — o Story deixa escolher entre as duas. */
+  default_cover_url?: string | null
   year:      number | null
   genre:     string | null
   author?:   string | null
