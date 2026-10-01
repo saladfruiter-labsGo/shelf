@@ -4,8 +4,12 @@ export type MediaType = typeof MEDIA_TYPES[number]
 export const MEDIA_STATUSES = ['wishlist', 'in_progress', 'completed', 'dropped'] as const
 export type MediaStatus = typeof MEDIA_STATUSES[number]
 
-export const GAME_STATUSES = ['jogando', 'zerado', 'platinado', 'abandonado', 'nunca_jogado'] as const
+export const GAME_STATUSES = ['jogando', 'pausado', 'zerado', 'platinado', 'abandonado', 'backlog', 'nunca_jogado'] as const
 export type GameStatus = typeof GAME_STATUSES[number]
+
+/** De onde veio o status ou o tempo de jogo de um game. Só `steam` leva selo. */
+export const GAME_DATA_SOURCES = ['steam', 'playnite', 'manual'] as const
+export type GameDataSource = typeof GAME_DATA_SOURCES[number]
 
 const mediaTypes = new Set<string>(MEDIA_TYPES)
 const mediaStatuses = new Set<string>(MEDIA_STATUSES)
@@ -26,13 +30,33 @@ export function isGameStatus(value: unknown): value is GameStatus {
 /** Status granular de games -> status base usado por toda a biblioteca. */
 export const GAME_STATUS_TO_BASE: Record<GameStatus, MediaStatus> = {
   jogando:      'in_progress',
+  pausado:      'in_progress',
   zerado:       'completed',
   platinado:    'completed',
   abandonado:   'dropped',
-  nunca_jogado: 'wishlist',
+  backlog:      'wishlist',   // tenho e não joguei: fora da biblioteca
+  nunca_jogado: 'wishlist',   // quero comprar (rotulado "Wishlist" na interface)
 }
 
 export const BACKLOG_STATUS: MediaStatus = 'wishlist'
+
+/**
+ * As duas filas fora da biblioteca, cada uma com a sua página:
+ * - `wishlist`: o que você quer comprar/consumir (inclui `nunca_jogado`);
+ * - `backlog`: jogo que você já tem e ainda não jogou.
+ * Só a Wishlist tem preço, data de lançamento e sincronização com a wishlist da Steam.
+ */
+export const MEDIA_QUEUES = ['wishlist', 'backlog'] as const
+export type MediaQueue = typeof MEDIA_QUEUES[number]
+
+export const QUEUE_PREDICATE: Record<MediaQueue, string> = {
+  wishlist: `status = '${BACKLOG_STATUS}' AND COALESCE(game_status, '') != 'backlog'`,
+  backlog:  `status = '${BACKLOG_STATUS}' AND game_status = 'backlog'`,
+}
+
+export function isMediaQueue(value: unknown): value is MediaQueue {
+  return value === 'wishlist' || value === 'backlog'
+}
 
 /** Predicado SQL compartilhado pelas consultas que representam a biblioteca. */
 export const LIBRARY_STATUS_PREDICATE = `status != '${BACKLOG_STATUS}'`

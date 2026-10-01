@@ -16,7 +16,9 @@ import {
 import {
   GAME_STATUS_TO_BASE,
   LIBRARY_STATUS_PREDICATE,
+  QUEUE_PREDICATE,
   isGameStatus,
+  isMediaQueue,
   isMediaStatus,
   isMediaType,
 } from '../media-domain.js'
@@ -48,6 +50,7 @@ app.get('/', (c) => {
   const type    = c.req.query('type')
   const status  = c.req.query('status')
   const library = c.req.query('library') === '1'
+  const queue   = c.req.query('queue')
   const limit   = parseInt(c.req.query('limit') ?? '100')
   // `offset` deixa quem precisa da coleção inteira — o Backlog, que monta os
   // filtros e a ordenação por preço a partir de todos os itens — buscar em
@@ -59,6 +62,10 @@ app.get('/', (c) => {
   if (type)    { sql += ' AND type = ?';   params.push(type) }
   if (status)  { sql += ' AND status = ?'; params.push(status) }
   if (library) { sql += ` AND ${LIBRARY_STATUS_PREDICATE}` }
+  if (queue != null) {
+    if (!isMediaQueue(queue)) return c.json({ error: 'Invalid queue' }, 400)
+    sql += ` AND ${QUEUE_PREDICATE[queue]}`
+  }
   // Desempate por id: sem ele, itens com o mesmo `added_at` — um import inteiro
   // tem muitos — podem trocar de lugar entre páginas e sumir ou repetir.
   sql += ' ORDER BY added_at DESC, id DESC LIMIT ? OFFSET ?'
@@ -84,7 +91,7 @@ app.get('/upcoming', (c) => {
 
   const wishlist = db.prepare(`
     SELECT * FROM media_items
-    WHERE status = 'wishlist'
+    WHERE ${QUEUE_PREDICATE.wishlist}
     ORDER BY release_date ASC NULLS LAST, added_at DESC
     LIMIT 24
   `).all()
@@ -285,7 +292,14 @@ app.patch('/:id', async (c) => {
     if (base === 'completed' && body.completed_at == null) body.completed_at = new Date().toISOString()
   }
 
-  const allowed = ['rating', 'status', 'notes', 'runtime', 'synopsis', 'creators', 'author', 'release_date', 'hype', 'favorite', 'completed_at', 'game_status', 'last_played_at', 'playtime_seconds']
+  // A procedência nunca vem do cliente: o que passa por aqui foi escolha manual,
+  // perde o selo da Steam e trava o status contra rebaixamento automático.
+  delete body.game_status_source
+  delete body.playtime_source
+  if ('game_status' in body) body.game_status_source = gameStatus === null ? null : 'manual'
+  if ('playtime_seconds' in body) body.playtime_source = body.playtime_seconds == null ? null : 'manual'
+
+  const allowed = ['rating', 'status', 'notes', 'runtime', 'synopsis', 'creators', 'author', 'release_date', 'hype', 'favorite', 'completed_at', 'game_status', 'game_status_source', 'last_played_at', 'playtime_seconds', 'playtime_source']
   const fields  = Object.keys(body).filter(k => allowed.includes(k))
   if (fields.length === 0) return c.json({ error: 'No valid fields' }, 400)
 

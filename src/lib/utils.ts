@@ -17,29 +17,38 @@ export const TYPE_COLOR: Record<MediaType, string> = {
 }
 
 export const STATUS_LABEL = {
-  wishlist:    'Backlog',
+  wishlist:    'Wishlist',
   in_progress: 'Em andamento',
   completed:   'Concluído',
   dropped:     'Abandonado',
 } as const
 
-/** Status granular de games (Playnite). Ordem usada nos botões. */
+/** Status granular de games. Ordem usada nos botões. */
 export const GAME_STATUS_LABEL: Record<GameStatus, string> = {
   jogando:      'Jogando',
+  pausado:      'Pausado',
   zerado:       'Zerado',
   platinado:    'Platinado',
   abandonado:   'Abandonado',
-  nunca_jogado: 'Nunca jogado',
+  backlog:      'Backlog',
+  nunca_jogado: 'Wishlist',
 }
-export const GAME_STATUSES: GameStatus[] = ['jogando', 'zerado', 'platinado', 'abandonado', 'nunca_jogado']
+export const GAME_STATUSES: GameStatus[] = ['jogando', 'pausado', 'zerado', 'platinado', 'abandonado', 'backlog', 'nunca_jogado']
 
 /** Cor (texto/fundo) por status de game — theme-aware, uma cor distinta por estado. */
 export const GAME_STATUS_STYLE: Record<GameStatus, { color: string; bg: string }> = {
-  jogando:      { color: 'var(--games)',      bg: 'var(--games-bg)' },
-  zerado:       { color: 'var(--series)',     bg: 'var(--series-bg)' },
-  platinado:    { color: 'var(--music)',      bg: 'var(--music-bg)' },
-  abandonado:   { color: 'var(--movies)',     bg: 'var(--movies-bg)' },
-  nunca_jogado: { color: 'var(--text-muted)', bg: 'var(--card-hover)' },
+  jogando:      { color: 'var(--games)',          bg: 'var(--games-bg)' },
+  pausado:      { color: 'var(--books)',          bg: 'var(--books-bg)' },
+  zerado:       { color: 'var(--series)',         bg: 'var(--series-bg)' },
+  platinado:    { color: 'var(--music)',          bg: 'var(--music-bg)' },
+  abandonado:   { color: 'var(--movies)',         bg: 'var(--movies-bg)' },
+  backlog:      { color: 'var(--text-secondary)', bg: 'var(--card-hover)' },
+  nunca_jogado: { color: 'var(--text-muted)',     bg: 'var(--card-hover)' },
+}
+
+/** Fonte do status/tempo de jogo. Só o que veio direto da Steam leva selo. */
+export function isFromSteam(source: string | null | undefined): boolean {
+  return source === 'steam'
 }
 
 /** game_status do item; se ausente (jogo adicionado à mão), deriva do status base. */

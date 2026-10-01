@@ -73,7 +73,13 @@ test('migração cria as tabelas de preços num banco que já existia', () => {
   assert.equal(snapshots.some(name => /^shelf-before-migration-.+\.db$/.test(name)), true)
 })
 
-test('só jogos no backlog entram na sincronização automática', () => {
+test('só jogos da Wishlist entram na sincronização automática — o Backlog você já tem', () => {
+  db.prepare(
+    "INSERT INTO media_items (external_id, type, title, status, game_status) VALUES ('owned-1', 'game', 'Já comprado', 'wishlist', 'backlog')",
+  ).run()
+  const owned = db.prepare("SELECT id FROM media_items WHERE external_id = 'owned-1'").get() as { id: number }
+  assert.equal(repo.isBacklogGame(owned.id), false)
+
   const games = repo.backlogGames()
   assert.deepEqual(games.map(g => g.title), ['Cyberpunk 2077'])
   assert.equal(repo.isBacklogGame(games[0].id), true)

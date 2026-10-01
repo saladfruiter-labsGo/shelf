@@ -20,6 +20,7 @@ Uma linha por obra, com `UNIQUE(external_id, type)`.
 - metadados comuns: título, capa, ano, gênero, runtime, sinopse, criadores/autor e datas;
 - livros: `pages_total`, `pages_read`;
 - jogos: `playtime_seconds`, `game_status`, `last_played_at`, publisher, library, `steam_appid`;
+- procedência de jogos: `game_status_source` e `playtime_source` (`steam | playnite | manual`). Só `steam` mostra o selo da Steam na UI. Edição pelo `PATCH /api/media/:id` grava `manual` no servidor (o cliente não escolhe a procedência);
 - filmes/séries do Plex podem usar GUID como `external_id`; `tmdb_id` mantém a identidade comum para deduplicação;
 - `favorite`: 0 fora dos favoritos, 1 favorito, 2 destaque coroado da categoria.
 - arte de capa personalizada: com `cover_custom = 1`, `cover_url` é a arte escolhida pelo usuário e `default_cover_url` guarda a capa do provedor. A capa é da mídia, não do registro do diário — trocar no diário troca na biblioteca e no Story. Regras em `server/custom-cover.ts`; integrações gravam capa com `COALESCE(media_items.cover_url, excluded.cover_url)` e por isso nunca sobrescrevem a escolha. Quem reescreve a capa do provedor (ex.: `tmdb-identification`) atualiza `default_cover_url` quando há arte personalizada.
@@ -28,17 +29,26 @@ O schema impõe `CHECK` para type/status/game_status. Valide também na borda HT
 
 ### Biblioteca e backlog
 
-`wishlist` é backlog e não biblioteca. O predicado canônico é `LIBRARY_STATUS_PREDICATE`, em `server/media-domain.ts`; use-o no SQL antes de `LIMIT`. O cliente pode paginar tudo via `api.media.listAll`, mas não deve redefinir o conceito de biblioteca.
+O status base `wishlist` reúne tudo o que está fora da biblioteca. O predicado canônico é `LIBRARY_STATUS_PREDICATE`, em `server/media-domain.ts`; use-o no SQL antes de `LIMIT`. O cliente pode paginar tudo via `api.media.listAll`, mas não deve redefinir o conceito de biblioteca.
+
+Fora da biblioteca existem **duas filas com páginas próprias**, separadas no servidor por `QUEUE_PREDICATE` (`GET /api/media?queue=wishlist|backlog`):
+
+- **Wishlist** (`/wishlist`): o que você quer comprar/consumir — todo `status = 'wishlist'` exceto jogos em `backlog`. Só ela tem preços, "Em breve" e sincronização com a wishlist da Steam.
+- **Backlog** (`/backlog`): jogo que você já tem e ainda não jogou (`game_status = 'backlog'`). Nunca recebe consulta de preço nem sobe para a wishlist da Steam.
+
+Não junte as duas numa tela com filtro: a separação em páginas é decisão do usuário.
 
 Games têm um `game_status` granular:
 
 | `game_status` | `status` base |
 |---|---|
 | `jogando` | `in_progress` |
+| `pausado` | `in_progress` |
 | `zerado` | `completed` |
 | `platinado` | `completed` |
 | `abandonado` | `dropped` |
-| `nunca_jogado` | `wishlist` |
+| `backlog` | `wishlist` (fila Backlog) |
+| `nunca_jogado` | `wishlist` (fila Wishlist; rótulo "Wishlist" na UI) |
 
 Use `GAME_STATUS_TO_BASE` de `server/media-domain.ts`. Não duplique o mapa.
 

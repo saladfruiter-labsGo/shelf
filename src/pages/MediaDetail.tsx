@@ -9,6 +9,7 @@ import { DiaryEntryModal, type DiaryEntryValues } from '../components/DiaryEntry
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { PricePanel } from '../components/PricePanel'
 import type { MediaStatus, TmdbMediaPreview } from '../types'
+import { SourceBadge } from '../components/SourceBadge'
 import { STATUS_LABEL, GAME_STATUSES, GAME_STATUS_LABEL, gameStatusOf, formatRuntime, formatPlaytime, formatDate, fmtRating } from '../lib/utils'
 import { imageUrl } from '../lib/images'
 import { diaryScope, diaryScopeText } from '../lib/diary'
@@ -364,10 +365,13 @@ export function MediaDetail() {
 
           {/* Status */}
           <div className="mb-4">
-            <p className="text-xs text-muted uppercase tracking-wide mb-2">Status</p>
+            <p className="text-xs text-muted uppercase tracking-wide mb-2 flex items-center gap-2">
+              Status
+              {item.type === 'game' && <SourceBadge source={item.game_status_source} />}
+            </p>
             <div className="flex flex-wrap gap-1.5">
               {item.type === 'game' ? (
-                // Games têm status próprios (espelham o Playnite)
+                // Games têm status próprios; escolher um aqui vira status manual (sem selo)
                 GAME_STATUSES.map(s => (
                   <button
                     key={s}
@@ -412,12 +416,14 @@ export function MediaDetail() {
             </div>
           )}
 
-          {/* Tempo de jogo + última vez jogado (games, via Playnite) */}
+          {/* Tempo de jogo + última vez jogado (games, via Steam/Playnite) */}
           {item.type === 'game' && ((item.playtime_seconds ?? 0) > 0 || item.last_played_at) && (
             <div className="mb-4 flex gap-8">
               {(item.playtime_seconds ?? 0) > 0 && (
                 <div>
-                  <p className="text-xs text-muted uppercase tracking-wide mb-1">Tempo de jogo</p>
+                  <p className="text-xs text-muted uppercase tracking-wide mb-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <span className="whitespace-nowrap">Tempo de jogo</span> <SourceBadge source={item.playtime_source} />
+                  </p>
                   <p className="font-display text-lg font-bold" style={{ color: 'var(--games)' }}>
                     {formatPlaytime(item.playtime_seconds!)}
                   </p>
@@ -425,7 +431,9 @@ export function MediaDetail() {
               )}
               {item.last_played_at && (
                 <div>
-                  <p className="text-xs text-muted uppercase tracking-wide mb-1">Última vez jogado</p>
+                  <p className="text-xs text-muted uppercase tracking-wide mb-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <span className="whitespace-nowrap">Última vez jogado</span> <SourceBadge source={item.playtime_source} />
+                  </p>
                   <p className="font-display text-lg font-bold text-primary">{formatDate(item.last_played_at)}</p>
                 </div>
               )}
@@ -514,8 +522,8 @@ export function MediaDetail() {
         )}
       </div>
 
-      {/* Preços (jogos de PC no backlog) */}
-      {item.type === 'game' && item.status === 'wishlist' && (
+      {/* Preços (só jogos da Wishlist; no Backlog você já tem o jogo) */}
+      {item.type === 'game' && item.status === 'wishlist' && gameStatusOf(item) !== 'backlog' && (
         <PricePanel mediaItemId={item.id} title={item.title} />
       )}
 

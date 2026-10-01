@@ -33,15 +33,17 @@ export function playniteGameStatus(completion: string | undefined, playtimeSecon
       return 'zerado'
     case 'abandoned':
       return 'abandonado'
+    // Jogo no Playnite é jogo que você tem: sem jogar é backlog, não wishlist.
     case 'not played':
     case 'plan to play':
-      return 'nunca_jogado'
+      return 'backlog'
+    case 'on hold':
+      return 'pausado'
     case 'played':
     case 'playing':
-    case 'on hold':
       return 'jogando'
     default:
-      return playtimeSeconds > 0 ? 'jogando' : 'nunca_jogado'
+      return playtimeSeconds > 0 ? 'jogando' : 'backlog'
   }
 }
 

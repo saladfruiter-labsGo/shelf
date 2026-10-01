@@ -1,8 +1,8 @@
 /**
  * Sincronização automática dos preços do backlog.
  *
- * Só jogos com `type = 'game'` e `status = 'wishlist'` são consultados. Sair do
- * backlog apenas interrompe as consultas — ofertas e histórico continuam no
+ * Só jogos com `type = 'game'` e `status = 'wishlist'` são consultados, exceto
+ * `game_status = 'backlog'` (jogo que você já tem). Sair do backlog apenas interrompe as consultas — ofertas e histórico continuam no
  * banco, e voltar ao backlog retoma o acompanhamento de onde parou.
  */
 import * as itad from './providers/isthereanydeal.js'

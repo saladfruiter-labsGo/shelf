@@ -93,6 +93,46 @@ export function rebuildMediaItemsWithDomainChecks(db: Database.Database): void {
   `)
 }
 
+const GAME_STATUS_CHECK_V2 = "('jogando', 'zerado', 'platinado', 'abandonado', 'nunca_jogado')"
+const GAME_STATUS_CHECK_V9 = "('jogando', 'pausado', 'zerado', 'platinado', 'abandonado', 'backlog', 'nunca_jogado')"
+
+/**
+ * Migration v9: amplia o CHECK de `game_status` com `pausado` e `backlog`.
+ *
+ * O SQLite não altera CHECK, então a tabela é recriada a partir do próprio SQL
+ * atual — assim as colunas que entraram por ALTER depois da v2 (capa
+ * personalizada etc.) vêm junto sem precisarem ser listadas aqui.
+ */
+export function rebuildMediaItemsWithBacklogStatuses(db: Database.Database): void {
+  const schema = db.prepare(
+    "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'media_items'",
+  ).get() as { sql: string } | undefined
+  if (!schema) throw new Error('media_items não existe')
+  if (schema.sql.includes("'backlog'")) return
+  if (schema.sql.split(GAME_STATUS_CHECK_V2).length !== 2) {
+    throw new Error('CHECK de game_status em formato inesperado; migration v9 abortada')
+  }
+
+  const nextSql = schema.sql
+    .replace(GAME_STATUS_CHECK_V2, GAME_STATUS_CHECK_V9)
+    .replace(/^CREATE TABLE\s+("?)media_items\1/, 'CREATE TABLE media_items_next')
+  if (!nextSql.startsWith('CREATE TABLE media_items_next')) {
+    throw new Error('Não foi possível renomear media_items no SQL da migration v9')
+  }
+
+  const indexes = db.prepare(
+    "SELECT sql FROM sqlite_master WHERE type = 'index' AND tbl_name = 'media_items' AND sql IS NOT NULL",
+  ).all() as { sql: string }[]
+  const columns = (db.prepare('PRAGMA table_info(media_items)').all() as { name: string }[])
+    .map(c => `"${c.name}"`).join(', ')
+
+  db.exec(nextSql)
+  db.exec(`INSERT INTO media_items_next (${columns}) SELECT ${columns} FROM media_items`)
+  db.exec('DROP TABLE media_items')
+  db.exec('ALTER TABLE media_items_next RENAME TO media_items')
+  for (const index of indexes) db.exec(index.sql)
+}
+
 /** Corrige bancos que aplicaram a v2 antes de `music` entrar na lista permitida. */
 export function ensureMediaItemsAllowsMusic(db: Database.Database): void {
   const schema = db.prepare(

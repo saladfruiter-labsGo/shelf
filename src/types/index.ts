@@ -1,7 +1,9 @@
 export type MediaType   = 'movie' | 'series' | 'game' | 'book' | 'music'
 export type MediaStatus = 'wishlist' | 'in_progress' | 'completed' | 'dropped'
-/** Status granular exclusivo de games (Playnite). */
-export type GameStatus  = 'jogando' | 'zerado' | 'platinado' | 'abandonado' | 'nunca_jogado'
+export type MediaQueue  = 'wishlist' | 'backlog' // filas fora da biblioteca, cada uma com sua página
+/** Status granular exclusivo de games. */
+export type GameStatus  = 'jogando' | 'pausado' | 'zerado' | 'platinado' | 'abandonado' | 'backlog' | 'nunca_jogado'
+export type GameDataSource = 'steam' | 'playnite' | 'manual'
 
 export interface MediaItem {
   id:           number
@@ -31,7 +33,9 @@ export interface MediaItem {
   pages_total?: number | null
   pages_read?:  number | null
   playtime_seconds?: number | null   // games (Playnite): tempo total jogado, em segundos
-  game_status?:      GameStatus | null // games (Playnite): status granular
+  game_status?:      GameStatus | null // games: status granular
+  game_status_source?: GameDataSource | null // de onde veio o status (selo só para 'steam')
+  playtime_source?:  GameDataSource | null // de onde veio o tempo de jogo
   last_played_at?:   string | null     // games (Playnite): última vez jogado (ISO)
   publisher?:        string | null     // games (Playnite): distribuidora(s)
   library?:          string | null     // games (Playnite): biblioteca/origem (Steam, GOG...)

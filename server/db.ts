@@ -3,7 +3,7 @@ import path from 'path'
 import fs from 'fs'
 import { writeVerifiedDatabaseBackup } from './database-backup.js'
 import { hasPendingMigrations, runMigrations, type Migration } from './migrations.js'
-import { ensureMediaItemsAllowsMusic, rebuildMediaItemsWithDomainChecks } from './media-schema.js'
+import { ensureMediaItemsAllowsMusic, rebuildMediaItemsWithBacklogStatuses, rebuildMediaItemsWithDomainChecks } from './media-schema.js'
 
 export const dataDir = path.resolve(process.env.DATA_DIR ?? './data')
 fs.mkdirSync(dataDir, { recursive: true })
@@ -130,7 +130,7 @@ const newCols: [string, string][] = [
   ['pages_total',   'INTEGER'], // livros (Kavita): total de páginas da série/volume
   ['pages_read',    'INTEGER'], // livros (Kavita): páginas lidas até o último poll
   ['playtime_seconds', 'INTEGER'], // games (Playnite): tempo total jogado, em segundos
-  ['game_status',   'TEXT'],    // games (Playnite): status granular (jogando|zerado|platinado|abandonado|nunca_jogado)
+  ['game_status',   'TEXT'],    // games: status granular (ver GAME_STATUSES em media-domain.ts)
   ['last_played_at','TEXT'],    // games (Playnite): última vez jogado (ISO), do LastActivity
   ['publisher',     'TEXT'],    // games (Playnite): distribuidora(s)
   ['library',       'TEXT'],    // games (Playnite): biblioteca/origem (Source: Steam, GOG, Epic...)
@@ -566,6 +566,46 @@ db.exec(`
     if (!mediaCols.includes('cover_custom')) {
       db.exec('ALTER TABLE media_items ADD COLUMN cover_custom INTEGER NOT NULL DEFAULT 0')
     }
+  },
+}, {
+  version: 9,
+  name: 'game-backlog-paused-and-sources',
+  foreignKeys: 'off',
+  up: () => {
+    rebuildMediaItemsWithBacklogStatuses(db)
+
+    // Procedência do status e do tempo de jogo: é o que decide o selo da
+    // Steam e impede que um sinal automático passe por cima de uma escolha manual.
+    const mediaCols = (db.prepare('PRAGMA table_info(media_items)').all() as { name: string }[]).map(c => c.name)
+    if (!mediaCols.includes('game_status_source')) {
+      db.exec('ALTER TABLE media_items ADD COLUMN game_status_source TEXT')
+    }
+    if (!mediaCols.includes('playtime_source')) {
+      db.exec('ALTER TABLE media_items ADD COLUMN playtime_source TEXT')
+    }
+
+    // Até aqui só o Playnite gravava tempo de jogo.
+    db.exec("UPDATE media_items SET playtime_source = 'playnite' WHERE type = 'game' AND playtime_seconds IS NOT NULL")
+
+    let playniteIds: string[] = []
+    try {
+      const raw = (db.prepare("SELECT value FROM settings WHERE key = 'PLAYNITE_STATE'").get() as { value: string } | undefined)?.value
+      playniteIds = Object.values(JSON.parse(raw || '{}') as Record<string, { externalId?: string }>)
+        .map(entry => entry?.externalId)
+        .filter((id): id is string => typeof id === 'string' && id.length > 0)
+    } catch { /* estado ilegível: ninguém é marcado como vindo do Playnite */ }
+
+    const markPlaynite = db.prepare(
+      "UPDATE media_items SET game_status_source = 'playnite' WHERE type = 'game' AND external_id = ? AND game_status IS NOT NULL",
+    )
+    for (const externalId of playniteIds) markPlaynite.run(externalId)
+
+    // Jogo "nunca jogado" que veio do Playnite está na biblioteca de alguém:
+    // é backlog (tenho e não joguei), não wishlist (quero comprar).
+    db.exec(`
+      UPDATE media_items SET game_status = 'backlog'
+       WHERE type = 'game' AND game_status = 'nunca_jogado' AND game_status_source = 'playnite'
+    `)
   },
 }]
 

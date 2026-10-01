@@ -7,16 +7,16 @@ import type {
 } from '../types'
 
 const SCOPES: { key: ExportScope; label: string; hint: string }[] = [
-  { key: 'all',     label: 'Tudo',        hint: 'Biblioteca + backlog, com diário, temporadas e listas' },
+  { key: 'all',     label: 'Tudo',        hint: 'Biblioteca, wishlist e backlog, com diário, temporadas e listas' },
   { key: 'library', label: 'Biblioteca',  hint: 'Só o que você já consumiu' },
-  { key: 'backlog', label: 'Backlog',     hint: 'Só o que ainda quer ver, ler ou jogar' },
+  { key: 'backlog', label: 'Wishlist + Backlog', hint: 'Tudo fora da biblioteca: o que quer consumir e os jogos que tem sem jogar' },
 ]
 
 const LETTERBOXD_KINDS: { key: LetterboxdKind; label: string; hint: string }[] = [
   { key: 'diary',     label: 'diary.csv',     hint: 'Cada sessão vira um registro no diário, com data e nota' },
   { key: 'ratings',   label: 'ratings.csv',   hint: 'Filmes assistidos, com a nota que você deu' },
   { key: 'watched',   label: 'watched.csv',   hint: 'Tudo que você já assistiu, sem nota' },
-  { key: 'watchlist', label: 'watchlist.csv', hint: 'Vira backlog — não entra na biblioteca' },
+  { key: 'watchlist', label: 'watchlist.csv', hint: 'Vai para a wishlist — não entra na biblioteca' },
 ]
 
 const cardCls = 'bg-surface border border-border rounded-xl p-5 mb-4'
@@ -229,7 +229,7 @@ function LetterboxdPlanPanel({
   const stats = [
     { label: 'Filmes',     value: t.titles },
     { label: 'Biblioteca', value: t.library },
-    { label: 'Backlog',    value: t.backlog },
+    { label: 'Fora da biblioteca', value: t.backlog },
     { label: 'No diário',  value: t.sessions },
     { label: 'Com nota',   value: t.rated },
   ]
@@ -325,7 +325,7 @@ function LetterboxdPlanPanel({
                 {title.year && <span>({title.year})</span>}
                 {title.rating != null && <span className="text-accent whitespace-nowrap">★ {title.rating}</span>}
                 {title.sessions > 0 && <span className="whitespace-nowrap">{title.sessions}× no diário</span>}
-                {title.target === 'backlog' && <span className="whitespace-nowrap">· backlog</span>}
+                {title.target === 'backlog' && <span className="whitespace-nowrap">· wishlist</span>}
               </li>
             ))}
           </ul>

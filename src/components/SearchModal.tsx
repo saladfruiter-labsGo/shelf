@@ -284,7 +284,7 @@ function ConfirmPanel({ result, onBack, onAdd, isPending, error }: ConfirmProps)
                 {[0, 1, 2].map(i => <div key={i} className="h-11 bg-card rounded-lg animate-pulse" />)}
               </div>
             ) : seasons.length === 0 ? (
-              <p className="text-xs text-muted py-2">Não foi possível carregar as temporadas (verifique a chave do TMDB). Você ainda pode adicionar ao Backlog.</p>
+              <p className="text-xs text-muted py-2">Não foi possível carregar as temporadas (verifique a chave do TMDB). Você ainda pode adicionar à Wishlist.</p>
             ) : (
               <>
                 <SeasonPicker seasons={seasons} selected={selected} onToggleEp={toggleEp} onToggleSeason={toggleSeason} />
@@ -325,9 +325,9 @@ function ConfirmPanel({ result, onBack, onAdd, isPending, error }: ConfirmProps)
             onClick={() => submit('watchlist')}
             disabled={isPending}
             className="flex-1 py-2 rounded-lg text-sm font-semibold border border-border text-primary bg-card hover:border-border-strong transition-colors disabled:opacity-50"
-            title="Envia para o Backlog (quero ver/ouvir/ler/jogar depois)"
+            title="Envia para a Wishlist (quero ver/ouvir/ler/jogar depois)"
           >
-            {btnBusy('watchlist') ? '...' : '♡ Backlog'}
+            {btnBusy('watchlist') ? '...' : '♡ Wishlist'}
           </button>
         </div>
         <button

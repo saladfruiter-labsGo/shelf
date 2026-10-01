@@ -13,6 +13,7 @@ const LibrarySeries = lazy(() => import('./pages/LibrarySeries').then(module => 
 const LibraryMusic = lazy(() => import('./pages/LibraryMusic').then(module => ({ default: module.LibraryMusic })))
 const Diary = lazy(() => import('./pages/Diary').then(module => ({ default: module.Diary })))
 const Wishlist = lazy(() => import('./pages/Wishlist').then(module => ({ default: module.Wishlist })))
+const Backlog = lazy(() => import('./pages/Wishlist').then(module => ({ default: module.Backlog })))
 const MediaDetail = lazy(() => import('./pages/MediaDetail').then(module => ({ default: module.MediaDetail })))
 const Wrap = lazy(() => import('./pages/Wrap').then(module => ({ default: module.Wrap })))
 const Settings = lazy(() => import('./pages/Settings').then(module => ({ default: module.Settings })))
@@ -41,6 +42,7 @@ export function App() {
               <Route path="library/music"  element={<LibraryMusic />} />
               <Route path="diary"      element={<Diary />} />
               <Route path="wishlist"   element={<Wishlist />} />
+              <Route path="backlog"    element={<Backlog />} />
               <Route path="media/:id"  element={<MediaDetail />} />
               <Route path="wrap"       element={<Wrap />} />
               <Route path="settings"   element={<Settings />} />

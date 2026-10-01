@@ -530,9 +530,9 @@ export function Dashboard() {
         <div className="band">
           <div className="quad quad-deals">
             <SectionHead
-              title={<>🏷️ Promoções no seu backlog</>}
+              title={<>🏷️ Promoções na sua wishlist</>}
               extra={dealCount > 0 ? <span className="count" style={{ color: 'var(--gold)' }}>{dealCount} em promoção</span> : undefined}
-              action="Ver backlog →"
+              action="Ver wishlist →"
               onAction={() => navigate('/wishlist')}
             />
             <div className="deals">
@@ -601,13 +601,13 @@ export function Dashboard() {
           ) : <Empty>Nada em andamento agora.</Empty>}
         </div>
         <div className="quad quad-soon">
-          <SectionHead title="Em breve" extra={emBreve.length ? <span className="count" style={{ color: 'var(--gold)' }}>{emBreve.length} chegando</span> : undefined} action="Ver backlog →" onAction={() => navigate('/wishlist')} />
+          <SectionHead title="Em breve" extra={emBreve.length ? <span className="count" style={{ color: 'var(--gold)' }}>{emBreve.length} chegando</span> : undefined} action="Ver wishlist →" onAction={() => navigate('/wishlist')} />
           {emBreve.length ? (
             <div className="soon">
               {emBreve.map(it => {
                 const days = it.release_date ? daysUntil(it.release_date) : null
                 const cd = days == null ? 'sem data' : days <= 0 ? 'disponível' : `em ${days} dia${days > 1 ? 's' : ''}`
-                const when = it.hype ? 'marcado como hype' : it.release_date ? new Date(it.release_date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }) : 'no backlog'
+                const when = it.hype ? 'marcado como hype' : it.release_date ? new Date(it.release_date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }) : 'na wishlist'
                 return (
                   <MediaPreviewTrigger media={it} label={`Abrir resumo de ${it.title}`} className="soon-card" key={it.id}>
                     <Cover url={it.cover_url} type={it.type} w={48} h={72} font={22} />
@@ -621,7 +621,7 @@ export function Dashboard() {
                 )
               })}
             </div>
-          ) : <Empty>Nada agendado no backlog.</Empty>}
+          ) : <Empty>Nada agendado na wishlist.</Empty>}
         </div>
       </div></div>
 

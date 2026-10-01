@@ -10,8 +10,8 @@ import { formatPlaytime, formatDate, norm, GAME_STATUS_LABEL, GAME_STATUS_STYLE,
 import { imageUrl } from '../lib/images'
 import type { GameStatus } from '../types'
 
-// Estados que aparecem na biblioteca (nunca_jogado = wishlist, fica de fora).
-const HEADER_STATES: GameStatus[] = ['jogando', 'zerado', 'platinado', 'abandonado']
+// Estados que aparecem na biblioteca (backlog e wishlist ficam de fora).
+const HEADER_STATES: GameStatus[] = ['jogando', 'pausado', 'zerado', 'platinado', 'abandonado']
 
 export function LibraryGames() {
   const navigate = useNavigate()

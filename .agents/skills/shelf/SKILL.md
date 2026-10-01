@@ -19,7 +19,8 @@ O Shelf é uma aplicação self-hosted para organizar filmes, séries, jogos, li
 
 ## Invariantes do produto
 
-- `wishlist` é backlog e nunca pertence à biblioteca. Use as funções e predicados de `server/media-domain.ts`; não replique comparações de status pelas telas.
+- O status base `wishlist` nunca pertence à biblioteca. Ele se divide em duas filas com páginas próprias — Wishlist (quero comprar/consumir) e Backlog (jogo que tenho e não joguei) — por `QUEUE_PREDICATE`. Use as funções e predicados de `server/media-domain.ts`; não replique comparações de status pelas telas.
+- Dado de jogo vindo direto da Steam leva selo (`SourceBadge`); o que é gerado ou editado no Shelf não leva. A procedência mora em `game_status_source`/`playtime_source`.
 - `game_status` deriva o `status` base por `GAME_STATUS_TO_BASE`, centralizado em `server/media-domain.ts`.
 - O diário é histórico N:1: cada consumo pode gerar uma nova linha. Não reduza `diary_entries` a um espelho 1:1 de `media_items`. Filmes e episódios entram ao concluir; um episódio vira uma entrada DE episódio (`season_number` + `episode_number`), nunca um comentário na série, e a transição de uma temporada para concluída cria uma linha própria (`season_number` preenchido e `episode_number` nulo). Livros e jogos acumulam snapshots de progresso somente quando o provedor informa uma atualização real, e o job diário materializa o último snapshot de cada dia. Zerar/platinar no Playnite cria na hora, além disso, uma linha de conclusão (sem campos de progresso) com a nota resolvida; a nota que chega depois completa essa linha, e a avaliação rápida nunca cai num snapshot de progresso.
 - Diário, linhas normalizadas de atividade, agregados musicais e histórico de preços não expiram. A retenção de 30 dias define apenas `activity_events.raw = NULL`.
