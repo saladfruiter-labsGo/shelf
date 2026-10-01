@@ -4,10 +4,11 @@ import { useQuery } from '@tanstack/react-query'
 import { api } from '../lib/api'
 import { LibraryStats } from '../components/LibraryStats'
 import { LibrarySearch } from '../components/LibrarySearch'
-import { SourceBadge } from '../components/SourceBadge'
+// No card a marca vai na capa: o jogo inteiro é "verificado pela Steam".
+import { SteamVerifiedMark } from '../components/SourceBadge'
 import { Pager, usePagination } from '../components/Pager'
 import { useMediaPreview } from '../components/MediaSummaryModal'
-import { formatPlaytime, formatDate, norm, GAME_STATUS_LABEL, GAME_STATUS_STYLE, gameStatusOf } from '../lib/utils'
+import { formatPlaytime, formatDate, norm, GAME_STATUS_LABEL, GAME_STATUS_STYLE, gameStatusOf, isSteamVerified } from '../lib/utils'
 import { imageUrl } from '../lib/images'
 import type { GameStatus } from '../types'
 
@@ -117,6 +118,7 @@ export function LibraryGames() {
                     ? <img src={imageUrl(item.cover_url, 320)!} alt={item.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                     : '🎮'
                   }
+                  {isSteamVerified(item) && <SteamVerifiedMark variant="cover" />}
                 </div>
                 {/* Body */}
                 <div style={{ padding: 16 }}>
@@ -128,12 +130,7 @@ export function LibraryGames() {
                   </p>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, flexWrap: 'wrap', marginTop: 10 }}>
                     {(item.playtime_seconds ?? 0) > 0
-                      ? (
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                          <span style={{ fontFamily: 'Space Grotesk, monospace', fontSize: 13, color: 'var(--games)' }}>⏱ {formatPlaytime(item.playtime_seconds!)}</span>
-                          <SourceBadge source={item.playtime_source} />
-                        </span>
-                      )
+                      ? <span style={{ fontFamily: 'Space Grotesk, monospace', fontSize: 13, color: 'var(--games)' }}>⏱ {formatPlaytime(item.playtime_seconds!)}</span>
                       : item.runtime
                         ? <span style={{ fontFamily: 'Space Grotesk, monospace', fontSize: 13, color: 'var(--games)' }}>{item.runtime}h</span>
                         : <span />
@@ -142,15 +139,12 @@ export function LibraryGames() {
                       const gs = gameStatusOf(item)
                       const st = GAME_STATUS_STYLE[gs]
                       return (
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                          <span style={{
-                            fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.5px',
-                            padding: '3px 8px', borderRadius: 4,
-                            background: st.bg, color: st.color,
-                          }}>
-                            {GAME_STATUS_LABEL[gs]}
-                          </span>
-                          <SourceBadge source={item.game_status_source} />
+                        <span style={{
+                          fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.5px',
+                          padding: '3px 8px', borderRadius: 4,
+                          background: st.bg, color: st.color,
+                        }}>
+                          {GAME_STATUS_LABEL[gs]}
                         </span>
                       )
                     })()}

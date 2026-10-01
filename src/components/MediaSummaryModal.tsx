@@ -11,12 +11,13 @@ import {
   gameStatusOf,
   GAME_STATUS_LABEL,
   STATUS_LABEL,
+  isSteamVerified,
 } from '../lib/utils'
 import { imageUrl } from '../lib/images'
 import type { MediaItem, MediaType } from '../types'
 import { CategoryTag } from './CategoryTag'
 import { StarRating } from './StarRating'
-import { SourceBadge } from './SourceBadge'
+import { SourceBadge, SteamVerifiedMark } from './SourceBadge'
 
 export interface MediaPreviewSummary {
   type: MediaType
@@ -188,7 +189,10 @@ function MediaSummaryModal({ selection, onClose }: { selection: MediaSelection |
             </div>
 
             <div className="media-summary-content">
-              <CategoryTag type={media.type} />
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <CategoryTag type={media.type} />
+                {item && isSteamVerified(item) && <SteamVerifiedMark variant="title" />}
+              </span>
               <h2 id="media-summary-title">{media.title}</h2>
               <p className="media-summary-lead">
                 {[media.year, media.genre, selection.summary?.subtitle, status].filter(Boolean).join(' · ')}

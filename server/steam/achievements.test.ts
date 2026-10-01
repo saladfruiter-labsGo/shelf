@@ -146,6 +146,16 @@ test('a página do jogo esconde o spoiler de conquista oculta ainda bloqueada', 
   assert.equal(secret.description, null)
 })
 
+test('a Home recebe as últimas conquistas de todos os jogos, da mais recente para a mais antiga', async () => {
+  const app = (await import('../routes/games.js')).default as any
+  const body = await (await app.request('/achievements/latest?limit=3')).json() as any[]
+  assert.equal(body.length, 3)
+  const dates = body.map(a => Date.parse(a.unlocked_at))
+  assert.deepEqual(dates, [...dates].sort((x, y) => y - x))
+  assert.ok(body.every(a => typeof a.game === 'string' && Number.isInteger(a.media_item_id)))
+  assert.equal(body.some(a => a.name === 'Bookworm'), false) // bloqueada não entra
+})
+
 test('perfil privado vira aviso e não mexe em nada', async () => {
   database.prepare("DELETE FROM settings WHERE key = 'STEAM_ACHIEVEMENTS_STATE'").run()
   const before = database.prepare('SELECT id, game_status FROM media_items ORDER BY id').all()

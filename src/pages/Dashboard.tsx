@@ -9,6 +9,7 @@ import { diaryScope } from '../lib/diary'
 import type { MediaItem, MediaType, TrendingItem, DiaryEntry, GamePriceSummary, UnratedSeason } from '../types'
 import { MediaPreviewTrigger, useMediaPreview } from '../components/MediaSummaryModal'
 import { StarRating } from '../components/StarRating'
+import { SteamVerifiedMark } from '../components/SourceBadge'
 
 const TYPE_EMOJI: Record<MediaType, string> = { movie: '🎬', series: '📺', game: '🎮', book: '📚', music: '🎵' }
 const hue = (t: MediaType) => `var(--${TYPE_COLOR[t]})`
@@ -296,6 +297,7 @@ export function Dashboard() {
   const { data: trending = [] } = useQuery({ queryKey: ['trending'], queryFn: api.integrations.trending, staleTime: 3_600_000 })
   const { data: wrap } = useQuery({ queryKey: ['wrap-month', now.getFullYear(), now.getMonth() + 1], queryFn: () => api.wrap({ period: 'monthly', year: now.getFullYear(), month: now.getMonth() + 1 }) })
   const { data: prices } = useQuery({ queryKey: ['prices', 'backlog'], queryFn: api.prices.backlog, staleTime: 60_000 })
+  const { data: latestAchievements = [] } = useQuery({ queryKey: ['achievements-latest'], queryFn: () => api.games.latestAchievements(8) })
 
   /* ─── derivações ─── */
   // Contador da biblioteca por categoria: tudo que já foi consumido — concluído,
@@ -625,6 +627,37 @@ export function Dashboard() {
         </div>
       </div></div>
 
+      {/* ── Últimas conquistas (Steam) ── */}
+      {latestAchievements.length > 0 && (
+        <div className="band">
+          <SectionHead
+            title={<>🏆 Últimas conquistas</>}
+            extra={<span style={{ marginLeft: 12, verticalAlign: 'middle' }}><SteamVerifiedMark variant="title" /></span>}
+          />
+          <div className="achv-grid">
+            {latestAchievements.map(a => (
+              <Link key={`${a.media_item_id}-${a.api_name}`} to={`/games/${a.media_item_id}`} className="achv-card"
+                aria-label={`${a.name}, em ${a.game}`}>
+                <span className="achv-icon">
+                  {a.icon ? <img src={imageUrl(a.icon, 160)!} alt="" loading="lazy" /> : <span aria-hidden="true">🏆</span>}
+                </span>
+                <span className="achv-body">
+                  <span className="achv-name">
+                    <span className="achv-title">{a.name}</span>
+                    {a.finale && <span className="achv-finale" title="Marca o fim da história">Finaliza</span>}
+                  </span>
+                  <span className="achv-game">{a.game}</span>
+                  <span className="achv-meta">
+                    {new Date(a.unlocked_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}
+                    {a.global_percent != null && <> · {a.global_percent < 5 ? 'rara · ' : ''}{a.global_percent.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}% dos jogadores</>}
+                  </span>
+                </span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* ── Em alta no público ── */}
       {trending.length > 0 && (
         <>
@@ -851,6 +884,18 @@ const HOME_CSS = `
 .fav-pick:disabled{opacity:.5;cursor:default}
 
 .home .two-col{display:grid;grid-template-columns:1fr 1fr;gap:32px;align-items:stretch}
+.home .achv-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
+.home .achv-card{display:flex;gap:12px;align-items:center;padding:12px;border-radius:12px;background:var(--card);border:1px solid var(--border);color:inherit;text-decoration:none;transition:border-color .2s,transform .2s}
+.home .achv-card:hover{border-color:var(--steam-solid);transform:translateY(-1px)}
+.home .achv-card:focus-visible{outline:2px solid var(--steam-solid);outline-offset:2px}
+.home .achv-icon{width:52px;height:52px;border-radius:10px;overflow:hidden;flex-shrink:0;background:var(--card-hover);display:flex;align-items:center;justify-content:center;font-size:24px;box-shadow:0 0 0 1px var(--steam-solid),0 4px 14px var(--steam-glow)}
+.home .achv-icon img{width:100%;height:100%;object-fit:cover}
+.home .achv-body{display:flex;flex-direction:column;gap:2px;min-width:0}
+.home .achv-name{font-weight:700;font-size:15px;color:var(--text-primary);display:flex;gap:6px;align-items:center;min-width:0}
+.home .achv-title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.home .achv-finale{font-size:10px;font-weight:700;padding:1px 7px;border-radius:999px;color:var(--series);background:var(--series-bg);flex-shrink:0}
+.home .achv-game{font-size:13px;color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.home .achv-meta{font-size:12px;color:var(--text-muted)}
 .home .two-col>.quad,.home .two-col>.col-stack{display:flex;flex-direction:column;min-width:0}
 
 @media(max-width:800px){.home .quick-rate-list{grid-template-columns:1fr}.home .quick-rate-item{align-items:flex-start;flex-direction:column}.home .quick-rate-item>div:last-child{align-self:flex-end}}

@@ -30,6 +30,10 @@
   --books-bg:     rgba(196,122,58,.1);
   --music:        #8B5CF6;
   --music-bg:     rgba(139,92,246,.12);
+  /* Selo "verificado pela Steam": fundo sólido com texto branco (contraste AA). */
+  --steam:        #4CB1FF;
+  --steam-solid:  #1670CC;
+  --steam-glow:   rgba(26,159,255,.45);
   /* nav */
   --nav-h:        64px;
   --bottomnav-h:  0px; /* becomes real height on mobile via media query */
@@ -78,6 +82,9 @@ html:not(.dark) {
   --books-bg:     rgba(139,78,16,.1);
   --music:        #6D3FD4;
   --music-bg:     rgba(109,63,212,.1);
+  --steam:        #0F5FAE;
+  --steam-solid:  #1670CC;
+  --steam-glow:   rgba(22,112,204,.35);
   --shadow-lg:    0 20px 40px rgba(0,0,0,.14);
 }
 
@@ -233,6 +240,7 @@ body {
   outline-offset: 2px;
 }
 .media-summary-cover {
+  position: relative;
   min-height: 520px;
   background: var(--card);
   display: grid;
@@ -254,7 +262,7 @@ body {
 .media-summary-lead { color: var(--text-muted); font-size: 14px; line-height: 1.5; }
 .media-summary-rating { display: flex; align-items: center; gap: 9px; margin-top: 16px; color: var(--gold); }
 .media-summary-facts { display: flex; flex-wrap: wrap; gap: 18px 28px; margin-top: 24px; padding: 18px 0; border-block: 1px solid var(--border); }
-.media-summary-facts span { display: flex; flex-direction: column; gap: 4px; color: var(--text-secondary); font-size: 13px; }
+.media-summary-facts > span { display: flex; flex-direction: column; gap: 4px; color: var(--text-secondary); font-size: 13px; }
 .media-summary-facts small,
 .media-summary-block small { color: var(--text-muted); font-size: 10px; font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase; }
 .media-summary-block { margin-top: 20px; }

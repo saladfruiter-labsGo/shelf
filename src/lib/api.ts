@@ -4,7 +4,7 @@ import type {
   SearchResult, WrapData, SeriesView, SeriesPreview, UnratedSeason, SeasonRatingResult, DiaryEntry, TmdbMediaPreview, CoverChoices,
   IntegrationStatus, NowPlaying, ActivityEvent, ActivityMediaType, MusicStats, TrendingItem,
   GamePriceBacklog, GamePriceDetails, GamePriceRange, GamePriceCandidate,
-  SteamSyncResult, SteamLibraryResult, SteamStorePage, GameAchievement, SteamDiagnostic, ProfileView, ExportScope, ExportSummary, ImportReport, BackupStatus, DatabaseBackupInfo,
+  SteamSyncResult, SteamLibraryResult, SteamStorePage, GameAchievement, LatestAchievement, SteamDiagnostic, ProfileView, ExportScope, ExportSummary, ImportReport, BackupStatus, DatabaseBackupInfo,
   LetterboxdKind, LetterboxdPlan, LetterboxdPreview, LetterboxdApplyResult,
   PlexFilenameSyncResult, SearchApiKeySettings,
 } from '../types'
@@ -176,6 +176,8 @@ export const api = {
       request(`/games/${id}/steam`),
     timeToBeat: (id: number): Promise<{ configured: boolean; main: number | null; extra: number | null; complete: number | null }> =>
       request(`/games/${id}/time-to-beat`),
+    latestAchievements: (limit = 8): Promise<LatestAchievement[]> =>
+      request(`/games/achievements/latest?limit=${limit}`),
     achievements: (id: number): Promise<{ total: number; unlocked: number; achievements: GameAchievement[] }> =>
       request(`/games/${id}/achievements`),
   },

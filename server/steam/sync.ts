@@ -17,6 +17,7 @@ import { normalizeTitle, steamAppIdFromRawg } from '../prices/matcher.js'
 import { rawgLookup } from '../routes/search.js'
 import { planWishlistSync, nextKnown, type SteamSyncOptions } from './plan.js'
 import * as steam from './client.js'
+import { refreshSteamCovers } from './covers.js'
 
 const getSetting = db.prepare('SELECT value FROM settings WHERE key = ?')
 const setSetting = db.prepare(
@@ -335,7 +336,8 @@ let intervalTimer: NodeJS.Timeout | null = null
 /** Sincroniza o backlog logo após o boot e a cada 6 h, quando o conector está ativo. */
 export function startSteamSync(): void {
   if (firstRunTimer || intervalTimer) return
-  const tick = () => { if (steam.steamEnabled()) syncSteamBacklog().catch(() => {}) }
+  // Depois da wishlist, a arte vertical da Steam para os jogos ligados a ela.
+  const tick = () => { if (steam.steamEnabled()) syncSteamBacklog().then(() => refreshSteamCovers()).catch(() => {}) }
   firstRunTimer = setTimeout(() => { firstRunTimer = null; tick() }, FIRST_RUN_DELAY_MS)
   intervalTimer = setInterval(tick, INTERVAL_MS)
   firstRunTimer.unref()
