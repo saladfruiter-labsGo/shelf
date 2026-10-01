@@ -11,6 +11,7 @@ import { SourceBadge } from '../components/SourceBadge'
 import { PricePanel } from '../components/PricePanel'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { AddToListDropdown } from '../components/AddToListDropdown'
+import { GameAchievements } from '../components/GameAchievements'
 import { isGameCompletion } from '../lib/diary'
 import type { MediaItem, SteamStorePage } from '../types'
 
@@ -246,6 +247,8 @@ export function GameDetail() {
                 : <div className="h-4 bg-card rounded w-3/4 animate-pulse" />}
             </section>
           )}
+
+          <GameAchievements mediaId={item.id} enabled={!!item.steam_appid} />
 
           {page && page.movies.length > 0 && (
             <section aria-labelledby="game-trailer" className="mb-8">

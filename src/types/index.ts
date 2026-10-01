@@ -297,6 +297,8 @@ export interface IntegrationStatus {
     last_sync:      SteamSyncResult | null
     library_enabled:   boolean
     library_last_sync: SteamLibraryResult | null
+    achievements_last_sync: SteamAchievementsResult | null
+    auto_abandon_days: number
   }
   prices: {
     enabled:        boolean
@@ -312,6 +314,31 @@ export interface IntegrationStatus {
 /* ─── Steam: conector bidirecional do backlog ─── */
 
 export type SteamSyncMode = 'pull' | 'push' | 'both'
+
+/** Leitura das conquistas (ver server/steam/achievements.ts). */
+export interface SteamAchievementsResult {
+  at:          string
+  checked:     number
+  zerados:     number
+  platinados:  number
+  abandonados: number
+  private:     boolean
+  errors:      string[]
+}
+
+/** Conquista de um jogo na página de jogo. `finale` = marca o fim da história. */
+export interface GameAchievement {
+  api_name:       string
+  name:           string
+  description:    string | null
+  icon:           string | null
+  icon_gray:      string | null
+  hidden:         boolean
+  global_percent: number | null
+  achieved:       boolean
+  unlocked_at:    string | null
+  finale:         boolean
+}
 
 /** Leitura da biblioteca da Steam (ver server/steam/library.ts). */
 export interface SteamLibraryResult {
@@ -380,6 +407,8 @@ export interface ProfileView {
     completed_this_year: number
     platinum_this_year:  number
     completed_source:    ProfileDataSource
+    achievements_unlocked: number
+    rarest_achievement:  { name: string; game: string; media_item_id: number; percent: number } | null
   }
   favorites: { id: number; type: MediaType; title: string; cover_url: string | null; favorite: number }[]
   recent_ratings: { id: number; media_item_id: number; type: MediaType; title: string; cover_url: string | null; rating: number; watched_at: string }[]

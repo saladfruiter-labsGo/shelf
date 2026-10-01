@@ -21,6 +21,8 @@ const DEFAULT_HOSTS = new Set([
   // CDN atual da Steam (capas, screenshots e miniaturas de trailers).
   'shared.fastly.steamstatic.com',
   'cdn.fastly.steamstatic.com',
+  // Ícones de conquistas.
+  'steamcdn-a.akamaihd.net',
   // Avatares do perfil Steam (página de Perfil).
   'avatars.steamstatic.com',
   'avatars.akamai.steamstatic.com',

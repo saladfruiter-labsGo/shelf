@@ -44,4 +44,33 @@ app.get('/:id/steam', async (c) => {
   return c.json({ available: true, page, filled: filled.changes > 0 })
 })
 
+/** Conquistas do jogo, como gravadas pela leitura da Steam (ST-03). */
+app.get('/:id/achievements', (c) => {
+  const id = Number(c.req.param('id'))
+  if (!Number.isInteger(id) || id <= 0) return c.json({ error: 'Invalid media id' }, 400)
+  const item = db.prepare("SELECT steam_appid FROM media_items WHERE id = ? AND type = 'game'").get(id) as
+    { steam_appid: number | null } | undefined
+  if (!item) return c.json({ error: 'Not found' }, 404)
+  if (!item.steam_appid) return c.json({ total: 0, unlocked: 0, achievements: [] })
+
+  const achievements = db.prepare(`
+    SELECT api_name, name, description, icon, icon_gray, hidden, global_percent, achieved, unlocked_at, finale
+      FROM steam_achievements WHERE appid = ?
+     ORDER BY achieved DESC, unlocked_at DESC, global_percent DESC, name COLLATE NOCASE
+  `).all(item.steam_appid) as { achieved: number; hidden: number; finale: number; description: string | null }[]
+
+  return c.json({
+    total: achievements.length,
+    unlocked: achievements.filter(a => a.achieved).length,
+    // Oculta e ainda bloqueada: o nome e a descrição podem ser spoiler.
+    achievements: achievements.map(a => ({
+      ...a,
+      achieved: a.achieved === 1,
+      hidden: a.hidden === 1,
+      finale: a.finale === 1,
+      description: a.hidden && !a.achieved ? null : a.description,
+    })),
+  })
+})
+
 export default app

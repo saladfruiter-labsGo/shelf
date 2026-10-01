@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../lib/api'
 import { imageUrl } from '../lib/images'
-import { TYPE_LABEL, fmtRating, formatDate, timeAgoLong } from '../lib/utils'
+import { TYPE_LABEL, fmtRating, formatDate, formatPercent, timeAgoLong } from '../lib/utils'
 import { CategoryTag } from '../components/CategoryTag'
 import { SourceBadge } from '../components/SourceBadge'
 import type { ProfileDataSource, ProfileView } from '../types'
@@ -193,7 +193,16 @@ export function Profile() {
             <Stat value={games.completed_total} label="zerados no total" source={games.completed_source} />
             <Stat value={games.playing} label="jogando agora" />
             <Stat value={games.backlog} label="no backlog" />
+            {games.achievements_unlocked > 0 && <Stat value={games.achievements_unlocked} label="conquistas" source="steam" />}
           </div>
+          {games.rarest_achievement && (
+            <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginTop: 12, display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+              Conquista mais rara: <strong style={{ color: 'var(--text-primary)' }}>{games.rarest_achievement.name}</strong>
+              em <Link to={`/games/${games.rarest_achievement.media_item_id}`} style={{ color: 'var(--text-primary)' }}>{games.rarest_achievement.game}</Link>
+              <span style={{ color: 'var(--text-muted)' }}>· {formatPercent(games.rarest_achievement.percent)} dos jogadores</span>
+              <SourceBadge source="steam" />
+            </p>
+          )}
         </section>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 24, marginBottom: 48 }}>

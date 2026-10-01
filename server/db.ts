@@ -638,6 +638,34 @@ db.exec(`
       );
     `)
   },
+}, {
+  version: 12,
+  name: 'steam-achievements',
+  up: () => {
+    // Conquistas por jogo (ST-03). `finale = 1` marca a conquista de fim de
+    // história reconhecida com confiança alta; o desbloqueio dela é o "zerado".
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS steam_achievements (
+        appid          INTEGER NOT NULL,
+        api_name       TEXT    NOT NULL,
+        name           TEXT    NOT NULL,
+        description    TEXT,
+        icon           TEXT,
+        icon_gray      TEXT,
+        hidden         INTEGER NOT NULL DEFAULT 0,
+        global_percent REAL,
+        achieved       INTEGER NOT NULL DEFAULT 0,
+        unlocked_at    TEXT,
+        finale         INTEGER NOT NULL DEFAULT 0,
+        updated_at     TEXT    NOT NULL DEFAULT (datetime('now')),
+        PRIMARY KEY (appid, api_name)
+      );
+      CREATE INDEX IF NOT EXISTS idx_steam_ach_appid ON steam_achievements(appid);
+    `)
+    const mediaCols = (db.prepare('PRAGMA table_info(media_items)').all() as { name: string }[]).map(c => c.name)
+    if (!mediaCols.includes('achievements_total')) db.exec('ALTER TABLE media_items ADD COLUMN achievements_total INTEGER')
+    if (!mediaCols.includes('achievements_unlocked')) db.exec('ALTER TABLE media_items ADD COLUMN achievements_unlocked INTEGER')
+  },
 }]
 
 if (databaseExisted && (hasPendingMigrations(db, migrations) || schemaNeedsUpgrade())) {

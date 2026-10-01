@@ -156,6 +156,8 @@ export interface SteamAchievementSchema {
   name: string
   description: string | null
   hidden: boolean
+  icon?: string | null
+  iconGray?: string | null
 }
 
 /** Lista de conquistas do jogo (nome, descrição, oculta). Exige API key. */
@@ -173,11 +175,31 @@ export async function fetchAchievementSchema(appid: number, language = 'english'
       // Conquista oculta costuma vir sem descrição.
       description: typeof a.description === 'string' && a.description.trim() ? a.description.trim() : null,
       hidden: Number(a.hidden) === 1,
+      icon: typeof a.icon === 'string' && a.icon.startsWith('https://') ? a.icon : null,
+      iconGray: typeof a.icongray === 'string' && a.icongray.startsWith('https://') ? a.icongray : null,
     }))
   } catch (e) {
     // Jogo sem estatísticas responde 400/403 em vez de uma lista vazia.
     if (e instanceof SteamError && (e.status === 400 || e.status === 403)) return []
     throw e
+  }
+}
+
+/** % de jogadores que desbloquearam cada conquista. Sem chave. */
+export async function fetchGlobalAchievementPercentages(appid: number): Promise<Map<string, number>> {
+  const qs = new URLSearchParams({ gameid: String(appid) })
+  try {
+    const data = await getJson<{ achievementpercentages?: { achievements?: { name?: string; percent?: number | string }[] } }>(
+      `https://api.steampowered.com/ISteamUserStats/GetGlobalAchievementPercentagesForApp/v2/?${qs}`,
+    )
+    const map = new Map<string, number>()
+    for (const a of data.achievementpercentages?.achievements ?? []) {
+      const percent = Number(a.percent)
+      if (a.name && Number.isFinite(percent)) map.set(String(a.name), Math.round(percent * 10) / 10)
+    }
+    return map
+  } catch {
+    return new Map()
   }
 }
 

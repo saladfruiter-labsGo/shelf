@@ -60,6 +60,10 @@ Uma linha só (`id = 1`): `display_name` e `avatar_url` opcional (https). É o e
 
 Ficha da loja da Steam por AppID (`server/steam/store.ts`), usada pela página de jogo. É cache descartável (7 dias; falha da Steam devolve a cópia antiga), não histórico. A primeira visita completa `synopsis`, `genre`, `year`, `creators` e `publisher` do card com `COALESCE`, sem sobrescrever o que já existe.
 
+### `steam_achievements`
+
+Conquistas por `(appid, api_name)`: nome, descrição, ícones, oculta, raridade global, desbloqueio (`achieved`, `unlocked_at`) e `finale` (conquista de fim de história). `media_items.achievements_total/achievements_unlocked` guardam o resumo por jogo. A API de jogo devolve conquista oculta ainda bloqueada sem descrição (spoiler).
+
 ### `diary_entries`
 
 Histórico N:1 em relação à mídia. Cada consumo pode gerar uma linha com data, nota, comentário e origem. Séries também guardam temporada/episódio.

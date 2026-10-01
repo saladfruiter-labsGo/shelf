@@ -100,6 +100,7 @@ test('adota banco sem versão, preserva dados e cria snapshot antes da migration
     { version: 9, name: 'game-backlog-paused-and-sources' },
     { version: 10, name: 'profile' },
     { version: 11, name: 'steam-app-cache' },
+    { version: 12, name: 'steam-achievements' },
   ])
   assert.deepEqual(db.prepare('SELECT id, display_name FROM profile').all(), [{ id: 1, display_name: 'Você' }])
 
