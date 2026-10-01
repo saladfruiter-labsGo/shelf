@@ -5,6 +5,7 @@ import { syncSteamBacklog } from '../../steam/sync.js'
 import { lastDiagnostic, startSteamDiagnostic } from '../../steam/diagnostic.js'
 import { syncSteamLibrary } from '../../steam/library.js'
 import { syncSteamAchievements } from '../../steam/achievements.js'
+import { refreshSteamCovers } from '../../steam/covers.js'
 
 const app = new Hono()
 
@@ -51,7 +52,7 @@ app.post('/steam/library/sync', async (c) => {
   if (!cfg('STEAM_API_KEY')) return c.json({ error: 'Cole a Web API Key da Steam antes de sincronizar a biblioteca.' }, 400)
   const library = await syncSteamLibrary()
   // As conquistas seguem em segundo plano; o resultado aparece no card.
-  syncSteamAchievements().catch(() => {})
+  refreshSteamCovers().then(() => syncSteamAchievements()).catch(() => {})
   return c.json(library)
 })
 

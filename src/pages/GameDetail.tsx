@@ -4,10 +4,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../lib/api'
 import { imageUrl } from '../lib/images'
 import {
-  GAME_STATUSES, GAME_STATUS_LABEL, GAME_STATUS_STYLE, gameStatusOf, formatDate, formatPlaytime, fmtRating,
+  GAME_STATUSES, GAME_STATUS_LABEL, GAME_STATUS_STYLE, gameStatusOf, formatDate, formatPlaytime, fmtRating, isSteamVerified,
 } from '../lib/utils'
 import { StarRating } from '../components/StarRating'
-import { SourceBadge } from '../components/SourceBadge'
+import { SourceBadge, SteamVerifiedMark } from '../components/SourceBadge'
 import { PricePanel } from '../components/PricePanel'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { AddToListDropdown } from '../components/AddToListDropdown'
@@ -139,6 +139,7 @@ export function GameDetail() {
   if (!item || item.type !== 'game') return <div className="px-6 py-8 text-muted">Jogo não encontrado.</div>
 
   const status = gameStatusOf(item)
+  const verified = isSteamVerified(item)
   const finished = status === 'zerado' || status === 'platinado'
   const inWishlist = item.status === 'wishlist' && status !== 'backlog'
   const backdrop = imageUrl(page?.background ?? page?.screenshots[0]?.full ?? null, 1024)
@@ -162,13 +163,16 @@ export function GameDetail() {
             ← Voltar
           </button>
           <div style={{ display: 'flex', gap: 28, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-            <div style={{ width: 'min(200px, 40vw)', aspectRatio: '2/3', borderRadius: 12, overflow: 'hidden', background: 'var(--card)', border: '1px solid var(--border-strong)', flexShrink: 0, boxShadow: 'var(--shadow-lg)' }}>
+            <div style={{ position: 'relative', width: 'min(240px, 46vw)', aspectRatio: '2/3', borderRadius: 12, overflow: 'hidden', background: 'var(--card)', border: `1px solid ${verified ? 'var(--steam-solid)' : 'var(--border-strong)'}`, flexShrink: 0, boxShadow: verified ? '0 0 0 1px var(--steam-solid), 0 12px 40px var(--steam-glow)' : 'var(--shadow-lg)' }}>
               {item.cover_url
                 ? <img src={imageUrl(item.cover_url, 640)!} alt={item.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 : <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', fontSize: 48 }}>🎮</div>}
+              {verified && <SteamVerifiedMark variant="cover" />}
             </div>
             <div style={{ flex: '1 1 300px', minWidth: 0 }}>
-              <p style={{ fontSize: 11, fontWeight: 600, letterSpacing: '3px', textTransform: 'uppercase', color: 'var(--games)', marginBottom: 12 }}>Jogo</p>
+              <p style={{ fontSize: 11, fontWeight: 600, letterSpacing: '3px', textTransform: 'uppercase', color: 'var(--games)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                Jogo {verified && <SteamVerifiedMark variant="title" />}
+              </p>
               <h1 style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: 'clamp(32px,5vw,60px)', fontWeight: 800, lineHeight: 1.05, letterSpacing: '-1.5px', overflowWrap: 'anywhere' }}>
                 {item.title}
               </h1>

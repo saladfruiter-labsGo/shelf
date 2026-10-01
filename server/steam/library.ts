@@ -26,6 +26,7 @@ import * as steam from './client.js'
 import { decideLibraryUpdate, type LibraryGameRow } from './library-plan.js'
 import { syncSteamAchievements } from './achievements.js'
 import { syncTimeToBeat } from '../igdb.js'
+import { refreshSteamCovers } from './covers.js'
 
 const STATE_KEY = 'STEAM_LIBRARY_STATE'
 const LAST_SYNC_KEY = 'STEAM_LIBRARY_LAST_SYNC'
@@ -279,6 +280,7 @@ export function startSteamLibrarySync(): void {
   const tick = () => {
     if (!steamLibraryEnabled()) return
     syncSteamLibrary()
+      .then(() => refreshSteamCovers())
       .then(() => syncSteamAchievements())
       // Tempo para zerar dos jogos novos, em lotes pequenos (IGDB: 4 req/s).
       .then(() => syncTimeToBeat(50))

@@ -38,6 +38,8 @@ export interface MediaItem {
   playtime_source?:  GameDataSource | null // de onde veio o tempo de jogo
   steam_appid?:      number | null // games: AppID na Steam (página de jogo, conquistas)
   ttb_main_seconds?: number | null // games: tempo para zerar a história (IGDB)
+  achievements_total?: number | null // games: conquistas lidas da Steam
+  achievements_unlocked?: number | null
   last_played_at?:   string | null     // games (Playnite): última vez jogado (ISO)
   publisher?:        string | null     // games (Playnite): distribuidora(s)
   library?:          string | null     // games (Playnite): biblioteca/origem (Steam, GOG...)
@@ -346,6 +348,21 @@ export interface GameAchievement {
   achieved:       boolean
   unlocked_at:    string | null
   finale:         boolean
+}
+
+/** Conquista recente de qualquer jogo, para a Home. */
+export interface LatestAchievement {
+  api_name:       string
+  name:           string
+  description:    string | null
+  icon:           string | null
+  global_percent: number | null
+  unlocked_at:    string
+  finale:         boolean
+  hidden:         boolean
+  media_item_id:  number
+  game:           string
+  cover_url:      string | null
 }
 
 /** Leitura da biblioteca da Steam (ver server/steam/library.ts). */

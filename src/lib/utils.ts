@@ -46,6 +46,16 @@ export const GAME_STATUS_STYLE: Record<GameStatus, { color: string; bg: string }
   nunca_jogado: { color: 'var(--text-muted)',     bg: 'var(--card-hover)' },
 }
 
+/**
+ * Jogo ligado à Steam com informação vinda dela (tempo, status ou conquistas):
+ * é o que recebe a marca de "verificado pela Steam" na capa e no título.
+ */
+export function isSteamVerified(item: Pick<MediaItem, 'type' | 'steam_appid' | 'playtime_source' | 'game_status_source' | 'achievements_total'>): boolean {
+  return item.type === 'game' && !!item.steam_appid && (
+    item.playtime_source === 'steam' || item.game_status_source === 'steam' || item.achievements_total != null
+  )
+}
+
 /** Fonte do status/tempo de jogo. Só o que veio direto da Steam leva selo. */
 export function isFromSteam(source: string | null | undefined): boolean {
   return source === 'steam'
