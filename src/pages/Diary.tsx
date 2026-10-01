@@ -12,6 +12,7 @@ import type { StorySubject } from '../lib/story'
 import { diaryScope, diaryScopeText, isGameCompletion } from '../lib/diary'
 import { formatPlaytime } from '../lib/utils'
 import { imageUrl } from '../lib/images'
+import { SourceBadge } from '../components/SourceBadge'
 
 const TYPE_EMOJI: Record<string, string> = {
   game: '🎮', book: '📚', movie: '🎬', series: '📺', music: '🎵',
@@ -364,6 +365,7 @@ export function Diary() {
                           {entry.title}
                           {scope && <span className="diary-item-ep">{scope.tag}</span>}
                           {entry.source === 'plex' && <span className="diary-item-plex">Plex</span>}
+                          {entry.source === 'steam' && <> <SourceBadge source="steam" /></>}
                         </p>
                         <p className="diary-item-meta">
                           {scope?.name && <span className="diary-item-scope">{scope.name} · </span>}

@@ -16,6 +16,7 @@ import { imageUrl } from '../lib/images'
 import type { MediaItem, MediaType } from '../types'
 import { CategoryTag } from './CategoryTag'
 import { StarRating } from './StarRating'
+import { SourceBadge } from './SourceBadge'
 
 export interface MediaPreviewSummary {
   type: MediaType
@@ -191,6 +192,7 @@ function MediaSummaryModal({ selection, onClose }: { selection: MediaSelection |
               <h2 id="media-summary-title">{media.title}</h2>
               <p className="media-summary-lead">
                 {[media.year, media.genre, selection.summary?.subtitle, status].filter(Boolean).join(' · ')}
+                {item?.type === 'game' && <> <SourceBadge source={item.game_status_source} /></>}
               </p>
 
               {(media.rating ?? 0) > 0 && (
@@ -204,7 +206,7 @@ function MediaSummaryModal({ selection, onClose }: { selection: MediaSelection |
                 {item?.release_date && <span><small>Lançamento</small>{formatDate(item.release_date)}</span>}
                 {item?.runtime != null && item.runtime > 0 && <span><small>Duração</small>{formatRuntime(item.runtime)}</span>}
                 {item?.type === 'game' && (item.playtime_seconds ?? 0) > 0 && (
-                  <span><small>Tempo de jogo</small>{formatPlaytime(item.playtime_seconds!)}</span>
+                  <span><small>Tempo de jogo <SourceBadge source={item.playtime_source} /></small>{formatPlaytime(item.playtime_seconds!)}</span>
                 )}
                 {item?.type === 'book' && item.progress != null && (
                   <span><small>Progresso</small>{Math.round(item.progress * 100)}% lido</span>
