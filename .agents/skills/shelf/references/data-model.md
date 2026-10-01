@@ -56,6 +56,10 @@ Use `GAME_STATUS_TO_BASE` de `server/media-domain.ts`. Não duplique o mapa.
 
 Uma linha só (`id = 1`): `display_name` e `avatar_url` opcional (https). É o embrião da tabela `users` do multiusuário; a página de Perfil é montada no servidor por `server/profile.ts` (`GET/PATCH /api/profile`) e nunca devolve credenciais, SteamID ou configuração. O resumo da conta Steam (nome, avatar, link) fica em cache por 12 h em `STEAM_PLAYER_SUMMARY`; falha da Steam devolve o último valor conhecido. Agregados levam `source = 'steam'` só quando todas as linhas que entraram neles vieram da Steam.
 
+### `steam_app_cache`
+
+Ficha da loja da Steam por AppID (`server/steam/store.ts`), usada pela página de jogo. É cache descartável (7 dias; falha da Steam devolve a cópia antiga), não histórico. A primeira visita completa `synopsis`, `genre`, `year`, `creators` e `publisher` do card com `COALESCE`, sem sobrescrever o que já existe.
+
 ### `diary_entries`
 
 Histórico N:1 em relação à mídia. Cada consumo pode gerar uma linha com data, nota, comentário e origem. Séries também guardam temporada/episódio.

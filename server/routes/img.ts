@@ -18,6 +18,9 @@ const DEFAULT_HOSTS = new Set([
   'shared.cloudflare.steamstatic.com',
   'cdn.akamai.steamstatic.com',
   'shared.akamai.steamstatic.com',
+  // CDN atual da Steam (capas, screenshots e miniaturas de trailers).
+  'shared.fastly.steamstatic.com',
+  'cdn.fastly.steamstatic.com',
   // Avatares do perfil Steam (página de Perfil).
   'avatars.steamstatic.com',
   'avatars.akamai.steamstatic.com',

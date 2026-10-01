@@ -155,6 +155,7 @@ O proxy de capas aceita apenas HTTPS dos provedores conhecidos. Na primeira soli
 | `POST /api/integrations/steam/test` | Testa o acesso à wishlist/biblioteca e informa se a escrita está liberada |
 | `POST /api/integrations/steam/sync` | Sincroniza o backlog com a wishlist da Steam sob demanda |
 | `POST /api/integrations/steam/resolve` | Converte link de perfil ou vanity URL em SteamID64 |
+| `GET /api/games/:id/steam` | Ficha da loja da Steam para a página de jogo (cache de 7 dias); completa sinopse/gênero/empresas do card |
 | `GET/PATCH /api/profile` | Página de Perfil (nome, avatar, números, favoritos, notas e atividade); sem credenciais |
 | `GET /auth/steam/login` | Começa o "Entrar com a Steam" (OpenID); a volta em `/auth/steam/callback` grava o SteamID |
 | `POST /api/integrations/steam/library/sync` | Lê a biblioteca da Steam agora (fora da rodada de 30 min) |

@@ -36,6 +36,7 @@ export interface MediaItem {
   game_status?:      GameStatus | null // games: status granular
   game_status_source?: GameDataSource | null // de onde veio o status (selo só para 'steam')
   playtime_source?:  GameDataSource | null // de onde veio o tempo de jogo
+  steam_appid?:      number | null // games: AppID na Steam (página de jogo, conquistas)
   last_played_at?:   string | null     // games (Playnite): última vez jogado (ISO)
   publisher?:        string | null     // games (Playnite): distribuidora(s)
   library?:          string | null     // games (Playnite): biblioteca/origem (Steam, GOG...)
@@ -333,6 +334,25 @@ export interface SteamSyncResult {
   pending_push:  number
   can_write:     boolean
   errors:        string[]
+}
+
+/** Ficha da loja da Steam para a página de jogo (ver server/steam/store.ts). */
+export interface SteamStorePage {
+  appid:             number
+  name:              string
+  short_description: string | null
+  genres:            string[]
+  developers:        string[]
+  publishers:        string[]
+  release_date:      string | null
+  year:              number | null
+  coming_soon:       boolean
+  header_image:      string
+  background:        string | null
+  screenshots:       { thumb: string; full: string }[]
+  movies:            { name: string; thumbnail: string; mp4: string | null; webm: string | null }[]
+  metacritic:        { score: number; url: string | null } | null
+  store_url:         string
 }
 
 /** Página de Perfil (ver server/profile.ts). `source` decide o selo da Steam. */
