@@ -400,6 +400,7 @@ function IntegrationsSection() {
       steam_sync_mode: status.steam.sync_mode,
       steam_sync_removals: status.steam.sync_removals,
       steam_library_enabled: status.steam.library_enabled,
+      steam_auto_abandon_days: String(status.steam.auto_abandon_days),
       itad_enabled: status.prices.enabled,
       itad_api_key: '',
       itad_country: status.prices.country,
@@ -427,6 +428,7 @@ function IntegrationsSection() {
         steam_sync_mode: form.steam_sync_mode,
         steam_sync_removals: form.steam_sync_removals,
         steam_library_enabled: form.steam_library_enabled,
+        steam_auto_abandon_days: Number.parseInt(String(form.steam_auto_abandon_days ?? ''), 10),
         itad_enabled: form.itad_enabled,
         itad_country: form.itad_country,
       }
@@ -997,6 +999,18 @@ function IntegrationsSection() {
             </span>
           </label>
 
+          <div>
+            <label htmlFor="steam-abandon-days" className="text-xs text-secondary mb-1 block">
+              Abandono automático <span className="text-muted">(dias sem jogar; 0 desliga)</span>
+            </label>
+            <input id="steam-abandon-days" className={inputCls} type="number" min={0} max={3650} inputMode="numeric"
+              value={String(form.steam_auto_abandon_days ?? '')} onChange={e => set('steam_auto_abandon_days')(e.target.value)} />
+            <p className="text-[11px] text-muted mt-1">
+              Jogo em "jogando" que não é aberto há esse tempo, sem conquista de final, vira abandonado. Status escolhido à mão
+              nunca muda sozinho.
+            </p>
+          </div>
+
           <label className="flex items-start gap-2 cursor-pointer">
             <input type="checkbox" className="mt-0.5" checked={!!form.steam_sync_removals}
               onChange={e => set('steam_sync_removals')(e.target.checked)} />
@@ -1074,6 +1088,19 @@ function IntegrationsSection() {
             {' '}· {status.steam.library_last_sync.owned} jogos na conta
             {status.steam.library_last_sync.errors.length > 0 && (
               <span className="text-movies"> · {status.steam.library_last_sync.errors[0]}</span>
+            )}
+          </p>
+        )}
+
+        {status?.steam.achievements_last_sync && (
+          <p className="text-[11px] text-muted mt-1">
+            Conquistas lidas {timeAgo(status.steam.achievements_last_sync.at) === 'agora' ? 'agora' : `há ${timeAgo(status.steam.achievements_last_sync.at)}`}
+            {' '}· {status.steam.achievements_last_sync.checked} jogo(s) verificados
+            {status.steam.achievements_last_sync.zerados > 0 && ` · ${status.steam.achievements_last_sync.zerados} zerado(s)`}
+            {status.steam.achievements_last_sync.platinados > 0 && ` · ${status.steam.achievements_last_sync.platinados} platinado(s)`}
+            {status.steam.achievements_last_sync.abandonados > 0 && ` · ${status.steam.achievements_last_sync.abandonados} abandonado(s)`}
+            {status.steam.achievements_last_sync.errors.length > 0 && (
+              <span className="text-movies"> · {status.steam.achievements_last_sync.errors[0]}</span>
             )}
           </p>
         )}

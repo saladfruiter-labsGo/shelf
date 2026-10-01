@@ -6,6 +6,7 @@ import { syncState } from '../prices/sync.js'
 import * as steamClient from '../steam/client.js'
 import { lastSync as steamLastSync, syncRunning as steamSyncRunning } from '../steam/sync.js'
 import { lastLibrarySync as steamLibraryLastSync } from '../steam/library.js'
+import { autoAbandonDays, lastAchievementsSync } from '../steam/achievements.js'
 import { cfg, setCfg } from '../integrations/config.js'
 import type { NowPlaying } from '../integrations/now-playing.js'
 import kavitaIntegrationRoutes, { pollKavita, resetKavitaAuth } from './integrations/kavita.js'
@@ -134,6 +135,8 @@ app.get('/', (c) => {
       last_sync:        steamLastSync(),
       library_enabled:  cfg('STEAM_LIBRARY_ENABLED') === '1',
       library_last_sync: steamLibraryLastSync(),
+      achievements_last_sync: lastAchievementsSync(),
+      auto_abandon_days: autoAbandonDays(),
     },
     prices: {
       enabled:        cfg('ITAD_ENABLED') === '1',
@@ -152,6 +155,8 @@ app.patch('/', async (c) => {
   const b = (await c.req.json()) as Record<string, unknown>
   const str = (v: unknown) => (typeof v === 'string' ? v.trim() : undefined)
   const bool = (v: unknown) => (typeof v === 'boolean' ? (v ? '1' : '0') : undefined)
+  // 0 desliga o abandono automático; o teto evita valor absurdo digitado sem querer.
+  const abandonDays = (v: unknown) => (typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= 3650 ? String(v) : undefined)
 
   const map: [string, string | undefined][] = [
     ['PLEX_ENABLED', bool(b.plex_enabled)],
@@ -175,6 +180,7 @@ app.patch('/', async (c) => {
     ['STEAM_SYNC_MODE', ['pull', 'push', 'both'].includes(String(b.steam_sync_mode)) ? String(b.steam_sync_mode) : undefined],
     ['STEAM_SYNC_REMOVALS', bool(b.steam_sync_removals)],
     ['STEAM_LIBRARY_ENABLED', bool(b.steam_library_enabled)],
+    ['STEAM_AUTO_ABANDON_DAYS', abandonDays(b.steam_auto_abandon_days)],
   ]
   for (const [k, v] of map) if (v !== undefined) setCfg(k, v)
   // Tokens/segredos só são sobrescritos quando um valor novo é enviado (não apagar ao salvar mascarado)

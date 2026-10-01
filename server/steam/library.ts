@@ -24,6 +24,7 @@ import { recordDiaryProgress } from '../diary-progress.js'
 import { notifyLibraryActivity } from '../notify.js'
 import * as steam from './client.js'
 import { decideLibraryUpdate, type LibraryGameRow } from './library-plan.js'
+import { syncSteamAchievements } from './achievements.js'
 
 const STATE_KEY = 'STEAM_LIBRARY_STATE'
 const LAST_SYNC_KEY = 'STEAM_LIBRARY_LAST_SYNC'
@@ -273,7 +274,11 @@ let intervalTimer: NodeJS.Timeout | null = null
 
 export function startSteamLibrarySync(): void {
   if (firstRunTimer || intervalTimer) return
-  const tick = () => { if (steamLibraryEnabled()) syncSteamLibrary().catch(() => {}) }
+  // Depois da biblioteca, as conquistas dos jogos que mudaram (zerado/platinado/abandonado).
+  const tick = () => {
+    if (!steamLibraryEnabled()) return
+    syncSteamLibrary().then(() => syncSteamAchievements()).catch(() => {})
+  }
   firstRunTimer = setTimeout(() => { firstRunTimer = null; tick() }, FIRST_RUN_DELAY_MS)
   intervalTimer = setInterval(tick, INTERVAL_MS)
   firstRunTimer.unref()

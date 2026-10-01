@@ -21,11 +21,11 @@ test('jogo novo entra como jogando quando tem tempo, ou no Backlog quando nunca 
 })
 
 test('comprar um jogo da Wishlist o leva ao Backlog; jogar o leva a jogando', () => {
-  const wanted = row({ status: 'wishlist', game_status: 'nunca_jogado', playtime_seconds: null, last_played_at: null })
+  const wanted = row({ status: 'wishlist', game_status: 'nunca_jogado', game_status_source: 'steam', playtime_seconds: null, last_played_at: null })
   assert.equal(decideLibraryUpdate(owned(0, null), wanted).gameStatus, 'backlog')
   assert.equal(decideLibraryUpdate(owned(30), wanted).gameStatus, 'jogando')
 
-  const owning = row({ status: 'wishlist', game_status: 'backlog', playtime_seconds: null, last_played_at: null })
+  const owning = row({ status: 'wishlist', game_status: 'backlog', game_status_source: 'steam', playtime_seconds: null, last_played_at: null })
   const decision = decideLibraryUpdate(owned(30), owning)
   assert.equal(decision.gameStatus, 'jogando')
   assert.equal(decision.started, true)
@@ -37,6 +37,17 @@ test('nunca rebaixa nem mexe em zerado, platinado, pausado ou abandonado', () =>
     assert.equal(decision.gameStatus, null, gameStatus)
     assert.equal(decision.started, false)
   }
+})
+
+test('status escolhido à mão fica travado, mas o tempo continua vindo da Steam', () => {
+  const manualBacklog = row({ status: 'wishlist', game_status: 'backlog', game_status_source: 'manual', playtime_seconds: null })
+  const decision = decideLibraryUpdate(owned(120), manualBacklog)
+  assert.equal(decision.gameStatus, null)
+  assert.equal(decision.started, false)
+  assert.equal(decision.playtimeSeconds, 7_200)
+
+  const manualWish = row({ status: 'wishlist', game_status: 'nunca_jogado', game_status_source: 'manual' })
+  assert.equal(decideLibraryUpdate(owned(0, null), manualWish).gameStatus, null)
 })
 
 test('tempo e última vez jogada passam a vir da Steam', () => {

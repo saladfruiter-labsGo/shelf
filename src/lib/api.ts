@@ -4,7 +4,7 @@ import type {
   SearchResult, WrapData, SeriesView, SeriesPreview, UnratedSeason, SeasonRatingResult, DiaryEntry, TmdbMediaPreview, CoverChoices,
   IntegrationStatus, NowPlaying, ActivityEvent, ActivityMediaType, MusicStats, TrendingItem,
   GamePriceBacklog, GamePriceDetails, GamePriceRange, GamePriceCandidate,
-  SteamSyncResult, SteamLibraryResult, SteamStorePage, SteamDiagnostic, ProfileView, ExportScope, ExportSummary, ImportReport, BackupStatus, DatabaseBackupInfo,
+  SteamSyncResult, SteamLibraryResult, SteamStorePage, GameAchievement, SteamDiagnostic, ProfileView, ExportScope, ExportSummary, ImportReport, BackupStatus, DatabaseBackupInfo,
   LetterboxdKind, LetterboxdPlan, LetterboxdPreview, LetterboxdApplyResult,
   PlexFilenameSyncResult, SearchApiKeySettings,
 } from '../types'
@@ -174,6 +174,8 @@ export const api = {
   games: {
     steam: (id: number): Promise<{ available: boolean; page: SteamStorePage | null; filled?: boolean }> =>
       request(`/games/${id}/steam`),
+    achievements: (id: number): Promise<{ total: number; unlocked: number; achievements: GameAchievement[] }> =>
+      request(`/games/${id}/achievements`),
   },
   profile: {
     get: (): Promise<ProfileView> => request('/profile'),

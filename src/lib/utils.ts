@@ -66,6 +66,11 @@ export function gameStatusOf(item: Pick<MediaItem, 'game_status' | 'status'>): G
   }
 }
 
+/** Porcentagem no formato pt-BR, com até uma casa decimal ("2,4%"). */
+export function formatPercent(value: number): string {
+  return `${value.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`
+}
+
 /** "5" for whole ratings, "4.5" for half steps. */
 export function fmtRating(r: number): string {
   return r % 1 === 0 ? String(r) : r.toFixed(1)

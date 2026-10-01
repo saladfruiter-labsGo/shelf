@@ -4,6 +4,7 @@ import * as steamClient from '../../steam/client.js'
 import { syncSteamBacklog } from '../../steam/sync.js'
 import { lastDiagnostic, startSteamDiagnostic } from '../../steam/diagnostic.js'
 import { syncSteamLibrary } from '../../steam/library.js'
+import { syncSteamAchievements } from '../../steam/achievements.js'
 
 const app = new Hono()
 
@@ -48,7 +49,10 @@ app.get('/steam/diagnostic', (c) => c.json(lastDiagnostic()))
 app.post('/steam/library/sync', async (c) => {
   if (!cfg('STEAM_ID')) return c.json({ error: 'Entre com a Steam antes de sincronizar a biblioteca.' }, 400)
   if (!cfg('STEAM_API_KEY')) return c.json({ error: 'Cole a Web API Key da Steam antes de sincronizar a biblioteca.' }, 400)
-  return c.json(await syncSteamLibrary())
+  const library = await syncSteamLibrary()
+  // As conquistas seguem em segundo plano; o resultado aparece no card.
+  syncSteamAchievements().catch(() => {})
+  return c.json(library)
 })
 
 /** Converte um link de perfil ou vanity em SteamID64. */

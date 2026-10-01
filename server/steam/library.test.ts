@@ -36,8 +36,8 @@ before(async () => {
   add.run('3328', 'The Witcher 3: Wild Hunt', 'completed', 'zerado', 'playnite', 7_200, 'playnite', '2024-05-01T20:00:00.000Z', 'Steam')
   // Sem RAWG útil: casa pelo título exato.
   add.run('playnite:abc', 'Hades', 'in_progress', 'jogando', 'playnite', 600, 'playnite', null, 'Steam')
-  // Wishlist que foi comprada.
-  add.run('999', 'Celeste', 'wishlist', 'nunca_jogado', 'manual', null, null, null, null)
+  // Wishlist (vinda da wishlist da Steam) que foi comprada.
+  add.run('999', 'Celeste', 'wishlist', 'nunca_jogado', 'steam', null, null, null, null)
 
   OWNED = [
     { appid: 292030, name: 'The Witcher 3: Wild Hunt', playtime_forever: 6_000, rtime_last_played: OLD },

@@ -39,6 +39,9 @@ export interface ProfileView {
     completed_this_year: number
     platinum_this_year: number
     completed_source: DataSource
+    /** Conquistas desbloqueadas na Steam (sempre com selo). */
+    achievements_unlocked: number
+    rarest_achievement: { name: string; game: string; media_item_id: number; percent: number } | null
   }
   favorites: { id: number; type: string; title: string; cover_url: string | null; favorite: number }[]
   recent_ratings: { id: number; media_item_id: number; type: string; title: string; cover_url: string | null; rating: number; watched_at: string }[]
@@ -166,6 +169,14 @@ export async function buildProfile(
         "SELECT COUNT(*) AS n FROM media_items WHERE type = 'game' AND game_status = 'platinado' AND strftime('%Y', completed_at) = ?", yearStr,
       ),
       completed_source: aggregateSource('game_status_source', finished),
+      achievements_unlocked: count('SELECT COUNT(*) AS n FROM steam_achievements WHERE achieved = 1'),
+      rarest_achievement: (db.prepare(`
+        SELECT a.name, m.title AS game, m.id AS media_item_id, a.global_percent AS percent
+          FROM steam_achievements a JOIN media_items m ON m.steam_appid = a.appid AND m.type = 'game'
+         WHERE a.achieved = 1 AND a.global_percent IS NOT NULL
+         ORDER BY a.global_percent ASC, a.unlocked_at ASC
+         LIMIT 1
+      `).get() as ProfileView['games']['rarest_achievement'] | undefined) ?? null,
     },
     favorites: db.prepare(`
       SELECT id, type, title, cover_url, favorite FROM media_items

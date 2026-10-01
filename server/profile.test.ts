@@ -64,6 +64,8 @@ test('monta o perfil com prateleira por ano, filas e números de games', async (
   // Selo só quando tudo veio da Steam: o tempo mistura Playnite, os zerados não.
   assert.equal(view.games.played_source, 'shelf')
   assert.equal(view.games.completed_source, 'steam')
+  assert.equal(view.games.achievements_unlocked, 0)
+  assert.equal(view.games.rarest_achievement, null)
 
   assert.deepEqual(view.favorites.map(f => f.title), ['Filme visto'])
   assert.deepEqual(view.recent_ratings.map(r => [r.title, r.rating]), [['Filme visto', 4.5]])

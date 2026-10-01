@@ -3,7 +3,8 @@
  *
  * - O que a Steam informa só **promove** o status: jogo comprado sai da
  *   Wishlist para o Backlog; jogo com tempo de jogo sai do Backlog para
- *   "jogando". Zerado, platinado, pausado e abandonado nunca são mexidos aqui.
+ *   "jogando". Zerado, platinado, pausado e abandonado nunca são mexidos aqui,
+ *   e status escolhido à mão (`game_status_source = 'manual'`) fica travado.
  * - Tempo de jogo e última vez jogada passam a vir da Steam, exceto um tempo
  *   digitado à mão maior que o da Steam.
  */
@@ -65,9 +66,12 @@ export function decideLibraryUpdate(owned: OwnedGameInput, current: LibraryGameR
 
   const effective = effectiveGameStatus(current)
   let gameStatus: GameStatus | null = null
-  // Está na sua conta: deixou de ser "quero comprar".
-  if (effective === 'nunca_jogado') gameStatus = played ? 'jogando' : 'backlog'
-  else if (effective === 'backlog' && played) gameStatus = 'jogando'
+  // Status escolhido à mão fica travado: nada automático passa por cima.
+  if (current.game_status_source !== 'manual') {
+    // Está na sua conta: deixou de ser "quero comprar".
+    if (effective === 'nunca_jogado') gameStatus = played ? 'jogando' : 'backlog'
+    else if (effective === 'backlog' && played) gameStatus = 'jogando'
+  }
 
   let playtimeSeconds: number | null = null
   const currentSeconds = current.playtime_seconds ?? 0
