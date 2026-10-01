@@ -19,6 +19,7 @@ const Wrap = lazy(() => import('./pages/Wrap').then(module => ({ default: module
 const Settings = lazy(() => import('./pages/Settings').then(module => ({ default: module.Settings })))
 const Integrations = lazy(() => import('./pages/Integrations').then(module => ({ default: module.Integrations })))
 const ImportExport = lazy(() => import('./pages/ImportExport').then(module => ({ default: module.ImportExport })))
+const Profile = lazy(() => import('./pages/Profile').then(module => ({ default: module.Profile })))
 const Lists = lazy(() => import('./pages/Lists').then(module => ({ default: module.Lists })))
 const ListDetail = lazy(() => import('./pages/ListDetail').then(module => ({ default: module.ListDetail })))
 
@@ -45,6 +46,7 @@ export function App() {
               <Route path="backlog"    element={<Backlog />} />
               <Route path="media/:id"  element={<MediaDetail />} />
               <Route path="wrap"       element={<Wrap />} />
+              <Route path="profile"    element={<Profile />} />
               <Route path="settings"   element={<Settings />} />
               <Route path="integrations"  element={<Integrations />} />
               <Route path="import-export" element={<ImportExport />} />

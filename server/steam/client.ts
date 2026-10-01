@@ -120,6 +120,30 @@ export async function fetchOwnedGames(): Promise<SteamOwnedGame[]> {
   })).filter(g => g.appid > 0 && g.name)
 }
 
+export interface SteamPlayerSummary {
+  persona: string
+  avatar_url: string | null
+  profile_url: string
+}
+
+/** Nome, avatar e link do perfil público da conta conectada. Exige API key. */
+export async function fetchPlayerSummary(): Promise<SteamPlayerSummary | null> {
+  const key = cfg('STEAM_API_KEY')
+  const steamid = cfg('STEAM_ID')
+  if (!key || !steamid) return null
+  const qs = new URLSearchParams({ key, steamids: steamid })
+  const data = await getJson<{ response?: { players?: any[] } }>(
+    `https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/?${qs}`,
+  )
+  const player = data.response?.players?.[0]
+  if (!player) return null
+  return {
+    persona: String(player.personaname ?? ''),
+    avatar_url: typeof player.avatarfull === 'string' ? player.avatarfull : null,
+    profile_url: String(player.profileurl ?? `https://steamcommunity.com/profiles/${steamid}/`),
+  }
+}
+
 /* ──────────────────────────────── Conquistas ────────────────────────────── */
 
 export interface SteamAchievementSchema {
