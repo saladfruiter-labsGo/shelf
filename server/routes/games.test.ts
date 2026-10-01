@@ -28,6 +28,7 @@ const APPDETAILS = {
       screenshots: [{ path_thumbnail: 'https://shared.fastly.steamstatic.com/s1.600x338.jpg', path_full: 'https://shared.fastly.steamstatic.com/s1.1920x1080.jpg' }],
       movies: [
         { name: 'Launch Trailer', thumbnail: 'https://shared.fastly.steamstatic.com/m1.jpg', mp4: { 480: 'https://video.fastly.steamstatic.com/m1_480.mp4', max: 'https://video.fastly.steamstatic.com/m1_max.mp4' } },
+        { name: 'HLS Trailer', thumbnail: 'https://shared.fastly.steamstatic.com/m3.jpg', hls_h264: 'https://video.akamai.steamstatic.com/m3/hls_264_master.m3u8', dash_h264: 'https://video.akamai.steamstatic.com/m3/dash_h264.mpd' },
         { name: 'Sem miniatura', mp4: { max: 'https://video.fastly.steamstatic.com/m2.mp4' } },
       ],
       metacritic: { score: 93, url: 'https://www.metacritic.com/game/pc/hades' },
@@ -71,7 +72,10 @@ test('devolve a ficha da loja em texto puro e completa o card sem sobrescrever',
   assert.equal(body.page.screenshots.length, 1)
   assert.deepEqual(body.page.movies, [{
     name: 'Launch Trailer', thumbnail: 'https://shared.fastly.steamstatic.com/m1.jpg',
-    mp4: 'https://video.fastly.steamstatic.com/m1_max.mp4', webm: null,
+    mp4: 'https://video.fastly.steamstatic.com/m1_max.mp4', webm: null, hls: null,
+  }, {
+    name: 'HLS Trailer', thumbnail: 'https://shared.fastly.steamstatic.com/m3.jpg',
+    mp4: null, webm: null, hls: 'https://video.akamai.steamstatic.com/m3/hls_264_master.m3u8',
   }])
   assert.deepEqual(body.page.metacritic, { score: 93, url: 'https://www.metacritic.com/game/pc/hades' })
 
@@ -97,6 +101,16 @@ test('a segunda visita usa o cache; Steam fora do ar devolve a última cópia', 
   } finally {
     storeDown = false
   }
+})
+
+test('cópia em cache de formato antigo é buscada de novo', async () => {
+  const appid = 1145360
+  database.prepare('UPDATE steam_app_cache SET data = ?, fetched_at = ? WHERE appid = ?')
+    .run(JSON.stringify({ appid, name: 'Hades', movies: [] }), Date.now(), appid)
+  const calls = storeCalls
+  const body = await (await app.request(`/${idOf('steam:1145360')}/steam`)).json() as any
+  assert.equal(storeCalls, calls + 1)
+  assert.equal(body.page.movies[1].hls, 'https://video.akamai.steamstatic.com/m3/hls_264_master.m3u8')
 })
 
 test('jogo sem AppID não consulta a Steam', async () => {

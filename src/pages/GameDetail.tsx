@@ -13,6 +13,7 @@ import { ConfirmDialog } from '../components/ConfirmDialog'
 import { AddToListDropdown } from '../components/AddToListDropdown'
 import { GameAchievements } from '../components/GameAchievements'
 import { TimeToBeat } from '../components/TimeToBeat'
+import { TrailerPlayer } from '../components/TrailerPlayer'
 import { isGameCompletion } from '../lib/diary'
 import type { MediaItem, SteamStorePage } from '../types'
 
@@ -56,42 +57,6 @@ function Screenshots({ shots, title }: { shots: SteamStorePage['screenshots']; t
         </div>
       )}
     </>
-  )
-}
-
-/**
- * Trailer: MP4/WebM toca na página. A Steam hoje entrega a maioria só em
- * DASH/HLS, que o navegador não toca sem biblioteca extra — nesse caso a capa
- * leva ao trailer na própria loja.
- */
-function Trailer({ movie, poster, storeUrl }: { movie: SteamStorePage['movies'][number]; poster: string | null; storeUrl: string }) {
-  const image = imageUrl(poster ?? movie.thumbnail, 1024)
-  if (movie.mp4 || movie.webm) {
-    return (
-      <figure style={{ margin: 0 }}>
-        <video controls preload="none" poster={image ?? undefined}
-          style={{ width: '100%', borderRadius: 10, background: '#000', aspectRatio: '16/9' }}>
-          {movie.mp4 && <source src={movie.mp4} type="video/mp4" />}
-          {movie.webm && <source src={movie.webm} type="video/webm" />}
-        </video>
-        <figcaption className="text-sm text-muted mt-2">{movie.name}</figcaption>
-      </figure>
-    )
-  }
-  return (
-    <a href={storeUrl} target="_blank" rel="noopener noreferrer" aria-label={`Assistir ${movie.name} na Steam`}
-      className="block rounded-xl overflow-hidden border border-border hover:border-border-strong transition-colors"
-      style={{ position: 'relative', aspectRatio: '16/9', background: '#000' }}>
-      {image && <img src={image} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.75 }} />}
-      <span aria-hidden="true" style={{
-        position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
-        width: 64, height: 64, borderRadius: '50%', background: 'rgba(0,0,0,.65)', color: '#fff',
-        display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, border: '1px solid rgba(255,255,255,.4)',
-      }}>▶</span>
-      <span style={{ position: 'absolute', left: 12, bottom: 10, right: 12, color: '#fff', fontSize: 14, fontWeight: 600, textShadow: '0 1px 4px rgba(0,0,0,.8)' }}>
-        {movie.name} · assistir na Steam ↗
-      </span>
-    </a>
   )
 }
 
@@ -256,7 +221,7 @@ export function GameDetail() {
           {page && page.movies.length > 0 && (
             <section aria-labelledby="game-trailer" className="mb-8">
               <h2 id="game-trailer" className={`${label} mb-3`}>Trailer</h2>
-              <Trailer movie={page.movies.find(m => m.mp4 || m.webm) ?? page.movies[0]}
+              <TrailerPlayer movie={page.movies.find(m => m.hls || m.mp4 || m.webm) ?? page.movies[0]}
                 poster={page.screenshots[0]?.full ?? null} storeUrl={page.store_url} />
             </section>
           )}
