@@ -3,6 +3,7 @@ import { cfg } from '../../integrations/config.js'
 import * as steamClient from '../../steam/client.js'
 import { syncSteamBacklog } from '../../steam/sync.js'
 import { lastDiagnostic, startSteamDiagnostic } from '../../steam/diagnostic.js'
+import { syncSteamLibrary } from '../../steam/library.js'
 
 const app = new Hono()
 
@@ -42,6 +43,13 @@ app.post('/steam/diagnostic', (c) => {
 })
 
 app.get('/steam/diagnostic', (c) => c.json(lastDiagnostic()))
+
+/** Lê a biblioteca da Steam agora, sem esperar a próxima rodada de 30 min. */
+app.post('/steam/library/sync', async (c) => {
+  if (!cfg('STEAM_ID')) return c.json({ error: 'Entre com a Steam antes de sincronizar a biblioteca.' }, 400)
+  if (!cfg('STEAM_API_KEY')) return c.json({ error: 'Cole a Web API Key da Steam antes de sincronizar a biblioteca.' }, 400)
+  return c.json(await syncSteamLibrary())
+})
 
 /** Converte um link de perfil ou vanity em SteamID64. */
 app.post('/steam/resolve', async (c) => {

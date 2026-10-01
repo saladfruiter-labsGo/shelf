@@ -399,6 +399,7 @@ function IntegrationsSection() {
       steam_cookies_clear: false,
       steam_sync_mode: status.steam.sync_mode,
       steam_sync_removals: status.steam.sync_removals,
+      steam_library_enabled: status.steam.library_enabled,
       itad_enabled: status.prices.enabled,
       itad_api_key: '',
       itad_country: status.prices.country,
@@ -425,6 +426,7 @@ function IntegrationsSection() {
         steam_id: form.steam_id,
         steam_sync_mode: form.steam_sync_mode,
         steam_sync_removals: form.steam_sync_removals,
+        steam_library_enabled: form.steam_library_enabled,
         itad_enabled: form.itad_enabled,
         itad_country: form.itad_country,
       }
@@ -560,6 +562,18 @@ function IntegrationsSection() {
     queryKey: ['steam-diagnostic'],
     queryFn: api.integrations.steamDiagnostic,
     refetchInterval: query => (query.state.data?.running ? 1500 : false),
+  })
+  const steamLibrarySync = useMutation({
+    mutationFn: api.integrations.steamLibrarySync,
+    onSuccess: (r) => {
+      qc.invalidateQueries({ queryKey: ['integrations'] })
+      qc.invalidateQueries({ queryKey: ['media'] })
+      qc.invalidateQueries({ queryKey: ['profile'] })
+      setSteamNotice(r.errors.length
+        ? { ok: false, text: r.errors[0] }
+        : { ok: true, text: `Biblioteca lida: ${r.owned} jogos · ${r.created} novos · ${r.adopted} associados · ${r.updated} atualizados.` })
+    },
+    onError: (e: unknown) => setSteamNotice({ ok: false, text: (e as Error).message || 'Falha ao ler a biblioteca.' }),
   })
   const steamDiagnose = useMutation({
     mutationFn: api.integrations.steamDiagnose,
@@ -918,8 +932,8 @@ function IntegrationsSection() {
           os cookies da sua sessão da loja, porque a Steam não tem API pública de escrita na wishlist.
         </p>
         <p className="text-xs text-muted mb-4">
-          Por enquanto a Steam mexe <b>só na Wishlist</b>: o que você já jogou continua vindo do Playnite, e o Backlog (jogos que
-          você já tem) nunca sobe para a wishlist da Steam.
+          Com <b>Biblioteca e tempo de jogo</b> ligado, a Steam também alimenta seus jogos. O Backlog (jogos que você já tem)
+          nunca sobe para a wishlist da Steam.
         </p>
 
         {steamNotice && (
@@ -969,6 +983,19 @@ function IntegrationsSection() {
               <option value="push">Só enviar — Wishlist do Shelf → wishlist da Steam</option>
             </select>
           </div>
+
+          <label className="flex items-start gap-2 cursor-pointer">
+            <input type="checkbox" className="mt-0.5" checked={!!form.steam_library_enabled}
+              onChange={e => set('steam_library_enabled')(e.target.checked)} />
+            <span className="text-xs text-secondary">
+              Biblioteca e tempo de jogo pela Steam
+              <span className="block text-[11px] text-muted">
+                A cada 30 min o Shelf lê os jogos da sua conta: comprados entram no Backlog, jogados viram "jogando", e o tempo
+                de jogo e a última vez jogada passam a vir da Steam (com selo). Zerado, platinado, pausado e abandonado não são
+                mexidos. Precisa da Web API Key. O Playnite continua funcionando em paralelo, sem sobrescrever o tempo da Steam.
+              </span>
+            </span>
+          </label>
 
           <label className="flex items-start gap-2 cursor-pointer">
             <input type="checkbox" className="mt-0.5" checked={!!form.steam_sync_removals}
@@ -1029,12 +1056,27 @@ function IntegrationsSection() {
             className="text-xs px-3 py-2 bg-card border border-border rounded-lg text-primary hover:border-accent transition-colors disabled:opacity-50">
             {steamSync.isPending ? 'Sincronizando…' : '⇄ Sincronizar wishlist'}
           </button>
+          <button type="button" onClick={() => steamLibrarySync.mutate()}
+            disabled={steamLibrarySync.isPending || !status?.steam.steam_id || !status?.steam.api_key_set}
+            className="text-xs px-3 py-2 bg-card border border-border rounded-lg text-primary hover:border-accent transition-colors disabled:opacity-50">
+            {steamLibrarySync.isPending ? 'Lendo biblioteca…' : '🎮 Ler biblioteca agora'}
+          </button>
           <button type="button" onClick={() => steamDiagnose.mutate()}
             disabled={steamDiagnose.isPending || !!diagnostic?.running || !status?.steam.steam_id || !status?.steam.api_key_set}
             className="text-xs px-3 py-2 bg-card border border-border rounded-lg text-primary hover:border-accent transition-colors disabled:opacity-50">
             {diagnostic?.running ? 'Diagnosticando…' : '🔎 Diagnosticar conta'}
           </button>
         </div>
+
+        {status?.steam.library_last_sync && (
+          <p className="text-[11px] text-muted mt-2">
+            Biblioteca lida {timeAgo(status.steam.library_last_sync.at) === 'agora' ? 'agora' : `há ${timeAgo(status.steam.library_last_sync.at)}`}
+            {' '}· {status.steam.library_last_sync.owned} jogos na conta
+            {status.steam.library_last_sync.errors.length > 0 && (
+              <span className="text-movies"> · {status.steam.library_last_sync.errors[0]}</span>
+            )}
+          </p>
+        )}
 
         {diagnostic && <SteamDiagnosticPanel d={diagnostic} />}
 

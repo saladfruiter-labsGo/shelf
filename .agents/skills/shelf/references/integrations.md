@@ -17,6 +17,7 @@ Os loops começam explicitamente por `startIntegrationPolling()` no bootstrap e 
 | Playnite | webhook disparado pelo PC | fechamento, agenda/catch-up e envio manual |
 | Steam/ITAD | jobs próprios | 6 h |
 | Diagnóstico da Steam | job sob demanda | botão em Integrações |
+| Biblioteca da Steam | polling (`GetOwnedGames`) | 30 min, se `STEAM_LIBRARY_ENABLED` |
 
 Cada poll tem guarda de reentrância e entra no conjunto de promises aguardadas pelo shutdown.
 
@@ -94,7 +95,7 @@ O Telegram continua opcional e funciona atrás do Tailscale; não crie webhook p
 
 ## Steam e preços
 
-Steam sincroniza apenas a wishlist da Steam ↔ fila Wishlist do Shelf (nunca o Backlog). Itens consumidos ainda são responsabilidade do Playnite; a migração da biblioteca para a Steam segue o plano em etapas (diagnóstico → biblioteca → conquistas).
+A wishlist da Steam sincroniza com a fila Wishlist do Shelf (nunca o Backlog). A biblioteca (`server/steam/library.ts`, regras puras em `library-plan.ts`) é opcional por `STEAM_LIBRARY_ENABLED`: casa por AppID (adoção por lojas da RAWG ou título único, sem trocar `external_id`), só promove status, grava tempo/última vez jogada com `playtime_source = 'steam'`, e só gera atividade/diário para mudanças observadas depois da primeira leitura (estado em `STEAM_LIBRARY_STATE`). O Playnite segue em paralelo até o ST-05, mas não sobrescreve tempo vindo da Steam nem grava progresso duplicado, e reaproveita card `steam:<appid>` de mesmo título.
 
 A conta é conectada pelo usuário no navegador: `GET /auth/steam/login` (OpenID 2.0) e `/auth/steam/callback`, fora de `/api` porque a volta é navegação cross-site. Proteções: `state` de uso único em `STEAM_OPENID_STATE` com 10 min, `return_to` idêntico ao gerado, campos assinados obrigatórios e `check_authentication` confirmado com a Steam (`server/steam/openid.ts`). O service worker ignora `/auth/`. Não leia credenciais da Steam por fora do app.
 

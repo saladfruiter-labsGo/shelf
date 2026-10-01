@@ -106,7 +106,12 @@ export async function fetchOwnedGames(): Promise<SteamOwnedGame[]> {
   })
   const data = await getJson<{ response?: { games?: any[] } }>(
     `https://api.steampowered.com/IPlayerService/GetOwnedGames/v0001/?${qs}`,
-  )
+  ).catch((e: unknown) => {
+    if (e instanceof SteamError && (e.status === 401 || e.status === 403)) {
+      throw new SteamError('A Steam recusou a Web API Key. Confira a chave no card da Steam.', e.status)
+    }
+    throw e
+  })
   const games = data.response?.games
   if (!games) throw new SteamError('A Steam não retornou a biblioteca — o perfil precisa estar público (Detalhes do jogo: Público).')
 

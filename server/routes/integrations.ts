@@ -5,6 +5,7 @@ import { backlogGames } from '../prices/repository.js'
 import { syncState } from '../prices/sync.js'
 import * as steamClient from '../steam/client.js'
 import { lastSync as steamLastSync, syncRunning as steamSyncRunning } from '../steam/sync.js'
+import { lastLibrarySync as steamLibraryLastSync } from '../steam/library.js'
 import { cfg, setCfg } from '../integrations/config.js'
 import type { NowPlaying } from '../integrations/now-playing.js'
 import kavitaIntegrationRoutes, { pollKavita, resetKavitaAuth } from './integrations/kavita.js'
@@ -131,6 +132,8 @@ app.get('/', (c) => {
       sync_removals:    cfg('STEAM_SYNC_REMOVALS') === '1',
       running:          steamSyncRunning(),
       last_sync:        steamLastSync(),
+      library_enabled:  cfg('STEAM_LIBRARY_ENABLED') === '1',
+      library_last_sync: steamLibraryLastSync(),
     },
     prices: {
       enabled:        cfg('ITAD_ENABLED') === '1',
@@ -171,6 +174,7 @@ app.patch('/', async (c) => {
     ['STEAM_ID', str(b.steam_id)],
     ['STEAM_SYNC_MODE', ['pull', 'push', 'both'].includes(String(b.steam_sync_mode)) ? String(b.steam_sync_mode) : undefined],
     ['STEAM_SYNC_REMOVALS', bool(b.steam_sync_removals)],
+    ['STEAM_LIBRARY_ENABLED', bool(b.steam_library_enabled)],
   ]
   for (const [k, v] of map) if (v !== undefined) setCfg(k, v)
   // Tokens/segredos só são sobrescritos quando um valor novo é enviado (não apagar ao salvar mascarado)
