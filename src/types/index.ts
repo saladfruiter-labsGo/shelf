@@ -373,6 +373,7 @@ export interface SteamSyncResult {
 
 /** Ficha da loja da Steam para a página de jogo (ver server/steam/store.ts). */
 export interface SteamStorePage {
+  format:            number
   appid:             number
   name:              string
   short_description: string | null
@@ -385,7 +386,7 @@ export interface SteamStorePage {
   header_image:      string
   background:        string | null
   screenshots:       { thumb: string; full: string }[]
-  movies:            { name: string; thumbnail: string; mp4: string | null; webm: string | null }[]
+  movies:            { name: string; thumbnail: string; mp4: string | null; webm: string | null; hls: string | null }[]
   metacritic:        { score: number; url: string | null } | null
   store_url:         string
 }

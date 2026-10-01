@@ -16,6 +16,8 @@ Todas as páginas são lazy-loaded em `src/App.tsx`. O `Layout` fica no bundle i
 
 Após o code splitting, o JS inicial de referência ficou em aproximadamente 261 KB (81,5 KB gzip), contra cerca de 515 KB antes. Não aumente o limite do warning para esconder regressão.
 
+Exceção deliberada: o `hls.js` (~593 KB, ~186 KB gzip), usado só para tocar trailers da Steam na página de jogo, entra como **arquivo estático** (`import url from 'hls.js/dist/hls.min.mjs?url'` + `import(url)` ao apertar ▶ em `TrailerPlayer`). Ele não faz parte do JS inicial nem de chunk de página e só é baixado quando alguém aperta ▶ num navegador sem HLS nativo; não troque por `import('hls.js')`, que gera um chunk acima do limite. A versão `light` não serve: os trailers da Steam têm trilha de áudio separada.
+
 ## Rotas
 
 | Caminho | Responsabilidade |

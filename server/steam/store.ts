@@ -7,7 +7,11 @@
  */
 import { db } from '../db.js'
 
+/** Sobe quando o formato muda; cópia de formato antigo no cache conta como vencida. */
+export const STORE_PAGE_FORMAT = 2
+
 export interface SteamStorePage {
+  format: number
   appid: number
   name: string
   short_description: string | null
@@ -20,7 +24,8 @@ export interface SteamStorePage {
   header_image: string
   background: string | null
   screenshots: { thumb: string; full: string }[]
-  movies: { name: string; thumbnail: string; mp4: string | null; webm: string | null }[]
+  /** `hls` é o formato atual da Steam (tocado com hls.js); mp4/webm só em fichas antigas. */
+  movies: { name: string; thumbnail: string; mp4: string | null; webm: string | null; hls: string | null }[]
   metacritic: { score: number; url: string | null } | null
   store_url: string
 }
@@ -52,6 +57,7 @@ export function parseStorePage(appid: number, d: any): SteamStorePage {
   const release: string | null = typeof d.release_date?.date === 'string' && d.release_date.date.trim() ? d.release_date.date.trim() : null
   const year = release?.match(/(\d{4})/)?.[1]
   return {
+    format: STORE_PAGE_FORMAT,
     appid,
     name: String(d.name ?? ''),
     short_description: plainText(d.short_description),
@@ -73,6 +79,7 @@ export function parseStorePage(appid: number, d: any): SteamStorePage {
         thumbnail: httpsUrl(m.thumbnail),
         mp4: httpsUrl(m.mp4?.max) ?? httpsUrl(m.mp4?.['480']),
         webm: httpsUrl(m.webm?.max) ?? httpsUrl(m.webm?.['480']),
+        hls: httpsUrl(m.hls_h264),
       }))
       .filter((m: any) => !!m.thumbnail)
       .slice(0, 4),
@@ -100,7 +107,8 @@ async function fetchFromStore(appid: number): Promise<SteamStorePage | null> {
 export async function getStorePage(appid: number, now = Date.now()): Promise<SteamStorePage | null> {
   const cached = db.prepare('SELECT data, fetched_at FROM steam_app_cache WHERE appid = ?').get(appid) as
     { data: string; fetched_at: number } | undefined
-  if (cached && now - cached.fetched_at < TTL_MS) return JSON.parse(cached.data)
+  const cachedPage = cached ? JSON.parse(cached.data) as SteamStorePage : null
+  if (cachedPage && cachedPage.format === STORE_PAGE_FORMAT && now - cached!.fetched_at < TTL_MS) return cachedPage
 
   try {
     const page = await fetchFromStore(appid)
@@ -110,8 +118,8 @@ export async function getStorePage(appid: number, now = Date.now()): Promise<Ste
         ON CONFLICT(appid) DO UPDATE SET data = excluded.data, fetched_at = excluded.fetched_at
       `).run(appid, JSON.stringify(page), now)
     }
-    return page ?? (cached ? JSON.parse(cached.data) : null)
+    return page ?? cachedPage
   } catch {
-    return cached ? JSON.parse(cached.data) : null
+    return cachedPage
   }
 }
