@@ -1,6 +1,6 @@
 import type {
   Details, List, ListCheck, ListDetail, ListMode, ListTier, ListSearchAddResult,
-  MediaItem, MediaStatus, MediaType,
+  MediaItem, MediaQueue, MediaStatus, MediaType,
   SearchResult, WrapData, SeriesView, SeriesPreview, UnratedSeason, SeasonRatingResult, DiaryEntry, TmdbMediaPreview, CoverChoices,
   IntegrationStatus, NowPlaying, ActivityEvent, ActivityMediaType, MusicStats, TrendingItem,
   GamePriceBacklog, GamePriceDetails, GamePriceRange, GamePriceCandidate,
@@ -42,11 +42,12 @@ export const api = {
 
   media: {
     /** `library: true` exclui a wishlist no servidor, antes do limite de linhas. */
-    list: (params?: { type?: MediaType; status?: MediaStatus; limit?: number; offset?: number; library?: boolean }): Promise<MediaItem[]> => {
+    list: (params?: { type?: MediaType; status?: MediaStatus; limit?: number; offset?: number; library?: boolean; queue?: MediaQueue }): Promise<MediaItem[]> => {
       const qs = new URLSearchParams()
       if (params?.type)    qs.set('type', params.type)
       if (params?.status)  qs.set('status', params.status)
       if (params?.library) qs.set('library', '1')
+      if (params?.queue)   qs.set('queue', params.queue)
       if (params?.limit)   qs.set('limit', String(params.limit))
       if (params?.offset)  qs.set('offset', String(params.offset))
       return request(`/media?${qs}`)
@@ -59,7 +60,7 @@ export const api = {
      * `limit` chutado ali esconde item sem avisar; aqui a busca só para quando o
      * servidor devolve uma página curta.
      */
-    listAll: async (params?: { type?: MediaType; status?: MediaStatus; library?: boolean }, pageSize = 500): Promise<MediaItem[]> => {
+    listAll: async (params?: { type?: MediaType; status?: MediaStatus; library?: boolean; queue?: MediaQueue }, pageSize = 500): Promise<MediaItem[]> => {
       const all: MediaItem[] = []
       for (let offset = 0; ; offset += pageSize) {
         const page = await api.media.list({ ...params, limit: pageSize, offset })

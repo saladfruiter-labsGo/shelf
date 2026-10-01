@@ -1,5 +1,6 @@
 /** Leitura e escrita das tabelas de preços. Sem regra de negócio. */
 import { db } from '../db.js'
+import { QUEUE_PREDICATE } from '../media-domain.js'
 import type { NormalizedOffer, NormalizedHistoryPoint } from './providers/isthereanydeal.js'
 import type { HistoryRow } from './stats.js'
 import { dayOf } from './stats.js'
@@ -244,17 +245,20 @@ export function getShops(productId: number): { id: number; name: string }[] {
 
 /* ──────────────────────────────────── Backlog ─────────────────────────────── */
 
-/** Jogos no backlog — os únicos consultados automaticamente. */
+// Só a Wishlist tem preço a acompanhar: `backlog` é jogo que você já tem.
+const PRICE_WATCH = `type = 'game' AND ${QUEUE_PREDICATE.wishlist}`
+
+/** Jogos da wishlist de compra — os únicos consultados automaticamente. */
 export function backlogGames(): BacklogGame[] {
   return db.prepare(`
     SELECT id, title, external_id FROM media_items
-    WHERE type = 'game' AND status = 'wishlist'
+    WHERE ${PRICE_WATCH}
     ORDER BY added_at DESC
   `).all() as BacklogGame[]
 }
 
 export function isBacklogGame(mediaItemId: number): boolean {
-  const row = db.prepare(`SELECT 1 AS ok FROM media_items WHERE id = ? AND type = 'game' AND status = 'wishlist'`).get(mediaItemId)
+  const row = db.prepare(`SELECT 1 AS ok FROM media_items WHERE id = ? AND ${PRICE_WATCH}`).get(mediaItemId)
   return !!row
 }
 
@@ -293,6 +297,6 @@ export function backlogSummaries(): BacklogSummaryRow[] {
           AND (p.currency IS NULL OR o.currency = p.currency)
         ORDER BY o.price_minor ASC LIMIT 1
       )
-    WHERE m.type = 'game' AND m.status = 'wishlist'
+    WHERE m.id IN (SELECT id FROM media_items WHERE ${PRICE_WATCH})
   `).all() as BacklogSummaryRow[]
 }

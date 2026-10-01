@@ -12,15 +12,15 @@ test('converte todos os CompletionStatus conhecidos', () => {
   assert.equal(playniteGameStatus('Completed', 0), 'zerado')
   assert.equal(playniteGameStatus('Finished', 0), 'zerado')
   assert.equal(playniteGameStatus('Abandoned', 100), 'abandonado')
-  assert.equal(playniteGameStatus('Not Played', 0), 'nunca_jogado')
-  assert.equal(playniteGameStatus('Plan to Play', 0), 'nunca_jogado')
+  assert.equal(playniteGameStatus('Not Played', 0), 'backlog')
+  assert.equal(playniteGameStatus('Plan to Play', 0), 'backlog')
   assert.equal(playniteGameStatus('Playing', 100), 'jogando')
-  assert.equal(playniteGameStatus('On Hold', 100), 'jogando')
+  assert.equal(playniteGameStatus('On Hold', 100), 'pausado')
 })
 
 test('status customizado usa playtime sem inventar conclusão', () => {
   assert.equal(playniteGameStatus('Custom', 1), 'jogando')
-  assert.equal(playniteGameStatus('Custom', 0), 'nunca_jogado')
+  assert.equal(playniteGameStatus('Custom', 0), 'backlog')
   assert.equal(playniteGameStatus(undefined, 30), 'jogando')
 })
 

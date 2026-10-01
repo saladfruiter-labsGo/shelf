@@ -19,9 +19,9 @@ const app = new Hono()
 
 const upsertGame = db.prepare(`
   INSERT INTO media_items
-    (external_id, type, title, cover_url, year, genre, creators, publisher, library, status, game_status, rating, playtime_seconds, last_played_at, completed_at)
+    (external_id, type, title, cover_url, year, genre, creators, publisher, library, status, game_status, game_status_source, rating, playtime_seconds, playtime_source, last_played_at, completed_at)
   VALUES
-    (@external_id, 'game', @title, @cover_url, @year, @genre, @creators, @publisher, @library, @status, @game_status, @rating, @playtime_seconds, @last_played_at,
+    (@external_id, 'game', @title, @cover_url, @year, @genre, @creators, @publisher, @library, @status, @game_status, 'playnite', @rating, @playtime_seconds, 'playnite', @last_played_at,
      CASE WHEN @is_completed = 1 THEN @completed_at ELSE NULL END)
   ON CONFLICT(external_id, type) DO UPDATE SET
     title            = COALESCE(media_items.title, excluded.title),
@@ -33,8 +33,10 @@ const upsertGame = db.prepare(`
     library          = COALESCE(excluded.library, media_items.library),
     status           = excluded.status,
     game_status      = excluded.game_status,
+    game_status_source = 'playnite',
     rating           = @resolved_rating,
     playtime_seconds = excluded.playtime_seconds,
+    playtime_source  = 'playnite',
     last_played_at   = COALESCE(excluded.last_played_at, media_items.last_played_at),
     completed_at     = CASE WHEN @is_completed = 1 THEN COALESCE(media_items.completed_at, @completed_at) ELSE media_items.completed_at END,
     updated_at       = datetime('now')

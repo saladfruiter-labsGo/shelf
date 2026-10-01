@@ -12,7 +12,7 @@ import { imageUrl } from '../lib/images'
 const STATUS_LABEL: Record<string, string> = {
   completed:   'Finalizada',
   in_progress: 'Assistindo',
-  wishlist:    'Backlog',
+  wishlist:    'Wishlist',
   dropped:     'Abandonada',
 }
 

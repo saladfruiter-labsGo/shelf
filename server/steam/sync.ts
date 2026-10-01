@@ -12,6 +12,7 @@
  * quantos itens ficaram esperando.
  */
 import { db } from '../db.js'
+import { QUEUE_PREDICATE } from '../media-domain.js'
 import { normalizeTitle, steamAppIdFromRawg } from '../prices/matcher.js'
 import { rawgLookup } from '../routes/search.js'
 import { planWishlistSync, nextKnown, type SteamSyncOptions } from './plan.js'
@@ -75,7 +76,8 @@ interface ShelfGame {
 function backlogGames(): ShelfGame[] {
   return db.prepare(
     `SELECT id, external_id, title, status, game_status, steam_appid
-       FROM media_items WHERE type = 'game' AND status = 'wishlist'`,
+       FROM media_items
+      WHERE type = 'game' AND ${QUEUE_PREDICATE.wishlist}`,
   ).all() as ShelfGame[]
 }
 
@@ -111,15 +113,16 @@ async function resolveAppId(game: ShelfGame): Promise<number | null> {
 
 /* ───────────────────────── Criação de itens vindos da Steam ──────────────── */
 
-// O conector só cria item de backlog: `nunca_jogado` (que o Shelf deriva para
+// O conector só cria item de wishlist: `nunca_jogado` (que o Shelf deriva para
 // `wishlist`). O que foi jogado é assunto do Playnite, não da Steam.
+// `backlog` (jogo que você já tem) nunca entra nem sai por aqui.
 const insertBacklogGame = db.prepare(`
   INSERT INTO media_items
     (external_id, type, title, cover_url, year, genre, creators, publisher, synopsis, release_date,
-     status, game_status, library, steam_appid)
+     status, game_status, game_status_source, library, steam_appid)
   VALUES
     (@external_id, 'game', @title, @cover_url, @year, @genre, @creators, @publisher, @synopsis, @release_date,
-     'wishlist', 'nunca_jogado', 'Steam', @steam_appid)
+     'wishlist', 'nunca_jogado', 'steam', 'Steam', @steam_appid)
   ON CONFLICT(external_id, type) DO UPDATE SET
     steam_appid = COALESCE(media_items.steam_appid, excluded.steam_appid),
     cover_url   = COALESCE(media_items.cover_url, excluded.cover_url),
@@ -283,8 +286,8 @@ async function runSync(opts: SteamSyncOptions, run: RunOptions): Promise<SteamSy
 
     // Remoções (só para o que já estava sincronizado dos dois lados)
     for (const appid of plan.removeFromShelf) {
-      const row = findByAppId.get(appid) as { id: number; status: string } | undefined
-      if (row && row.status === 'wishlist') {
+      const row = findByAppId.get(appid) as { id: number; status: string; game_status: string | null } | undefined
+      if (row && row.status === 'wishlist' && row.game_status !== 'backlog') {
         db.prepare('DELETE FROM media_items WHERE id = ?').run(row.id)
         result.removed_shelf++
       }

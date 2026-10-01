@@ -97,6 +97,7 @@ test('adota banco sem versão, preserva dados e cria snapshot antes da migration
     { version: 6, name: 'season-ratings' },
     { version: 7, name: 'episode-diary-entries' },
     { version: 8, name: 'custom-covers' },
+    { version: 9, name: 'game-backlog-paused-and-sources' },
   ])
 
   const item = db.prepare("SELECT title, status FROM media_items WHERE external_id = 'legacy-1'").get()
@@ -105,6 +106,9 @@ test('adota banco sem versão, preserva dados e cria snapshot antes da migration
   const mediaColumns = (db.prepare('PRAGMA table_info(media_items)').all() as { name: string }[]).map(c => c.name)
   assert.ok(mediaColumns.includes('game_status'))
   assert.ok(mediaColumns.includes('favorite'))
+  assert.ok(mediaColumns.includes('cover_custom'))
+  assert.ok(mediaColumns.includes('game_status_source'))
+  assert.ok(mediaColumns.includes('playtime_source'))
   assert.ok(db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'game_price_history'").get())
   assert.ok(db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'diary_progress'").get())
   const diaryColumns = (db.prepare('PRAGMA table_info(diary_entries)').all() as { name: string }[]).map(c => c.name)
@@ -149,6 +153,11 @@ test('adota banco sem versão, preserva dados e cria snapshot antes da migration
   assert.throws(() => db.prepare(
     "INSERT INTO media_items (external_id, type, title, status, game_status) VALUES ('bad-game', 'game', 'Jogo', 'completed', 'beaten')",
   ).run(), /CHECK constraint/)
+  for (const [id, gameStatus, status] of [['owned', 'backlog', 'wishlist'], ['paused', 'pausado', 'in_progress']]) {
+    assert.doesNotThrow(() => db.prepare(
+      "INSERT INTO media_items (external_id, type, title, status, game_status) VALUES (?, 'game', 'Jogo', ?, ?)",
+    ).run(id, status, gameStatus))
+  }
 
   const snapshots = readdirSync(backupDir).filter(name => /^shelf-before-migration-.*\.db$/.test(name))
   assert.equal(snapshots.length, 1)

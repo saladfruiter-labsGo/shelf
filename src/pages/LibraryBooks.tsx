@@ -12,7 +12,7 @@ import { norm } from '../lib/utils'
 const STATUS_LABEL: Record<string, string> = {
   completed:   'Lido',
   in_progress: 'Lendo',
-  wishlist:    'Backlog',
+  wishlist:    'Wishlist',
   dropped:     'Abandonado',
 }
 

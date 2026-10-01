@@ -8,7 +8,7 @@ import { Pager, usePagination } from '../components/Pager'
 import { useMediaPreview } from '../components/MediaSummaryModal'
 import { TYPE_LABEL, TYPE_COLOR, formatDate, norm } from '../lib/utils'
 import { imageUrl } from '../lib/images'
-import type { MediaItem, MediaType } from '../types'
+import type { MediaItem, MediaQueue, MediaType } from '../types'
 
 /* ─── Ordenações disponíveis ─── */
 type SortKey = 'added_desc' | 'added_asc' | 'release_desc' | 'release_asc' | 'price_asc' | 'discount_desc'
@@ -25,6 +25,14 @@ const TYPE_EMOJI: Record<MediaType, string> = {
   movie: '🎬', series: '📺', game: '🎮', book: '📚', music: '🎵',
 }
 const TYPE_ORDER: MediaType[] = ['movie', 'series', 'game', 'book', 'music']
+
+// Wishlist e Backlog são filas diferentes, cada uma com sua página. A separação
+// é feita no servidor (`QUEUE_PREDICATE` em media-domain.ts).
+const QUEUE_COPY: Record<MediaQueue, { eyebrow: string; title: string; empty: string }> = {
+  wishlist: { eyebrow: 'Quero consumir', title: 'Wishlist', empty: 'Adicione algo à Wishlist pelo ⌘K.' },
+  backlog:  { eyebrow: 'Já tenho, falta jogar', title: 'Backlog', empty: 'Jogos que você tem e ainda não abriu aparecem aqui.' },
+}
+const PRICE_SORTS: SortKey[] = ['price_asc', 'discount_desc']
 
 /** Mês (YYYY-MM) de added_at. */
 function addedMonthKey(iso: string): string {
@@ -95,19 +103,30 @@ function FilterInput({
 }
 
 export function Wishlist() {
+  return <MediaQueuePage queue="wishlist" />
+}
+
+export function Backlog() {
+  return <MediaQueuePage queue="backlog" />
+}
+
+function MediaQueuePage({ queue }: { queue: MediaQueue }) {
   const qc = useQueryClient()
   const { openMedia } = useMediaPreview()
+  const copy = QUEUE_COPY[queue]
+  const withPrices = queue === 'wishlist'
 
   const { data: items = [], isLoading } = useQuery({
-    queryKey: ['media', 'wishlist'],
-    queryFn: () => api.media.listAll({ status: 'wishlist' }),
+    queryKey: ['media', 'queue', queue],
+    queryFn: () => api.media.listAll({ queue }),
   })
 
-  // Uma única consulta em lote alimenta o preço de todos os cards.
+  // Uma única consulta em lote alimenta o preço de todos os cards (só na Wishlist).
   const { data: prices } = useQuery({
     queryKey: ['prices', 'backlog'],
     queryFn: api.prices.backlog,
     staleTime: 60_000,
+    enabled: withPrices,
   })
   const priceBy = useMemo(
     () => new Map((prices?.items ?? []).map(p => [p.media_item_id, p])),
@@ -224,11 +243,11 @@ export function Wishlist() {
 
         {/* Header */}
         <p style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '2.5px', color: 'var(--dim)', marginBottom: 16 }}>
-          Quero consumir
+          {copy.eyebrow}
         </p>
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 24, flexWrap: 'wrap', marginBottom: 40 }}>
           <h1 style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: 'clamp(40px,5vw,72px)', fontWeight: 800, letterSpacing: '-2px', lineHeight: 1, color: 'var(--text-primary)' }}>
-            Backlog
+            {copy.title}
           </h1>
           <p style={{ fontFamily: 'Space Grotesk, monospace', fontSize: 13, color: 'var(--text-muted)', paddingBottom: 8 }}>
             {filtered.length}{anyFilter ? ` de ${items.length}` : ''} {items.length === 1 ? 'item' : 'itens'}
@@ -242,7 +261,7 @@ export function Wishlist() {
               <span style={{ display: 'block', fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '1.5px', color: 'var(--text-muted)', marginBottom: 8 }}>
                 Categorias
               </span>
-              <div className="backlog-category-filters" role="group" aria-label="Filtrar backlog por categoria">
+              <div className="backlog-category-filters" role="group" aria-label={`Filtrar ${copy.title} por categoria`}>
                 <button
                   type="button"
                   onClick={() => setFType('')}
@@ -318,7 +337,7 @@ export function Wishlist() {
                     color: 'var(--text-secondary)',
                   }}
                 >
-                  {SORTS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                  {SORTS.filter(s => withPrices || !PRICE_SORTS.includes(s.value)).map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
                 </select>
               </label>
 
@@ -399,8 +418,8 @@ export function Wishlist() {
                   {[item.year, item.genre].filter(Boolean).join(' · ') || '—'}
                 </p>
 
-                {/* Preço (só jogos, e só enquanto estão no backlog) */}
-                {item.type === 'game' && prices?.enabled && (
+                {/* Preço só na Wishlist: jogo do Backlog você já tem. */}
+                {withPrices && item.type === 'game' && prices?.enabled && (
                   <PriceBadge summary={priceBy.get(item.id)} />
                 )}
 
@@ -428,13 +447,11 @@ export function Wishlist() {
             <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '3rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--border)', marginBottom: 12 }}>
               Vazia
             </p>
-            <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>
-              Adicione algo ao <strong style={{ color: 'var(--text-secondary)' }}>Backlog</strong> pelo ⌘K.
-            </p>
+            <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>{copy.empty}</p>
           </div>
         )}
 
-        <Pager page={page} total={totalPages} count={filtered.length} onGo={goTo} label="Paginação do backlog" />
+        <Pager page={page} total={totalPages} count={filtered.length} onGo={goTo} label={`Paginação: ${copy.title}`} />
       </div>
 
       {/* Modal: adicionar ao diário (marca como concluído → entra na biblioteca) */}

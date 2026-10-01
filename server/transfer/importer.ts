@@ -100,7 +100,8 @@ const ITEM_COLUMNS = [
   'external_id', 'type', 'title', 'cover_url', 'year', 'genre', 'runtime', 'rating',
   'status', 'notes', 'synopsis', 'creators', 'author', 'release_date', 'hype', 'favorite',
   'completed_at', 'tmdb_id', 'pages_total', 'pages_read', 'playtime_seconds',
-  'game_status', 'last_played_at', 'publisher', 'library', 'steam_appid',
+  'game_status', 'game_status_source', 'last_played_at', 'publisher', 'library', 'steam_appid',
+  'playtime_source',
   'original_filename', 'default_cover_url', 'cover_custom',
   'added_at', 'updated_at',
 ] as const

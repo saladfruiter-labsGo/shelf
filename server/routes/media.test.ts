@@ -143,6 +143,36 @@ test('edição rejeita enums inválidos e deriva status de game_status', async (
   assert.equal(invalidStatus.status, 400)
 })
 
+test('Wishlist e Backlog são filas separadas no servidor', async () => {
+  database.prepare(
+    "INSERT INTO media_items (external_id, type, title, status, game_status) VALUES ('owned', 'game', 'Tenho e não joguei', 'wishlist', 'backlog')",
+  ).run()
+
+  assert.deepEqual(await titles('queue=backlog'), ['Tenho e não joguei'])
+  const wishlist = await titles('queue=wishlist&limit=100')
+  assert.equal(wishlist.includes('Tenho e não joguei'), false)
+  assert.equal(wishlist.includes('Backlog 1'), true)
+
+  const invalid = await app.request('/?queue=library')
+  assert.equal(invalid.status, 400)
+})
+
+test('status escolhido à mão perde o selo da Steam e o cliente não forja procedência', async () => {
+  database.prepare("UPDATE media_items SET game_status_source = 'steam', playtime_source = 'steam' WHERE id = ?").run(gameId)
+
+  const res = await app.request(`/${gameId}`, {
+    method: 'PATCH', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ game_status: 'pausado', game_status_source: 'steam' }),
+  })
+  assert.equal(res.status, 200)
+  const item = await res.json() as { game_status: string; status: string; game_status_source: string; playtime_source: string }
+  assert.equal(item.game_status, 'pausado')
+  assert.equal(item.status, 'in_progress')
+  assert.equal(item.game_status_source, 'manual')
+  // Só o status foi editado: o tempo de jogo continua vindo da Steam.
+  assert.equal(item.playtime_source, 'steam')
+})
+
 test('identificação TMDB rejeita código inválido e tipos incompatíveis', async () => {
   const invalid = await app.request('/1/tmdb-preview?tmdb_id=abc')
   assert.equal(invalid.status, 400)

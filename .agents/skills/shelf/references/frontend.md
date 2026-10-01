@@ -23,7 +23,8 @@ Após o code splitting, o JS inicial de referência ficou em aproximadamente 261
 | `/` | Dashboard: visão geral, favoritos, progresso, promoções e fila de avaliações |
 | `/library` e `/library/*` | biblioteca geral e por categoria |
 | `/diary` | histórico de conclusões |
-| `/wishlist` | backlog |
+| `/wishlist` | wishlist: o que quer comprar/consumir, com preços |
+| `/backlog` | jogos que você tem e não jogou (mesmo componente, `queue="backlog"`) |
 | `/media/:id` | detalhe, status, nota, histórico e metadados |
 | `/lists`, `/lists/:id` | listas, ranking e tierlist |
 | `/wrap` | estatísticas mensal/anual e story |

@@ -3,6 +3,8 @@ import assert from 'node:assert/strict'
 import {
   GAME_STATUS_TO_BASE,
   LIBRARY_STATUS_PREDICATE,
+  QUEUE_PREDICATE,
+  isMediaQueue,
   isGameStatus,
   isLibraryStatus,
   isMediaStatus,
@@ -12,9 +14,11 @@ import {
 test('cada status granular de jogo deriva o status base correto', () => {
   assert.deepEqual(GAME_STATUS_TO_BASE, {
     jogando: 'in_progress',
+    pausado: 'in_progress',
     zerado: 'completed',
     platinado: 'completed',
     abandonado: 'dropped',
+    backlog: 'wishlist',
     nunca_jogado: 'wishlist',
   })
 })
@@ -26,7 +30,16 @@ test('reconhece apenas tipos e status persistidos pelo Shelf', () => {
   assert.equal(isMediaStatus('completed'), true)
   assert.equal(isMediaStatus('finished'), false)
   assert.equal(isGameStatus('platinado'), true)
+  assert.equal(isGameStatus('pausado'), true)
+  assert.equal(isGameStatus('backlog'), true)
   assert.equal(isGameStatus('beaten'), false)
+})
+
+test('backlog de jogos e wishlist são filas separadas', () => {
+  assert.equal(QUEUE_PREDICATE.wishlist, "status = 'wishlist' AND COALESCE(game_status, '') != 'backlog'")
+  assert.equal(QUEUE_PREDICATE.backlog, "status = 'wishlist' AND game_status = 'backlog'")
+  assert.equal(isMediaQueue('backlog'), true)
+  assert.equal(isMediaQueue('library'), false)
 })
 
 test('wishlist nunca pertence à biblioteca', () => {
