@@ -21,6 +21,7 @@ import pricesRoutes    from './routes/prices.js'
 import transferRoutes  from './routes/transfer.js'
 import { startPriceSync, stopPriceSync } from './prices/sync.js'
 import { startSteamSync, stopSteamSync } from './steam/sync.js'
+import { startSteamLibrarySync, stopSteamLibrarySync } from './steam/library.js'
 import { limitedApiBody, noStoreDynamicApi, sameOriginApi, shelfSecurityHeaders } from './security.js'
 import { startBackupScheduler, stopBackupScheduler } from './backup.js'
 import { db } from './db.js'
@@ -80,6 +81,9 @@ startPriceSync()
 // Backlog ↔ wishlist da Steam: mesma cadência (6 h), quando o conector está ativo.
 startSteamSync()
 
+// Biblioteca, tempo de jogo e última vez jogada vindos da Steam, a cada 30 min.
+startSteamLibrarySync()
+
 // Snapshot integral verificado, independente do export JSON portátil.
 startBackupScheduler()
 
@@ -104,6 +108,7 @@ function requestShutdown(reason: string, exitCode: number): void {
       stopIntegrationPolling,
       stopPriceSync,
       stopSteamSync,
+      stopSteamLibrarySync,
       stopSteamDiagnostic,
       stopBackupScheduler,
       stopActivityRetention,

@@ -14,6 +14,7 @@ import { recordDiaryProgress } from '../../diary-progress.js'
 import { GAME_STATUS_TO_BASE } from '../../media-domain.js'
 import { notifyLibraryActivity } from '../../notify.js'
 import { rawgLookup } from '../search.js'
+import { normalizeTitle } from '../../prices/matcher.js'
 
 const app = new Hono()
 
@@ -35,13 +36,17 @@ const upsertGame = db.prepare(`
     game_status      = excluded.game_status,
     game_status_source = 'playnite',
     rating           = @resolved_rating,
-    playtime_seconds = excluded.playtime_seconds,
-    playtime_source  = 'playnite',
-    last_played_at   = COALESCE(excluded.last_played_at, media_items.last_played_at),
+    -- Tempo e última vez jogada que já vêm da Steam não são sobrescritos pelo Playnite.
+    playtime_seconds = CASE WHEN media_items.playtime_source = 'steam' THEN media_items.playtime_seconds ELSE excluded.playtime_seconds END,
+    playtime_source  = CASE WHEN media_items.playtime_source = 'steam' THEN 'steam' ELSE 'playnite' END,
+    last_played_at   = CASE WHEN media_items.playtime_source = 'steam' THEN media_items.last_played_at
+                            ELSE COALESCE(excluded.last_played_at, media_items.last_played_at) END,
     completed_at     = CASE WHEN @is_completed = 1 THEN COALESCE(media_items.completed_at, @completed_at) ELSE media_items.completed_at END,
     updated_at       = datetime('now')
 `)
-const getMedia = db.prepare("SELECT id, rating FROM media_items WHERE external_id = ? AND type = 'game'")
+const getMedia = db.prepare("SELECT id, rating, playtime_source FROM media_items WHERE external_id = ? AND type = 'game'")
+// Card criado pela leitura da biblioteca da Steam, para o Playnite não duplicar.
+const steamCreatedGames = db.prepare("SELECT external_id, title FROM media_items WHERE type = 'game' AND external_id LIKE 'steam:%'")
 const insertActivity = db.prepare(`
   INSERT OR IGNORE INTO activity_events
     (source, event_type, media_type, external_ref, title, subtitle, cover_url, rating, duration_ms, genre, occurred_at, raw)
@@ -122,6 +127,13 @@ app.post('/playnite/webhook', async (c) => {
   let genre: string | null = null
 
   if (!externalId) {
+    const target = normalizeTitle(name)
+    const fromSteam = (steamCreatedGames.all() as { external_id: string; title: string }[])
+      .filter(game => normalizeTitle(game.title) === target)
+    if (fromSteam.length === 1) externalId = fromSteam[0].external_id
+  }
+
+  if (!externalId) {
     const rawg = await rawgLookup(name).catch(() => null)
     if (rawg) {
       externalId = rawg.external_id
@@ -154,14 +166,15 @@ app.post('/playnite/webhook', async (c) => {
     is_completed: isCompleted ? 1 : 0,
     completed_at: lastPlayedIso ?? nowIso,
   })
-  const row = getMedia.get(externalId) as { id: number; rating: number } | undefined
+  const row = getMedia.get(externalId) as { id: number; rating: number; playtime_source: string | null } | undefined
   if (!row) return c.json({ ok: true })
 
   const wasCompleted = previous?.gameStatus === 'zerado' || previous?.gameStatus === 'platinado'
   const progressUpdated = lastPlayedIso
     ? previous?.lastPlayedAt !== lastPlayedIso || previous?.playtime !== playtime
     : !previous || previous.playtime !== playtime
-  if (progressUpdated && playtime > 0) {
+  // Com o tempo vindo da Steam, é ela quem grava o progresso no diário (um registro por dia, não dois).
+  if (progressUpdated && playtime > 0 && row.playtime_source !== 'steam') {
     recordDiaryProgress({
       mediaItemId: row.id,
       source: 'playnite',

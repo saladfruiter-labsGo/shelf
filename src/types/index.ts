@@ -294,6 +294,8 @@ export interface IntegrationStatus {
     sync_removals:  boolean
     running:        boolean
     last_sync:      SteamSyncResult | null
+    library_enabled:   boolean
+    library_last_sync: SteamLibraryResult | null
   }
   prices: {
     enabled:        boolean
@@ -309,6 +311,17 @@ export interface IntegrationStatus {
 /* ─── Steam: conector bidirecional do backlog ─── */
 
 export type SteamSyncMode = 'pull' | 'push' | 'both'
+
+/** Leitura da biblioteca da Steam (ver server/steam/library.ts). */
+export interface SteamLibraryResult {
+  at:      string
+  owned:   number
+  created: number
+  adopted: number
+  updated: number
+  started: number
+  errors:  string[]
+}
 
 export interface SteamSyncResult {
   at:            string

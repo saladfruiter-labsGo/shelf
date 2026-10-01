@@ -1,6 +1,6 @@
 import { db } from './db.js'
 
-export type DiaryProgressSource = 'kavita' | 'playnite'
+export type DiaryProgressSource = 'kavita' | 'playnite' | 'steam'
 export type DiaryProgressUnit = 'pages' | 'seconds'
 
 interface ProgressInput {
