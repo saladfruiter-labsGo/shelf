@@ -552,6 +552,21 @@ db.exec(`
       }
     })()
   },
+}, {
+  version: 8,
+  name: 'custom-covers',
+  up: () => {
+    // A arte escolhida pelo usuário passa a ser o `cover_url` — é ele que a
+    // biblioteca, o diário e o Story leem. A capa do provedor fica guardada
+    // em `default_cover_url` para poder voltar ao padrão.
+    const mediaCols = (db.prepare('PRAGMA table_info(media_items)').all() as { name: string }[]).map(c => c.name)
+    if (!mediaCols.includes('default_cover_url')) {
+      db.exec('ALTER TABLE media_items ADD COLUMN default_cover_url TEXT')
+    }
+    if (!mediaCols.includes('cover_custom')) {
+      db.exec('ALTER TABLE media_items ADD COLUMN cover_custom INTEGER NOT NULL DEFAULT 0')
+    }
+  },
 }]
 
 if (databaseExisted && (hasPendingMigrations(db, migrations) || schemaNeedsUpgrade())) {

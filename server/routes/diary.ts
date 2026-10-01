@@ -12,7 +12,7 @@ const SELECT_ENTRY = `
     d.id, d.media_item_id, d.watched_at, d.rating, d.comment, d.source, d.created_at,
     d.season_number, d.episode_number, ss.title AS season_title, se.title AS episode_title,
     d.progress_day, d.progress_value, d.progress_total, d.progress_unit,
-    m.title, m.type, m.cover_url, m.year, m.genre, m.external_id
+    m.title, m.type, m.cover_url, m.default_cover_url, m.cover_custom, m.year, m.genre, m.external_id
   FROM diary_entries d
   JOIN media_items m ON m.id = d.media_item_id
   LEFT JOIN series_seasons ss

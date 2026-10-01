@@ -12,6 +12,7 @@ import listsRoutes    from './routes/lists.js'
 import seriesRoutes   from './routes/series.js'
 import diaryRoutes    from './routes/diary.js'
 import imgRoutes      from './routes/img.js'
+import coversRoutes   from './routes/covers.js'
 import integrationsRoutes, { startIntegrationPolling, stopIntegrationPolling } from './routes/integrations.js'
 import pricesRoutes    from './routes/prices.js'
 import transferRoutes  from './routes/transfer.js'
@@ -43,6 +44,7 @@ app.route('/api/lists',    listsRoutes)
 app.route('/api/series',   seriesRoutes)
 app.route('/api/diary',    diaryRoutes)
 app.route('/api/img',      imgRoutes)
+app.route('/api/covers',   coversRoutes)
 app.route('/api/integrations', integrationsRoutes)
 app.route('/api/prices',  pricesRoutes)
 app.route('/api/transfer', transferRoutes)

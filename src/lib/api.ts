@@ -1,7 +1,7 @@
 import type {
   Details, List, ListCheck, ListDetail, ListMode, ListTier, ListSearchAddResult,
   MediaItem, MediaStatus, MediaType,
-  SearchResult, WrapData, SeriesView, SeriesPreview, UnratedSeason, SeasonRatingResult, DiaryEntry, TmdbMediaPreview,
+  SearchResult, WrapData, SeriesView, SeriesPreview, UnratedSeason, SeasonRatingResult, DiaryEntry, TmdbMediaPreview, CoverChoices,
   IntegrationStatus, NowPlaying, ActivityEvent, ActivityMediaType, MusicStats, TrendingItem,
   GamePriceBacklog, GamePriceDetails, GamePriceRange, GamePriceCandidate,
   SteamSyncResult, ExportScope, ExportSummary, ImportReport, BackupStatus, DatabaseBackupInfo,
@@ -82,6 +82,12 @@ export const api = {
       request(`/media/${id}/tmdb-identification`, { method: 'PATCH', body: JSON.stringify({ tmdb_id: tmdbId }) }),
     remove: (id: number): Promise<{ ok: boolean }> =>
       request(`/media/${id}`, { method: 'DELETE' }),
+    /** Arte de capa: vale para biblioteca, diário e Story ao mesmo tempo. */
+    covers: (id: number): Promise<CoverChoices> => request(`/media/${id}/covers`),
+    setCover: (id: number, url: string): Promise<MediaItem> =>
+      request(`/media/${id}/cover`, { method: 'PUT', body: JSON.stringify({ url }) }),
+    uploadCover: (id: number, file: File): Promise<MediaItem> => upload(`/media/${id}/cover/upload`, file),
+    resetCover: (id: number): Promise<MediaItem> => request(`/media/${id}/cover`, { method: 'DELETE' }),
   },
 
   diary: {

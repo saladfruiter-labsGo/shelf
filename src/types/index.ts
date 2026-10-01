@@ -9,6 +9,8 @@ export interface MediaItem {
   type:         MediaType
   title:        string
   cover_url:    string | null
+  default_cover_url?: string | null  // capa do provedor, guardada enquanto há arte personalizada
+  cover_custom?:      number         // 1 = `cover_url` é uma arte escolhida pelo usuário
   original_filename: string | null
   year:         number | null
   genre:        string | null
@@ -62,9 +64,26 @@ export interface DiaryEntry {
   title:         string
   type:          MediaType
   cover_url:     string | null
+  default_cover_url: string | null
+  cover_custom:  number
   year:          number | null
   genre:         string | null
   external_id:   string
+}
+
+/* ─── Arte de capa personalizada ─── */
+
+export interface CoverOption {
+  url:    string
+  source: 'default' | 'current' | 'tmdb' | 'rawg' | 'steam'
+}
+
+export interface CoverChoices {
+  current: string | null
+  default: string | null
+  custom:  boolean
+  options: CoverOption[]
+  notice?: string
 }
 
 /* ─── Séries: temporadas e episódios ─── */

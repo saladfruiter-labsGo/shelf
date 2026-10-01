@@ -5,6 +5,7 @@ import type { DiaryEntry } from '../types'
 import { StoryModal } from '../components/StoryModal'
 import { DiaryEntryModal, type DiaryEntryValues } from '../components/DiaryEntryModal'
 import { ConfirmDialog } from '../components/ConfirmDialog'
+import { CoverPickerModal } from '../components/CoverPickerModal'
 import { useIsMobile } from '../hooks/useIsMobile'
 import { useMediaPreview } from '../components/MediaSummaryModal'
 import type { StorySubject } from '../lib/story'
@@ -76,6 +77,7 @@ function subjectOf(e: DiaryEntry): StorySubject {
   const scope = diaryScope(e)
   return {
     title: e.title, type: e.type, cover_url: e.cover_url,
+    default_cover_url: e.cover_custom ? e.default_cover_url : null,
     year: e.year, genre: e.genre, rating: e.rating ?? 0, comment: e.comment,
     badge: scope?.label ?? (isGameCompletion(e) ? 'Jogo zerado' : null),
     subtitle: diaryScopeText(scope),
@@ -98,6 +100,7 @@ export function Diary() {
   const [storyFor, setStoryFor]   = useState<DiaryEntry | null>(null)
   const [editing, setEditing]     = useState<DiaryEntry | null>(null)
   const [removing, setRemoving]   = useState<DiaryEntry | null>(null)
+  const [coverFor, setCoverFor]   = useState<DiaryEntry | null>(null)
 
   // Filtros e ordenação
   const [nameQ, setNameQ]         = useState('')
@@ -348,6 +351,7 @@ export function Diary() {
                           {isMobile && (
                             <button onClick={() => setStoryFor(entry)} title="Gerar Story" className="diary-action">🎨</button>
                           )}
+                          <button onClick={() => setCoverFor(entry)} title="Trocar arte da capa" aria-label={`Trocar arte da capa de ${entry.title}`} className="diary-action">🖼</button>
                           <button onClick={() => setEditing(entry)} title="Editar" className="diary-action">✎</button>
                           <button onClick={() => setRemoving(entry)} title="Remover" className="diary-action diary-action-danger">🗑</button>
                         </div>
@@ -372,6 +376,13 @@ export function Diary() {
       </div>
 
       <StoryModal open={!!storyFor} subject={storyFor ? subjectOf(storyFor) : null} onClose={() => setStoryFor(null)} />
+
+      <CoverPickerModal
+        open={!!coverFor}
+        mediaId={coverFor?.media_item_id ?? null}
+        title={coverFor?.title ?? ''}
+        onClose={() => setCoverFor(null)}
+      />
 
       <DiaryEntryModal
         open={!!editing}

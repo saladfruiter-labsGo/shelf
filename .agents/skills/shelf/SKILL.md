@@ -54,6 +54,8 @@ server/
 
 O backend serve a API e o build Vite pela mesma origem. O acesso de navegador é same-origin; clientes sem `Origin`, como Plex e Playnite, usam seus próprios tokens. O container roda sem root, possui healthcheck e encerra drenando conexões/jobs antes do checkpoint WAL e fechamento do SQLite.
 
+Artes enviadas pelo usuário ficam em `DATA_DIR/covers/<sha256>.webp` e são servidas por `server/routes/covers.ts` (`/api/covers/...`, cache imutável); o arquivo é apagado quando nenhum item o referencia mais. Os snapshots do SQLite não copiam esses arquivos — eles vivem no volume de dados, como o cache de imagens.
+
 Capas externas passam por `server/routes/img.ts`: o primeiro acesso respeita a allowlist HTTPS, redimensiona/converte para WebP e salva em `DATA_DIR/images`; as telas usam o cache local por meio de `src/lib/images.ts`. O SQLite guarda URLs e metadados, nunca os bytes das imagens.
 
 ## Forma esperada das mudanças
