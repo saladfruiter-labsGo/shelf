@@ -16,6 +16,7 @@ Os loops começam explicitamente por `startIntegrationPolling()` no bootstrap e 
 | Telegram callbacks | polling | 10 s |
 | Playnite | webhook disparado pelo PC | fechamento, agenda/catch-up e envio manual |
 | Steam/ITAD | jobs próprios | 6 h |
+| Diagnóstico da Steam | job sob demanda | botão em Integrações |
 
 Cada poll tem guarda de reentrância e entra no conjunto de promises aguardadas pelo shutdown.
 
@@ -93,6 +94,10 @@ O Telegram continua opcional e funciona atrás do Tailscale; não crie webhook p
 
 ## Steam e preços
 
-Steam sincroniza apenas wishlist ↔ backlog. Itens consumidos são responsabilidade do Playnite. Pull requer perfil público; escrita exige cookies. Remoções são opcionais e conservadoras diante de resposta vazia/ambígua.
+Steam sincroniza apenas a wishlist da Steam ↔ fila Wishlist do Shelf (nunca o Backlog). Itens consumidos ainda são responsabilidade do Playnite; a migração da biblioteca para a Steam segue o plano em etapas (diagnóstico → biblioteca → conquistas).
+
+A conta é conectada pelo usuário no navegador: `GET /auth/steam/login` (OpenID 2.0) e `/auth/steam/callback`, fora de `/api` porque a volta é navegação cross-site. Proteções: `state` de uso único em `STEAM_OPENID_STATE` com 10 min, `return_to` idêntico ao gerado, campos assinados obrigatórios e `check_authentication` confirmado com a Steam (`server/steam/openid.ts`). O service worker ignora `/auth/`. Não leia credenciais da Steam por fora do app.
+
+`server/steam/finale.ts` classifica conquistas de final ("Finaliza") por texto (alta/baixa confiança) e `server/steam/diagnostic.ts` roda o diagnóstico só de leitura em segundo plano (resultado em `STEAM_DIAGNOSTIC`, drenado no shutdown). Pull requer perfil público; escrita exige cookies. Remoções são opcionais e conservadoras diante de resposta vazia/ambígua.
 
 ITAD acompanha jogos PC no backlog. Correspondência segue Steam AppID, título exato e revisão manual. Na ambiguidade, não mostre preço. `429` respeita `Retry-After`; falha não elimina oferta/histórico anterior.

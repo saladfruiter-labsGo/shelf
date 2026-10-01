@@ -1,5 +1,5 @@
 /* Shelved. service worker — app-shell + runtime caching */
-const VERSION = 'shelved-v2'
+const VERSION = 'shelved-v3'
 const SHELL = `${VERSION}-shell`
 const RUNTIME = `${VERSION}-runtime`
 
@@ -38,13 +38,19 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url)
   const sameOrigin = url.origin === self.location.origin
 
+  // Login da Steam: redirecionamentos de ida e volta ficam com o navegador.
+  if (sameOrigin && url.pathname.startsWith('/auth/')) return
+
   // SPA navigations → network-first, fall back to cached shell (offline boot)
   if (request.mode === 'navigate') {
     event.respondWith(
       fetch(request)
         .then((res) => {
-          const copy = res.clone()
-          caches.open(SHELL).then((c) => c.put('/index.html', copy))
+          // Só a página de verdade vira o shell offline, nunca um redirect ou erro.
+          if (res.ok && res.type === 'basic') {
+            const copy = res.clone()
+            caches.open(SHELL).then((c) => c.put('/index.html', copy))
+          }
           return res
         })
         .catch(() => caches.match('/index.html').then((r) => r || caches.match('/')))

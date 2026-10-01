@@ -4,7 +4,7 @@ import type {
   SearchResult, WrapData, SeriesView, SeriesPreview, UnratedSeason, SeasonRatingResult, DiaryEntry, TmdbMediaPreview, CoverChoices,
   IntegrationStatus, NowPlaying, ActivityEvent, ActivityMediaType, MusicStats, TrendingItem,
   GamePriceBacklog, GamePriceDetails, GamePriceRange, GamePriceCandidate,
-  SteamSyncResult, ExportScope, ExportSummary, ImportReport, BackupStatus, DatabaseBackupInfo,
+  SteamSyncResult, SteamDiagnostic, ExportScope, ExportSummary, ImportReport, BackupStatus, DatabaseBackupInfo,
   LetterboxdKind, LetterboxdPlan, LetterboxdPreview, LetterboxdApplyResult,
   PlexFilenameSyncResult, SearchApiKeySettings,
 } from '../types'
@@ -209,6 +209,10 @@ export const api = {
       request('/integrations/steam/sync', { method: 'POST' }),
     steamResolve: (input: string): Promise<{ ok: boolean; steam_id?: string; error?: string }> =>
       request('/integrations/steam/resolve', { method: 'POST', body: JSON.stringify({ input }) }),
+    steamDiagnose: (): Promise<SteamDiagnostic> =>
+      request('/integrations/steam/diagnostic', { method: 'POST' }),
+    steamDiagnostic: (): Promise<SteamDiagnostic | null> =>
+      request('/integrations/steam/diagnostic'),
   },
 
   transfer: {

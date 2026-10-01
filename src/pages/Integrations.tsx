@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../lib/api'
 import { timeAgo } from '../lib/utils'
-import type { SearchApiKey } from '../types'
+import type { SearchApiKey, SteamDiagnostic } from '../types'
 
 interface ApiEntry {
   key: SearchApiKey
@@ -226,6 +227,103 @@ function ApiKeysSection() {
 const inputCls =
   'w-full bg-card border border-border rounded-lg px-3 py-2.5 text-sm text-primary placeholder:text-muted outline-none focus:border-accent transition-colors'
 
+function DiagnosticStat({ n, label, hint }: { n: number | string; label: string; hint?: string }) {
+  return (
+    <div className="bg-card border border-border rounded-lg p-3">
+      <p className="font-display text-lg font-bold text-primary" style={{ fontVariantNumeric: 'tabular-nums' }}>{n}</p>
+      <p className="text-[11px] text-secondary">{label}</p>
+      {hint && <p className="text-[10px] text-muted">{hint}</p>}
+    </div>
+  )
+}
+
+/** Resultado do diagnóstico da Steam: o que ficaria automático ao migrar os games. */
+function SteamDiagnosticPanel({ d }: { d: SteamDiagnostic }) {
+  const a = d.achievements
+  const pct = (n: number) => (a.checked ? Math.round((n / a.checked) * 100) : 0)
+
+  return (
+    <section aria-label="Diagnóstico da Steam" className="mt-4 border border-border rounded-lg p-4">
+      <div className="flex items-center justify-between gap-2 mb-3">
+        <h4 className="text-xs font-semibold text-primary uppercase tracking-wide">Diagnóstico da conta</h4>
+        <span className="text-[11px] text-muted" aria-live="polite">
+          {d.running
+            ? `Verificando conquistas… ${d.progress.done}/${d.progress.total}`
+            : d.finished_at ? (timeAgo(d.finished_at) === 'agora' ? 'Feito agora' : `Feito há ${timeAgo(d.finished_at)}`) : ''}
+        </span>
+      </div>
+
+      {d.errors.length > 0 && (
+        <ul className="mb-3 space-y-1">
+          {d.errors.slice(0, 3).map(e => <li key={e} className="text-[11px] text-movies">⚠ {e}</li>)}
+        </ul>
+      )}
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+        <DiagnosticStat n={d.owned_total} label="jogos na conta" />
+        <DiagnosticStat n={d.owned_played} label="já jogados" />
+        <DiagnosticStat n={`${d.playtime_hours}h`} label="jogadas no total" />
+        <DiagnosticStat n={d.shelf.matched_by_appid + d.shelf.matched_by_title} label={`de ${d.shelf.games} jogos do Shelf achados na Steam`} />
+      </div>
+
+      {d.shelf.outside_steam.length > 0 && (
+        <p className="text-[11px] text-muted mb-3">
+          Jogos do Shelf que não estão nesta conta Steam (ficam congelados depois da migração):{' '}
+          {d.shelf.outside_steam.map(o => `${o.library} (${o.count})`).join(' · ')}
+        </p>
+      )}
+
+      {!a.private && a.checked > 0 && (
+        <>
+          <p className="text-xs text-secondary mb-2">"Zerado" pelas conquistas, entre {a.checked} jogos jogados com conquistas:</p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+            <DiagnosticStat n={`${pct(a.auto)}%`} label="automático" hint={`${a.auto} jogos`} />
+            <DiagnosticStat n={`${pct(a.confirm)}%`} label="pedem confirmação" hint={`${a.confirm} jogos`} />
+            <DiagnosticStat n={`${pct(a.manual)}%`} label="só à mão" hint={`${a.manual} jogos`} />
+            <DiagnosticStat n={a.no_achievements} label="sem conquistas" hint="zerado só à mão" />
+          </div>
+          <p className="text-[11px] text-muted mb-3">
+            Com as regras novas, {a.would_be_zerado} jogo(s) já sairiam como zerados e {a.would_be_platinado} como platinados.
+          </p>
+        </>
+      )}
+
+      {d.samples.auto.length > 0 && (
+        <details className="mb-2">
+          <summary className="text-[11px] text-secondary cursor-pointer">Conquistas de final encontradas ({d.samples.auto.length})</summary>
+          <ul className="mt-2 space-y-1">
+            {d.samples.auto.map(s => (
+              <li key={s.title} className="text-[11px] text-muted">
+                <span className="text-secondary">{s.title}</span>{s.unlocked && ' ✓'} — {s.achievements.join(', ')}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+      {d.samples.confirm.length > 0 && (
+        <details className="mb-2">
+          <summary className="text-[11px] text-secondary cursor-pointer">Vão pedir confirmação ({d.samples.confirm.length})</summary>
+          <ul className="mt-2 space-y-1">
+            {d.samples.confirm.map(s => (
+              <li key={s.title} className="text-[11px] text-muted">
+                <span className="text-secondary">{s.title}</span>
+                {s.candidates.length > 0 && ` — talvez: ${s.candidates.join(', ')}`}
+                {s.hidden > 0 && ` · ${s.hidden} oculta(s) sem descrição`}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+      {d.samples.manual.length > 0 && (
+        <details>
+          <summary className="text-[11px] text-secondary cursor-pointer">Sem conquista de final ({d.samples.manual.length})</summary>
+          <p className="mt-2 text-[11px] text-muted">{d.samples.manual.join(' · ')}</p>
+        </details>
+      )}
+    </section>
+  )
+}
+
 function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
   return (
     <button
@@ -431,7 +529,7 @@ function IntegrationsSection() {
       if (r.removed_shelf || r.removed_steam) parts.push(`${r.removed_shelf + r.removed_steam} removido(s)`)
       if (r.pending_push) parts.push(`${r.pending_push} esperando os cookies`)
       if (r.unmatched.length) parts.push(`${r.unmatched.length} sem AppID`)
-      setMsg(`Backlog sincronizado: ${parts.join(', ')}.`)
+      setMsg(`Wishlist sincronizada: ${parts.join(', ')}.`)
       setTimeout(() => setMsg(''), 6000)
     },
     onError: (e: unknown) => { setMsg('Falha ao sincronizar: ' + ((e as Error).message || '')); setTimeout(() => setMsg(''), 5000) },
@@ -443,6 +541,30 @@ function IntegrationsSection() {
       setTimeout(() => setMsg(''), 4000)
     },
     onError: (e: unknown) => { setMsg('Não resolvi o perfil: ' + ((e as Error).message || '')); setTimeout(() => setMsg(''), 5000) },
+  })
+
+  // Volta do "Entrar com a Steam": o servidor redireciona com ?steam=conectado|erro.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [steamNotice, setSteamNotice] = useState<{ ok: boolean; text: string } | null>(null)
+  useEffect(() => {
+    const result = searchParams.get('steam')
+    if (!result) return
+    setSteamNotice(result === 'conectado'
+      ? { ok: true, text: 'Conta Steam conectada.' }
+      : { ok: false, text: searchParams.get('motivo') || 'Não foi possível entrar com a Steam.' })
+    qc.invalidateQueries({ queryKey: ['integrations'] })
+    setSearchParams({}, { replace: true })
+  }, [searchParams, setSearchParams, qc])
+
+  const { data: diagnostic } = useQuery({
+    queryKey: ['steam-diagnostic'],
+    queryFn: api.integrations.steamDiagnostic,
+    refetchInterval: query => (query.state.data?.running ? 1500 : false),
+  })
+  const steamDiagnose = useMutation({
+    mutationFn: api.integrations.steamDiagnose,
+    onSuccess: d => qc.setQueryData(['steam-diagnostic'], d),
+    onError: (e: unknown) => setSteamNotice({ ok: false, text: (e as Error).message || 'Falha ao diagnosticar.' }),
   })
 
   const [playniteCopied, setPlayniteCopied] = useState(false)
@@ -774,12 +896,12 @@ function IntegrationsSection() {
         </button>
       </div>
 
-      {/* ── Steam (backlog bidirecional) ── */}
+      {/* ── Steam (conta + wishlist bidirecional) ── */}
       <div className="bg-surface border border-border rounded-xl p-5 mb-4">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <span style={{ fontSize: 18 }}>🕹️</span>
-            <h3 className="font-medium text-primary text-sm">Steam <span className="text-muted font-normal">backlog</span></h3>
+            <h3 className="font-medium text-primary text-sm">Steam <span className="text-muted font-normal">conta e wishlist</span></h3>
             <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${status?.steam.steam_id ? 'bg-games-bg text-games' : 'bg-card text-muted'}`}>
               {status?.steam.steam_id ? 'Conectado' : 'Não conectado'}
             </span>
@@ -791,17 +913,31 @@ function IntegrationsSection() {
         </div>
 
         <p className="text-xs text-muted mb-4">
-          Mantém a <b>wishlist da Steam</b> e o <b>backlog de jogos do Shelf</b> em sincronia, nos dois sentidos.
+          Mantém a <b>wishlist da Steam</b> e a <b>Wishlist de jogos do Shelf</b> em sincronia, nos dois sentidos.
           Verifica a cada 6 horas. Trazer da Steam só precisa do SteamID com perfil público; <b>enviar para a Steam</b> exige
           os cookies da sua sessão da loja, porque a Steam não tem API pública de escrita na wishlist.
         </p>
         <p className="text-xs text-muted mb-4">
-          A Steam mexe <b>só no backlog</b>: nada do que você já jogou entra ou sai por aqui — isso continua vindo do Playnite.
+          Por enquanto a Steam mexe <b>só na Wishlist</b>: o que você já jogou continua vindo do Playnite, e o Backlog (jogos que
+          você já tem) nunca sobe para a wishlist da Steam.
         </p>
+
+        {steamNotice && (
+          <p role="status" className={`text-xs mb-4 ${steamNotice.ok ? 'text-games' : 'text-movies'}`}>
+            {steamNotice.ok ? '✓ ' : '⚠ '}{steamNotice.text}
+          </p>
+        )}
 
         <div className="space-y-3">
           <div>
-            <label className="text-xs text-secondary mb-1 block">SteamID <span className="text-muted">(ou o link do seu perfil)</span></label>
+            <a href="/auth/steam/login"
+              className="inline-flex items-center gap-2 px-3 py-2 mb-2 bg-card border border-border rounded-lg text-xs text-primary hover:border-accent transition-colors">
+              🔐 {status?.steam.steam_id ? 'Entrar com outra conta Steam' : 'Entrar com a Steam'}
+            </a>
+            <p className="text-[11px] text-muted mb-2">
+              Você faz o login no site da Steam e volta para cá; o Shelf recebe só o seu SteamID, nunca a senha.
+            </p>
+            <label className="text-xs text-secondary mb-1 block">SteamID <span className="text-muted">(preenchido pelo login, ou cole o link do perfil)</span></label>
             <div className="flex gap-2">
               <input className={inputCls + ' font-mono'} placeholder="76561198000000000"
                 value={String(form.steam_id ?? '')} onChange={e => set('steam_id')(e.target.value)} spellCheck={false} />
@@ -816,7 +952,7 @@ function IntegrationsSection() {
           </div>
 
           <div>
-            <label className="text-xs text-secondary mb-1 block">Web API Key <span className="text-muted">(opcional — evita enviar para a wishlist jogo que você já tem)</span></label>
+            <label className="text-xs text-secondary mb-1 block">Web API Key <span className="text-muted">(necessária para ler a biblioteca, as conquistas e o diagnóstico)</span></label>
             <input className={inputCls + ' font-mono'} type="password" autoComplete="off"
               placeholder={status?.steam.api_key_set ? status.steam.api_key_masked : 'sua chave da Steam Web API'}
               value={String(form.steam_api_key ?? '')} onChange={e => set('steam_api_key')(e.target.value)} spellCheck={false} />
@@ -828,9 +964,9 @@ function IntegrationsSection() {
             <label className="text-xs text-secondary mb-1 block">Sentido da sincronização</label>
             <select className={inputCls} value={String(form.steam_sync_mode ?? 'both')}
               onChange={e => set('steam_sync_mode')(e.target.value)}>
-              <option value="both">Bidirecional — wishlist ↔ backlog</option>
-              <option value="pull">Só trazer — wishlist da Steam → backlog</option>
-              <option value="push">Só enviar — backlog → wishlist da Steam</option>
+              <option value="both">Bidirecional — wishlist da Steam ↔ Wishlist do Shelf</option>
+              <option value="pull">Só trazer — wishlist da Steam → Wishlist do Shelf</option>
+              <option value="push">Só enviar — Wishlist do Shelf → wishlist da Steam</option>
             </select>
           </div>
 
@@ -841,7 +977,7 @@ function IntegrationsSection() {
               Propagar remoções
               <span className="block text-[11px] text-muted">
                 Tirar um jogo de um lado tira do outro. Só vale para o que já foi sincronizado antes — comprar um jogo
-                o remove da wishlist da Steam e, com isto ligado, também do backlog.
+                o remove da wishlist da Steam e, com isto ligado, também da Wishlist do Shelf.
               </span>
             </span>
           </label>
@@ -891,9 +1027,16 @@ function IntegrationsSection() {
           </button>
           <button type="button" onClick={() => steamSync.mutate()} disabled={steamSync.isPending || !status?.steam.enabled}
             className="text-xs px-3 py-2 bg-card border border-border rounded-lg text-primary hover:border-accent transition-colors disabled:opacity-50">
-            {steamSync.isPending ? 'Sincronizando…' : '⇄ Sincronizar backlog'}
+            {steamSync.isPending ? 'Sincronizando…' : '⇄ Sincronizar wishlist'}
+          </button>
+          <button type="button" onClick={() => steamDiagnose.mutate()}
+            disabled={steamDiagnose.isPending || !!diagnostic?.running || !status?.steam.steam_id || !status?.steam.api_key_set}
+            className="text-xs px-3 py-2 bg-card border border-border rounded-lg text-primary hover:border-accent transition-colors disabled:opacity-50">
+            {diagnostic?.running ? 'Diagnosticando…' : '🔎 Diagnosticar conta'}
           </button>
         </div>
+
+        {diagnostic && <SteamDiagnosticPanel d={diagnostic} />}
 
         {status?.steam.last_sync ? (
           <p className="text-[11px] text-muted mt-2">

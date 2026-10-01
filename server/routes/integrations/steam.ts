@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import { cfg } from '../../integrations/config.js'
 import * as steamClient from '../../steam/client.js'
 import { syncSteamBacklog } from '../../steam/sync.js'
+import { lastDiagnostic, startSteamDiagnostic } from '../../steam/diagnostic.js'
 
 const app = new Hono()
 
@@ -28,6 +29,19 @@ app.post('/steam/sync', async (c) => {
   const result = await syncSteamBacklog()
   return c.json(result)
 })
+
+/**
+ * Diagnóstico só de leitura da conta conectada (biblioteca, conquistas e quanto
+ * do "zerado" sairia automático). Roda em segundo plano; o GET acompanha.
+ */
+app.post('/steam/diagnostic', (c) => {
+  if (!cfg('STEAM_ID')) return c.json({ error: 'Entre com a Steam antes de diagnosticar.' }, 400)
+  if (!cfg('STEAM_API_KEY')) return c.json({ error: 'Cole a Web API Key da Steam antes de diagnosticar.' }, 400)
+  const { started, diagnostic } = startSteamDiagnostic()
+  return c.json(diagnostic, started ? 202 : 200)
+})
+
+app.get('/steam/diagnostic', (c) => c.json(lastDiagnostic()))
 
 /** Converte um link de perfil ou vanity em SteamID64. */
 app.post('/steam/resolve', async (c) => {
