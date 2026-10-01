@@ -55,6 +55,8 @@ Não crie mutation de avaliação rápida que atualize apenas `media_items.ratin
 
 `CoverPickerModal` (aberto pelo botão 🖼 de cada registro do diário) lista a capa padrão, a atual e as alternativas do provedor (`GET /api/media/:id/covers`: pôsteres do TMDB para filme/série; arte vertical da Steam e capturas da RAWG para jogo) e aceita envio do dispositivo. Após trocar, invalida todas as queries, porque a capa aparece em quase toda tela. O `StoryModal` usa a arte escolhida e, quando `StorySubject.default_cover_url` existe, oferece o toggle "Arte escolhida / Padrão".
 
+A capa padrão de jogo costuma ser paisagem (header da Steam, screenshot da RAWG), não pôster. Não a force numa caixa 2:3 ou quadrada com `object-fit: cover`: sobra um pedaço ampliado sem o logo. A miniatura do diário (`DiaryCoverArt`) mede a arte ao carregar e vira retrato, quadrada ou paisagem, mostrando a imagem inteira (`contain`) sobre um fundo desfocado dela mesma. No Story, `fitBox(coverAspect(...))` dimensiona a capa pela proporção real, e `drawStack` mede os blocos antes de desenhar para centralizar o conjunto na vertical entre a margem do topo e a marca "Shelf". O modelo Minimalista mantém o texto no alto e a capa no canto inferior direito, por desenho.
+
 ## CSS e tema
 
 O projeto combina `src/index.css`, CSS local em template literal dentro de páginas grandes e Tailwind com cores mapeadas para CSS variables. Siga o padrão vizinho. Prefira tokens (`--bg`, `--surface`, `--card`, `--text-*`, `--accent`, `--gold` e cores das categorias) e `color-mix`.

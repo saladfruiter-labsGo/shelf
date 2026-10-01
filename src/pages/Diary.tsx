@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type CSSProperties } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../lib/api'
 import type { DiaryEntry } from '../types'
@@ -23,6 +23,41 @@ const CAT_STYLE: Record<string, { bg: string; color: string; label: string }> = 
   movie:  { bg: 'var(--movies-bg)', color: 'var(--movies)', label: 'Filme'  },
   series: { bg: 'var(--series-bg)', color: 'var(--series)', label: 'Série'  },
   music:  { bg: 'var(--music-bg)',  color: 'var(--music)',  label: 'Música' },
+}
+
+type CoverShape = 'portrait' | 'square' | 'wide'
+
+function coverShape(width: number, height: number): CoverShape {
+  const ratio = width / height
+  return ratio > 1.25 ? 'wide' : ratio < 0.85 ? 'portrait' : 'square'
+}
+
+/**
+ * Miniatura que acompanha o formato da arte. A capa padrão de jogo é paisagem
+ * (header da Steam, screenshot da RAWG): recortada num quadrado, sobrava um
+ * pedaço ampliado sem o logo. A arte aparece inteira; o fundo desfocado da
+ * própria imagem preenche a sobra quando a proporção não bate exato.
+ */
+function DiaryCoverArt({ url, type }: { url: string; type: string }) {
+  // Palpite até a imagem carregar: jogo costuma ser paisagem, música é quadrada.
+  const [shape, setShape] = useState<CoverShape>(type === 'game' ? 'wide' : type === 'music' ? 'square' : 'portrait')
+  const src = imageUrl(url, 320)!
+  return (
+    <span
+      className={`diary-item-cover-box is-${shape}`}
+      style={{ '--cover-art': `url("${src}")` } as CSSProperties}
+    >
+      <img
+        src={src}
+        alt=""
+        loading="lazy"
+        onLoad={e => {
+          const img = e.currentTarget
+          if (img.naturalWidth && img.naturalHeight) setShape(coverShape(img.naturalWidth, img.naturalHeight))
+        }}
+      />
+    </span>
+  )
 }
 
 /**
@@ -311,8 +346,8 @@ export function Diary() {
                         }}
                       >
                         {entry.cover_url
-                          ? <img src={imageUrl(entry.cover_url, 320)!} alt="" loading="lazy" />
-                          : <span>{TYPE_EMOJI[entry.type] ?? '📌'}</span>}
+                          ? <DiaryCoverArt url={entry.cover_url} type={entry.type} />
+                          : <span className="diary-item-cover-box">{TYPE_EMOJI[entry.type] ?? '📌'}</span>}
                       </div>
 
                       <div
@@ -433,19 +468,27 @@ export function Diary() {
 
         .diary-day-items { display: flex; flex-direction: column; gap: 2px; }
         .diary-item {
-          display: grid; grid-template-columns: 44px 1fr auto;
+          display: grid; grid-template-columns: 64px 1fr auto;
           align-items: center; gap: 14px;
           padding: 10px; border-radius: 12px;
           transition: background .15s;
         }
         .diary-item:hover { background: var(--card); }
-        .diary-item-cover {
-          width: 44px; height: 44px; border-radius: 9px; overflow: hidden;
+        .diary-item-cover { display: grid; place-items: center; cursor: pointer; }
+        .diary-item-cover-box {
+          position: relative; isolation: isolate;
+          width: 48px; height: 48px; border-radius: 9px; overflow: hidden;
           background: var(--card-hover); border: 1px solid var(--border);
           display: grid; place-items: center; font-size: 20px;
-          cursor: pointer; flex-shrink: 0;
         }
-        .diary-item-cover img { width: 100%; height: 100%; object-fit: cover; }
+        .diary-item-cover-box.is-portrait { width: 42px; height: 62px; }
+        .diary-item-cover-box.is-wide { width: 64px; height: 36px; border-radius: 7px; }
+        .diary-item-cover-box::before {
+          content: ''; position: absolute; inset: -6px; z-index: -1;
+          background: var(--cover-art, none) center / cover no-repeat;
+          filter: blur(6px) brightness(.7);
+        }
+        .diary-item-cover-box img { width: 100%; height: 100%; object-fit: contain; }
         .diary-item-main { min-width: 0; cursor: pointer; }
         .diary-item-title {
           font-family: 'Space Grotesk', sans-serif; font-size: 15px; font-weight: 600;
