@@ -37,6 +37,7 @@ export interface MediaItem {
   game_status_source?: GameDataSource | null // de onde veio o status (selo só para 'steam')
   playtime_source?:  GameDataSource | null // de onde veio o tempo de jogo
   steam_appid?:      number | null // games: AppID na Steam (página de jogo, conquistas)
+  ttb_main_seconds?: number | null // games: tempo para zerar a história (IGDB)
   last_played_at?:   string | null     // games (Playnite): última vez jogado (ISO)
   publisher?:        string | null     // games (Playnite): distribuidora(s)
   library?:          string | null     // games (Playnite): biblioteca/origem (Steam, GOG...)
@@ -299,6 +300,13 @@ export interface IntegrationStatus {
     library_last_sync: SteamLibraryResult | null
     achievements_last_sync: SteamAchievementsResult | null
     auto_abandon_days: number
+  }
+  igdb: {
+    configured:     boolean
+    client_id:      string
+    secret_set:     boolean
+    secret_masked:  string
+    last_sync:      { at: string; checked: number; found: number; errors: string[] } | null
   }
   prices: {
     enabled:        boolean

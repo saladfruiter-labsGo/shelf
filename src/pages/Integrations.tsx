@@ -401,6 +401,8 @@ function IntegrationsSection() {
       steam_sync_removals: status.steam.sync_removals,
       steam_library_enabled: status.steam.library_enabled,
       steam_auto_abandon_days: String(status.steam.auto_abandon_days),
+      igdb_client_id: status.igdb.client_id,
+      igdb_client_secret: '',
       itad_enabled: status.prices.enabled,
       itad_api_key: '',
       itad_country: status.prices.country,
@@ -429,6 +431,7 @@ function IntegrationsSection() {
         steam_sync_removals: form.steam_sync_removals,
         steam_library_enabled: form.steam_library_enabled,
         steam_auto_abandon_days: Number.parseInt(String(form.steam_auto_abandon_days ?? ''), 10),
+        igdb_client_id: form.igdb_client_id,
         itad_enabled: form.itad_enabled,
         itad_country: form.itad_country,
       }
@@ -438,6 +441,7 @@ function IntegrationsSection() {
       if (form.kavita_api_key) payload.kavita_api_key = form.kavita_api_key
       if (form.itad_api_key)   payload.itad_api_key   = form.itad_api_key
       if (form.steam_api_key)  payload.steam_api_key  = form.steam_api_key
+      if (form.igdb_client_secret) payload.igdb_client_secret = form.igdb_client_secret
       if (form.steam_login_secure) payload.steam_login_secure = form.steam_login_secure
       if (form.steam_session_id) payload.steam_session_id = form.steam_session_id
       if (form.steam_cookies_clear) payload.steam_cookies_clear = true
@@ -576,6 +580,23 @@ function IntegrationsSection() {
         : { ok: true, text: `Biblioteca lida: ${r.owned} jogos · ${r.created} novos · ${r.adopted} associados · ${r.updated} atualizados.` })
     },
     onError: (e: unknown) => setSteamNotice({ ok: false, text: (e as Error).message || 'Falha ao ler a biblioteca.' }),
+  })
+  const [igdbNotice, setIgdbNotice] = useState<{ ok: boolean; text: string } | null>(null)
+  const igdbTest = useMutation({
+    mutationFn: api.integrations.igdbTest,
+    onSuccess: r => setIgdbNotice(r.ok
+      ? { ok: true, text: r.found ? `IGDB OK — The Witcher 3: ~${Math.round((r.main ?? 0) / 3600)}h de história.` : 'Credenciais OK.' }
+      : { ok: false, text: r.error || 'Falha no teste.' }),
+    onError: (e: unknown) => setIgdbNotice({ ok: false, text: (e as Error).message || 'Falha no teste.' }),
+  })
+  const igdbSync = useMutation({
+    mutationFn: api.integrations.igdbSync,
+    onSuccess: r => {
+      qc.invalidateQueries({ queryKey: ['integrations'] })
+      qc.invalidateQueries({ queryKey: ['media'] })
+      setIgdbNotice(r.errors.length ? { ok: false, text: r.errors[0] } : { ok: true, text: `${r.checked} jogo(s) consultados, ${r.found} com tempo para zerar.` })
+    },
+    onError: (e: unknown) => setIgdbNotice({ ok: false, text: (e as Error).message || 'Falha ao buscar.' }),
   })
   const steamDiagnose = useMutation({
     mutationFn: api.integrations.steamDiagnose,
@@ -1120,6 +1141,56 @@ function IntegrationsSection() {
         ) : (
           <p className="text-[11px] text-muted mt-2">Ainda não sincronizado. O teste usa a config salva — salve antes de testar.</p>
         )}
+      </div>
+
+      {/* ── IGDB (tempo para zerar) ── */}
+      <div className="bg-surface border border-border rounded-xl p-5 mb-4">
+        <div className="flex items-center gap-2 mb-4">
+          <span style={{ fontSize: 18 }}>⏱️</span>
+          <h3 className="font-medium text-primary text-sm">IGDB <span className="text-muted font-normal">tempo para zerar</span></h3>
+          <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${status?.igdb.configured ? 'bg-games-bg text-games' : 'bg-card text-muted'}`}>
+            {status?.igdb.configured ? 'Conectado' : 'Não conectado'}
+          </span>
+        </div>
+        <p className="text-xs text-muted mb-4">
+          Mostra quanto tempo leva para zerar cada jogo (história, com extras e 100%) na página do jogo e soma o Backlog.
+          Usa um app gratuito da Twitch: em dev.twitch.tv/console crie uma aplicação (URL de redirecionamento: <span className="text-secondary">localhost</span>,
+          tipo <span className="text-secondary">Confidencial</span>) e copie o Client ID e um Client Secret.
+        </p>
+        {igdbNotice && (
+          <p role="status" className={`text-xs mb-3 ${igdbNotice.ok ? 'text-games' : 'text-movies'}`}>{igdbNotice.ok ? '✓ ' : '⚠ '}{igdbNotice.text}</p>
+        )}
+        <div className="space-y-3">
+          <div>
+            <label htmlFor="igdb-client-id" className="text-xs text-secondary mb-1 block">Client ID</label>
+            <input id="igdb-client-id" className={inputCls + ' font-mono'} autoComplete="off" spellCheck={false}
+              value={String(form.igdb_client_id ?? '')} onChange={e => set('igdb_client_id')(e.target.value)} />
+          </div>
+          <div>
+            <label htmlFor="igdb-client-secret" className="text-xs text-secondary mb-1 block">Client Secret</label>
+            <input id="igdb-client-secret" className={inputCls + ' font-mono'} type="password" autoComplete="off" spellCheck={false}
+              placeholder={status?.igdb.secret_set ? status.igdb.secret_masked : 'gerado em dev.twitch.tv'}
+              value={String(form.igdb_client_secret ?? '')} onChange={e => set('igdb_client_secret')(e.target.value)} />
+            <a href="https://dev.twitch.tv/console/apps" target="_blank" rel="noopener noreferrer"
+               className="text-[11px] text-accent hover:underline">Criar o app na Twitch →</a>
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2 mt-4">
+          <button type="button" onClick={() => igdbTest.mutate()} disabled={igdbTest.isPending || !status?.igdb.configured}
+            className="text-xs px-3 py-2 bg-card border border-border rounded-lg text-primary hover:border-accent transition-colors disabled:opacity-50">
+            {igdbTest.isPending ? 'Testando…' : '⚡ Testar conexão'}
+          </button>
+          <button type="button" onClick={() => igdbSync.mutate()} disabled={igdbSync.isPending || !status?.igdb.configured}
+            className="text-xs px-3 py-2 bg-card border border-border rounded-lg text-primary hover:border-accent transition-colors disabled:opacity-50">
+            {igdbSync.isPending ? 'Buscando…' : '⏱️ Buscar tempos agora'}
+          </button>
+        </div>
+        <p className="text-[11px] text-muted mt-2">
+          {status?.igdb.last_sync
+            ? `Última busca: ${status.igdb.last_sync.checked} jogo(s), ${status.igdb.last_sync.found} com tempo. `
+            : ''}
+          Os tempos também são buscados depois de cada leitura da biblioteca da Steam. O teste usa a config salva — salve antes de testar.
+        </p>
       </div>
 
       {/* ── IsThereAnyDeal (preços do backlog) ── */}

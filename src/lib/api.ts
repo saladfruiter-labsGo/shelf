@@ -174,6 +174,8 @@ export const api = {
   games: {
     steam: (id: number): Promise<{ available: boolean; page: SteamStorePage | null; filled?: boolean }> =>
       request(`/games/${id}/steam`),
+    timeToBeat: (id: number): Promise<{ configured: boolean; main: number | null; extra: number | null; complete: number | null }> =>
+      request(`/games/${id}/time-to-beat`),
     achievements: (id: number): Promise<{ total: number; unlocked: number; achievements: GameAchievement[] }> =>
       request(`/games/${id}/achievements`),
   },
@@ -222,6 +224,10 @@ export const api = {
       request('/integrations/steam/resolve', { method: 'POST', body: JSON.stringify({ input }) }),
     steamLibrarySync: (): Promise<SteamLibraryResult> =>
       request('/integrations/steam/library/sync', { method: 'POST' }),
+    igdbTest: (): Promise<{ ok: boolean; found?: boolean; main?: number | null; error?: string }> =>
+      request('/integrations/igdb/test', { method: 'POST' }),
+    igdbSync: (): Promise<{ checked: number; found: number; errors: string[] }> =>
+      request('/integrations/igdb/sync', { method: 'POST' }),
     steamDiagnose: (): Promise<SteamDiagnostic> =>
       request('/integrations/steam/diagnostic', { method: 'POST' }),
     steamDiagnostic: (): Promise<SteamDiagnostic | null> =>

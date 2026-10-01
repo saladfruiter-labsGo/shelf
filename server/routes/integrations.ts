@@ -7,6 +7,7 @@ import * as steamClient from '../steam/client.js'
 import { lastSync as steamLastSync, syncRunning as steamSyncRunning } from '../steam/sync.js'
 import { lastLibrarySync as steamLibraryLastSync } from '../steam/library.js'
 import { autoAbandonDays, lastAchievementsSync } from '../steam/achievements.js'
+import { igdbConfigured, lastTimeToBeatSync, syncTimeToBeat, timeToBeatForSteamApp } from '../igdb.js'
 import { cfg, setCfg } from '../integrations/config.js'
 import type { NowPlaying } from '../integrations/now-playing.js'
 import kavitaIntegrationRoutes, { pollKavita, resetKavitaAuth } from './integrations/kavita.js'
@@ -28,6 +29,22 @@ app.route('/', plexLiveIntegrationRoutes)
 app.route('/', plexWebhookIntegrationRoutes)
 app.route('/', priceIntegrationRoutes)
 app.route('/', steamIntegrationRoutes)
+
+// IGDB: testa as credenciais com um jogo conhecido (The Witcher 3, AppID 292030).
+app.post('/igdb/test', async (c) => {
+  if (!igdbConfigured()) return c.json({ ok: false, error: 'Informe o Client ID e o Client Secret da Twitch e salve.' }, 400)
+  try {
+    const times = await timeToBeatForSteamApp(292030)
+    return c.json({ ok: true, found: !!times.igdbId, main: times.main })
+  } catch (e) {
+    return c.json({ ok: false, error: (e as Error).message }, 400)
+  }
+})
+
+app.post('/igdb/sync', async (c) => {
+  if (!igdbConfigured()) return c.json({ error: 'Informe o Client ID e o Client Secret da Twitch e salve.' }, 400)
+  return c.json(await syncTimeToBeat())
+})
 
 /* ─────────────────────────────────────── Loops ────────────────────────────────────── */
 
@@ -147,6 +164,13 @@ app.get('/', (c) => {
       last_sync:      syncState().last_run?.at ?? null,
       running:        syncState().running,
     },
+    igdb: {
+      configured:     igdbConfigured(),
+      client_id:      cfg('IGDB_CLIENT_ID'),
+      secret_set:     !!cfg('IGDB_CLIENT_SECRET'),
+      secret_masked:  mask(cfg('IGDB_CLIENT_SECRET')),
+      last_sync:      lastTimeToBeatSync(),
+    },
   })
 })
 
@@ -195,6 +219,14 @@ app.patch('/', async (c) => {
   const kavitaKey = str(b.kavita_api_key)
   if (kavitaKey !== undefined && kavitaKey !== '') setCfg('KAVITA_API_KEY', kavitaKey)
   if (b.kavita_api_key_clear === true) setCfg('KAVITA_API_KEY', '')
+  const igdbId = str(b.igdb_client_id)
+  if (igdbId !== undefined) {
+    if (igdbId !== cfg('IGDB_CLIENT_ID')) setCfg('IGDB_TOKEN', '')
+    setCfg('IGDB_CLIENT_ID', igdbId.trim())
+  }
+  const igdbSecret = str(b.igdb_client_secret)
+  if (igdbSecret !== undefined && igdbSecret !== '') { setCfg('IGDB_CLIENT_SECRET', igdbSecret.trim()); setCfg('IGDB_TOKEN', '') }
+  if (b.igdb_client_secret_clear === true) { setCfg('IGDB_CLIENT_SECRET', ''); setCfg('IGDB_TOKEN', '') }
   const itadKey = str(b.itad_api_key)
   if (itadKey !== undefined && itadKey !== '') setCfg('ITAD_API_KEY', itadKey)
   if (b.itad_api_key_clear === true) setCfg('ITAD_API_KEY', '')

@@ -24,6 +24,7 @@ import { startPriceSync, stopPriceSync } from './prices/sync.js'
 import { startSteamSync, stopSteamSync } from './steam/sync.js'
 import { startSteamLibrarySync, stopSteamLibrarySync } from './steam/library.js'
 import { stopSteamAchievements } from './steam/achievements.js'
+import { stopTimeToBeatSync } from './igdb.js'
 import { limitedApiBody, noStoreDynamicApi, sameOriginApi, shelfSecurityHeaders } from './security.js'
 import { startBackupScheduler, stopBackupScheduler } from './backup.js'
 import { db } from './db.js'
@@ -113,6 +114,7 @@ function requestShutdown(reason: string, exitCode: number): void {
       stopSteamSync,
       stopSteamLibrarySync,
       stopSteamAchievements,
+      stopTimeToBeatSync,
       stopSteamDiagnostic,
       stopBackupScheduler,
       stopActivityRetention,
