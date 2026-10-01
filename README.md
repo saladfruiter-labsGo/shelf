@@ -17,7 +17,7 @@ Um app de biblioteca pessoal para rastrear **filmes, séries, games e livros** e
 - **Wrap** — relatório anual ou mensal gerado como imagem (canvas 1080×1920, formato de story) com suas estatísticas do período: totais por tipo, nota média, top itens e linha do tempo de atividade.
 - **Configurações** — preferências do app (tema). As chaves de API e os serviços conectados moram em **Integrações**.
 - **Proteção e portabilidade** — cria snapshots integrais e verificados do SQLite, com retenção automática, e exporta biblioteca, backlog ou tudo em **JSON v2** (itens, diário, progresso pendente, séries, listas/tierlists, atividade musical e preços, sem credenciais) ou **CSV**. Importa exports v1/v2 do Shelf, o **Letterboxd** (`diary`, `ratings`, `watched`, `watchlist`) e a **wishlist da Steam**. Reimportar não duplica nada, e a `watchlist` nunca rebaixa um filme já assistido de volta ao backlog.
-- **Steam (wishlist bidirecional)** — mantém a wishlist da Steam e a Wishlist de jogos do Shelf em sincronia nos dois sentidos, a cada 6 horas. **A Steam mexe só na Wishlist** — jogo consumido é assunto do Playnite, e jogo do Backlog (que você já tem) nunca sobe para a wishlist da Steam. Detalhes em [Steam: o que sincroniza e o que exige cookie](#steam-o-que-sincroniza-e-o-que-exige-cookie).
+- **Steam (wishlist bidirecional)** — mantém a wishlist da Steam e a Wishlist de jogos do Shelf em sincronia nos dois sentidos, a cada 6 horas. **A Steam mexe só na Wishlist** — jogo consumido é assunto do Playnite, e jogo do Backlog (que você já tem) nunca sobe para a wishlist da Steam. A conta é conectada pelo botão **Entrar com a Steam** em Integrações, e o **diagnóstico** mostra quanto da biblioteca e do "zerado" (pelas conquistas) sairia automático. Detalhes em [Steam: o que sincroniza e o que exige cookie](#steam-o-que-sincroniza-e-o-que-exige-cookie).
 - **Integrações** — as chaves de API (TMDB, RAWG, Google Books) ficam salvas no próprio banco, sem depender só do ambiente. Monitoramento automático via **Plex** (webhook: registra o que foi assistido até o fim e a nota dada), **Kavita** (progresso de leitura) e **YouTube Music via Last.fm** (registra músicas ouvidas, com horas e gêneros). Uma barra "assistindo agora" sob a navbar mostra a reprodução do Plex em tempo real, com progresso. Notificações via **Telegram** avisam sobre atividades da biblioteca (adicionado, concluído, abandonado, nota) — apenas filmes, séries, games e livros.
 - **Preços da Wishlist** — jogos de PC na Wishlist têm o preço acompanhado no [IsThereAnyDeal](https://isthereanydeal.com/) na região configurada (padrão `BR`). A **home abre com as promoções do backlog**; o card do backlog mostra a melhor oferta, o desconto e o selo de menor histórico; e a página do jogo traz os indicadores (melhor preço, menor histórico, menor do mês, menor em 30 dias), gráfico do menor preço por dia — com tabela equivalente para leitores de tela —, a **lista completa de lojas** (preço atual, menor histórico daquela loja e há quanto tempo cada um foi visto, inclusive de lojas que já não ofertam) e correspondência manual quando a edição é ambígua. Sincroniza a cada 6 horas.
 - **Armazenamento local** — dados em SQLite (WAL), auto-criado em `data/shelf.db`.
@@ -46,7 +46,7 @@ shelf/
 │  ├─ index.ts             # app, rotas, serve do build estático
 │  ├─ db.ts                # conexão + schema SQLite
 │  ├─ prices/              # preços do backlog (ITAD): provider, matcher, repository, stats, service, sync
-│  ├─ steam/               # conector Steam: client (Web API + loja), plan (diff bidirecional), sync
+│  ├─ steam/               # conector Steam: client (Web API + loja), openid (login), finale (conquistas de final), diagnostic, plan, sync
 │  ├─ transfer/            # importação/exportação: export, importer, letterboxd
 │  └─ routes/              # search, media, details, wrap, settings, lists, prices, transfer
 ├─ Dockerfile
@@ -98,7 +98,7 @@ O servidor, em produção, também serve o build estático do frontend (ver `ser
 | `ITAD_COUNTRY` | Região das ofertas, ISO de 2 letras (default `BR`) |
 | `STEAM_ENABLED` | `1` para ativar o conector da Steam |
 | `STEAM_ID` | SteamID64 do perfil (17 dígitos) |
-| `STEAM_API_KEY` | Chave da Steam Web API ([steamcommunity.com/dev/apikey](https://steamcommunity.com/dev/apikey)) — opcional, só para não enviar à wishlist jogo já comprado |
+| `STEAM_API_KEY` | Chave da Steam Web API ([steamcommunity.com/dev/apikey](https://steamcommunity.com/dev/apikey)) — necessária para biblioteca, conquistas e diagnóstico; na wishlist evita enviar jogo já comprado |
 | `STEAM_LOGIN_SECURE` | Cookie da loja — habilita escrever na wishlist (Shelf → Steam) |
 | `STEAM_SESSION_ID` | Cookie `sessionid` da loja, par do anterior |
 | `STEAM_SYNC_MODE` | `both` (default), `pull` (só Steam → Shelf) ou `push` (só Shelf → Steam) |
@@ -154,6 +154,8 @@ O proxy de capas aceita apenas HTTPS dos provedores conhecidos. Na primeira soli
 | `POST /api/integrations/steam/test` | Testa o acesso à wishlist/biblioteca e informa se a escrita está liberada |
 | `POST /api/integrations/steam/sync` | Sincroniza o backlog com a wishlist da Steam sob demanda |
 | `POST /api/integrations/steam/resolve` | Converte link de perfil ou vanity URL em SteamID64 |
+| `GET /auth/steam/login` | Começa o "Entrar com a Steam" (OpenID); a volta em `/auth/steam/callback` grava o SteamID |
+| `POST/GET /api/integrations/steam/diagnostic` | Inicia e acompanha o diagnóstico só de leitura da conta Steam |
 | `POST /api/integrations/itad/test` | Testa a chave do IsThereAnyDeal na região configurada |
 | `POST /api/integrations/itad/sync` | Sincroniza os preços do backlog sob demanda |
 | `POST /api/integrations/plex/webhook?token=` | Recebe webhooks do Plex (`media.scrobble`, `media.rate`) |
@@ -186,6 +188,8 @@ O proxy de capas aceita apenas HTTPS dos provedores conhecidos. Na primeira soli
 
 - **Escopo:** wishlist da Steam ↔ jogos da Wishlist do Shelf (`status = 'wishlist'`, exceto `game_status = 'backlog'`), **e nada além disso**. O conector nunca cria, promove ou rebaixa item da biblioteca: um jogo que já existe aqui só adota o AppID, mantendo o `game_status` que o Playnite definiu. A biblioteca comprada na Steam não é importada — quem registra o que foi jogado é o Playnite.
 - **Chave de casamento:** o **AppID**, guardado em `media_items.steam_appid`. Ele é descoberto pelas lojas da RAWG e, em último caso, pela busca da loja — e só quando o título bate **exatamente** depois de normalizado. Na dúvida o jogo fica listado como "sem AppID" e não sobe, para não adicionar a edição errada na conta.
+- **Conectar a conta:** o botão **Entrar com a Steam** leva ao login no site da Steam (OpenID 2.0) e volta para o Shelf com o SteamID assinado; o servidor confere a assinatura com a Steam e nunca vê a senha. Só o navegador precisa alcançar o Shelf, então funciona na LAN/Tailscale. As rotas ficam em `/auth/steam/*`, fora da proteção same-origin da `/api`, e são protegidas por um `state` de uso único (10 min) e pelo `return_to` exato.
+- **Diagnóstico:** só leitura. Mede jogos da conta, jogados e horas; quantos jogos do Shelf casam com a Steam e quais lojas ficam de fora; e, pelas conquistas, em quantos jogos o "zerado" sairia automático (conquista de final reconhecida), pediria confirmação ou ficaria manual. Não altera nenhum item.
 - **Ler não precisa de chave:** trazer a wishlist só exige o SteamID com o perfil público. A Web API key é opcional e serve a um único propósito: consultar os jogos que você já comprou, para não tentar enviá-los à wishlist.
 - **Escrever exige os cookies da loja:** a Steam não tem endpoint público para alterar a wishlist — só o AJAX da loja, autenticado por `steamLoginSecure` + `sessionid`. Sem eles a sincronização segue funcionando de mão única, e o relatório diz quantos itens ficaram esperando. Os cookies ficam apenas no banco do seu servidor e expiram quando você sai da conta na Steam.
 - **Remoções são opcionais e conservadoras:** só se propagam para itens que já estavam nos dois lados numa sincronização anterior, e só com a opção ligada. Como a Steam responde igual para wishlist vazia e perfil privado, uma wishlist que volta vazia tendo histórico **desliga as remoções daquela rodada** e reporta o aviso, em vez de esvaziar o backlog.

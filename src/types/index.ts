@@ -322,6 +322,40 @@ export interface SteamSyncResult {
   errors:        string[]
 }
 
+/** Diagnóstico só de leitura da conta Steam (ver server/steam/diagnostic.ts). */
+export interface SteamDiagnostic {
+  started_at:  string
+  finished_at: string | null
+  running:     boolean
+  progress:    { done: number; total: number }
+  owned_total:    number
+  owned_played:   number
+  playtime_hours: number
+  shelf: {
+    games:            number
+    matched_by_appid: number
+    matched_by_title: number
+    outside_steam:    { library: string; count: number }[]
+  }
+  achievements: {
+    checked:         number
+    no_achievements: number
+    auto:            number
+    confirm:         number
+    manual:          number
+    games_with_hidden_without_description: number
+    would_be_zerado:    number
+    would_be_platinado: number
+    private:            boolean
+  }
+  samples: {
+    auto:    { title: string; achievements: string[]; unlocked: boolean }[]
+    confirm: { title: string; candidates: string[]; hidden: number }[]
+    manual:  string[]
+  }
+  errors: string[]
+}
+
 /* ─── Importação / Exportação ─── */
 
 export type ExportScope = 'all' | 'library' | 'backlog'

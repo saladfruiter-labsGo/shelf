@@ -90,6 +90,8 @@ export interface SteamOwnedGame {
   playtime_minutes: number
   last_played_at: string | null
   cover_url: string
+  /** A Steam tem estatísticas/conquistas para este app. */
+  has_stats: boolean
 }
 
 /** Biblioteca do usuário (jogos comprados). Exige API key + perfil público. */
@@ -114,7 +116,77 @@ export async function fetchOwnedGames(): Promise<SteamOwnedGame[]> {
     playtime_minutes: Number(g.playtime_forever ?? 0),
     last_played_at: g.rtime_last_played ? new Date(g.rtime_last_played * 1000).toISOString() : null,
     cover_url: headerImage(Number(g.appid)),
+    has_stats: Boolean(g.has_community_visible_stats),
   })).filter(g => g.appid > 0 && g.name)
+}
+
+/* ──────────────────────────────── Conquistas ────────────────────────────── */
+
+export interface SteamAchievementSchema {
+  apiName: string
+  name: string
+  description: string | null
+  hidden: boolean
+}
+
+/** Lista de conquistas do jogo (nome, descrição, oculta). Exige API key. */
+export async function fetchAchievementSchema(appid: number, language = 'english'): Promise<SteamAchievementSchema[]> {
+  const key = cfg('STEAM_API_KEY')
+  if (!key) throw new SteamError('API key da Steam não configurada.')
+  const qs = new URLSearchParams({ key, appid: String(appid), l: language })
+  try {
+    const data = await getJson<{ game?: { availableGameStats?: { achievements?: any[] } } }>(
+      `https://api.steampowered.com/ISteamUserStats/GetSchemaForGame/v2/?${qs}`,
+    )
+    return (data.game?.availableGameStats?.achievements ?? []).map(a => ({
+      apiName: String(a.name),
+      name: String(a.displayName ?? a.name ?? ''),
+      // Conquista oculta costuma vir sem descrição.
+      description: typeof a.description === 'string' && a.description.trim() ? a.description.trim() : null,
+      hidden: Number(a.hidden) === 1,
+    }))
+  } catch (e) {
+    // Jogo sem estatísticas responde 400/403 em vez de uma lista vazia.
+    if (e instanceof SteamError && (e.status === 400 || e.status === 403)) return []
+    throw e
+  }
+}
+
+export interface SteamPlayerAchievement {
+  apiName: string
+  achieved: boolean
+  unlockedAt: string | null
+}
+
+export type PlayerAchievementsResult =
+  | { ok: true; achievements: SteamPlayerAchievement[] }
+  | { ok: false; reason: 'no_stats' | 'private' }
+
+/** Conquistas do usuário num jogo. Perfil privado devolve `private`. */
+export async function fetchPlayerAchievements(appid: number): Promise<PlayerAchievementsResult> {
+  const key = cfg('STEAM_API_KEY')
+  const steamid = cfg('STEAM_ID')
+  if (!key) throw new SteamError('API key da Steam não configurada.')
+  if (!steamid) throw new SteamError('SteamID não configurado.')
+  const qs = new URLSearchParams({ key, steamid, appid: String(appid) })
+  try {
+    const data = await getJson<{ playerstats?: { success?: boolean; achievements?: any[] } }>(
+      `https://api.steampowered.com/ISteamUserStats/GetPlayerAchievements/v1/?${qs}`,
+    )
+    if (!data.playerstats?.success) return { ok: false, reason: 'no_stats' }
+    return {
+      ok: true,
+      achievements: (data.playerstats.achievements ?? []).map(a => ({
+        apiName: String(a.apiname),
+        achieved: Number(a.achieved) === 1,
+        unlockedAt: Number(a.unlocktime) > 0 ? new Date(Number(a.unlocktime) * 1000).toISOString() : null,
+      })),
+    }
+  } catch (e) {
+    if (e instanceof SteamError && e.status === 403) return { ok: false, reason: 'private' }
+    if (e instanceof SteamError && e.status === 400) return { ok: false, reason: 'no_stats' }
+    throw e
+  }
 }
 
 export interface SteamWishlistEntry {

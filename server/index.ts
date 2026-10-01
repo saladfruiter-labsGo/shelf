@@ -13,6 +13,8 @@ import seriesRoutes   from './routes/series.js'
 import diaryRoutes    from './routes/diary.js'
 import imgRoutes      from './routes/img.js'
 import coversRoutes   from './routes/covers.js'
+import steamAuthRoutes from './routes/steam-auth.js'
+import { stopSteamDiagnostic } from './steam/diagnostic.js'
 import integrationsRoutes, { startIntegrationPolling, stopIntegrationPolling } from './routes/integrations.js'
 import pricesRoutes    from './routes/prices.js'
 import transferRoutes  from './routes/transfer.js'
@@ -48,6 +50,9 @@ app.route('/api/covers',   coversRoutes)
 app.route('/api/integrations', integrationsRoutes)
 app.route('/api/prices',  pricesRoutes)
 app.route('/api/transfer', transferRoutes)
+
+// "Entrar com a Steam": fora de /api porque a volta é navegação vinda da Steam.
+app.route('/auth/steam', steamAuthRoutes)
 
 app.get('/api/health', (c) => {
   if (shuttingDown) return c.json({ ok: false, reason: 'shutting_down' }, 503)
@@ -97,6 +102,7 @@ function requestShutdown(reason: string, exitCode: number): void {
       stopIntegrationPolling,
       stopPriceSync,
       stopSteamSync,
+      stopSteamDiagnostic,
       stopBackupScheduler,
       stopActivityRetention,
       stopDiaryProgressJob,

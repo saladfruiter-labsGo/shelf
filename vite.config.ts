@@ -13,6 +13,10 @@ export default defineConfig({
         target: 'http://localhost:3000',
         changeOrigin: true,
       },
+      // Sem changeOrigin: o login da Steam precisa voltar para a origem do navegador.
+      '/auth': {
+        target: 'http://localhost:3000',
+      },
     },
   },
 })
