@@ -4,7 +4,7 @@ import type {
   SearchResult, WrapData, SeriesView, SeriesPreview, UnratedSeason, SeasonRatingResult, DiaryEntry, TmdbMediaPreview, CoverChoices,
   IntegrationStatus, NowPlaying, ActivityEvent, ActivityMediaType, MusicStats, TrendingItem,
   GamePriceBacklog, GamePriceDetails, GamePriceRange, GamePriceCandidate,
-  SteamSyncResult, SteamDiagnostic, ExportScope, ExportSummary, ImportReport, BackupStatus, DatabaseBackupInfo,
+  SteamSyncResult, SteamDiagnostic, ProfileView, ExportScope, ExportSummary, ImportReport, BackupStatus, DatabaseBackupInfo,
   LetterboxdKind, LetterboxdPlan, LetterboxdPreview, LetterboxdApplyResult,
   PlexFilenameSyncResult, SearchApiKeySettings,
 } from '../types'
@@ -171,6 +171,11 @@ export const api = {
       request('/settings', { method: 'PATCH', body: JSON.stringify(data) }),
   },
 
+  profile: {
+    get: (): Promise<ProfileView> => request('/profile'),
+    update: (data: { display_name?: string; avatar_url?: string | null }): Promise<ProfileView> =>
+      request('/profile', { method: 'PATCH', body: JSON.stringify(data) }),
+  },
   integrations: {
     status:     (): Promise<IntegrationStatus> => request('/integrations'),
     plexSyncFiles: (): Promise<PlexFilenameSyncResult> =>

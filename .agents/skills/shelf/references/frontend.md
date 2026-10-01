@@ -28,6 +28,7 @@ Após o code splitting, o JS inicial de referência ficou em aproximadamente 261
 | `/media/:id` | detalhe, status, nota, histórico e metadados |
 | `/lists`, `/lists/:id` | listas, ranking e tierlist |
 | `/wrap` | estatísticas mensal/anual e story |
+| `/profile` | perfil: números gerais, games, prateleira por ano, favoritos, notas e atividade (substitui o antigo painel lateral) |
 | `/settings` | preferências do app |
 | `/integrations` | chaves e serviços conectados |
 | `/import-export` | snapshots, export e importadores |

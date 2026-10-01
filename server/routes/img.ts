@@ -18,6 +18,10 @@ const DEFAULT_HOSTS = new Set([
   'shared.cloudflare.steamstatic.com',
   'cdn.akamai.steamstatic.com',
   'shared.akamai.steamstatic.com',
+  // Avatares do perfil Steam (página de Perfil).
+  'avatars.steamstatic.com',
+  'avatars.akamai.steamstatic.com',
+  'avatars.cloudflare.steamstatic.com',
   'lastfm.freetls.fastly.net',
 ])
 

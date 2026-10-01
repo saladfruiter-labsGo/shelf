@@ -98,7 +98,9 @@ test('adota banco sem versão, preserva dados e cria snapshot antes da migration
     { version: 7, name: 'episode-diary-entries' },
     { version: 8, name: 'custom-covers' },
     { version: 9, name: 'game-backlog-paused-and-sources' },
+    { version: 10, name: 'profile' },
   ])
+  assert.deepEqual(db.prepare('SELECT id, display_name FROM profile').all(), [{ id: 1, display_name: 'Você' }])
 
   const item = db.prepare("SELECT title, status FROM media_items WHERE external_id = 'legacy-1'").get()
   assert.deepEqual(item, { title: 'Filme preservado', status: 'completed' })

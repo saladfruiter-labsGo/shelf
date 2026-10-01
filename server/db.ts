@@ -607,6 +607,23 @@ db.exec(`
        WHERE type = 'game' AND game_status = 'nunca_jogado' AND game_status_source = 'playnite'
     `)
   },
+}, {
+  version: 10,
+  name: 'profile',
+  up: () => {
+    // Uma linha só enquanto o Shelf for de um usuário; no multiusuário (MU-01)
+    // vira a tabela `users`, e a página de Perfil passa a ler por usuário.
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS profile (
+        id           INTEGER PRIMARY KEY CHECK (id = 1),
+        display_name TEXT    NOT NULL DEFAULT 'Você',
+        avatar_url   TEXT,
+        created_at   TEXT    NOT NULL DEFAULT (datetime('now')),
+        updated_at   TEXT    NOT NULL DEFAULT (datetime('now'))
+      );
+      INSERT OR IGNORE INTO profile (id) VALUES (1);
+    `)
+  },
 }]
 
 if (databaseExisted && (hasPendingMigrations(db, migrations) || schemaNeedsUpgrade())) {

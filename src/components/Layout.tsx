@@ -1,13 +1,10 @@
 import { Suspense, useState, useCallback, useEffect, useRef } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
 import { useHotkey } from '../hooks/useHotkey'
 import { useTheme } from '../hooks/useTheme'
 import { SearchModal } from './SearchModal'
 import { NowPlayingBar } from './NowPlayingBar'
-import { api } from '../lib/api'
 import { CATEGORIES } from '../lib/categories'
-import type { MediaItem } from '../types'
 
 const NAV = [
   { to: '/',         label: 'Home',        end: true  },
@@ -147,117 +144,10 @@ const BOTTOM_NAV = [
   { to: '/wrap',     label: 'Wrap',   end: false, Icon: WrapIcon },
 ]
 
-/* ─── Profile Overlay (year-by-year stats) ─── */
-function ProfileOverlay({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const overlayRef = useRef<HTMLDivElement>(null)
-
-  const { data: allItems = [] } = useQuery({
-    queryKey: ['media-library'],
-    // A coleção inteira: os contadores por ano precisam de tudo, e um limite
-    // chutado faria o Perfil mentir depois de um import grande.
-    queryFn: () => api.media.listAll({ library: true }),
-    enabled: open,
-  })
-
-  useEffect(() => {
-    if (!open) return
-    const handler = (e: MouseEvent) => {
-      if (overlayRef.current && !overlayRef.current.contains(e.target as Node)) onClose()
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [open, onClose])
-
-  const currentYear = new Date().getFullYear()
-  const years = Array.from({ length: currentYear - 2021 }, (_, i) => currentYear - i)
-
-  // A prateleira é a biblioteca: a wishlist já fica de fora no servidor.
-  const shelfItems = allItems
-
-  const statsByYear = years.map(year => {
-    const items = shelfItems.filter(item => new Date(item.added_at).getFullYear() === year)
-    const done  = items.filter(i => i.status === 'completed').length
-    const prog  = items.filter(i => i.status === 'in_progress').length
-    return { year, total: items.length, done, prog }
-  })
-
-  return (
-    <div
-      style={{
-        position: 'fixed', inset: 0, zIndex: 200,
-        background: 'rgba(0,0,0,0.5)',
-        display: open ? 'flex' : 'none',
-        alignItems: 'flex-start',
-        justifyContent: 'flex-end',
-      }}
-    >
-      <div
-        ref={overlayRef}
-        style={{
-          width: 360,
-          height: '100vh',
-          background: 'var(--surface)',
-          borderLeft: '1px solid var(--border-strong)',
-          padding: '32px 32px 48px',
-          overflowY: 'auto',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 0,
-        }}
-        className="animate-scale-in"
-      >
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 40 }}>
-          <div>
-            <p style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '2px', color: 'var(--text-muted)', marginBottom: 4 }}>Perfil</p>
-            <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: 24, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.5px' }}>Sua prateleira</p>
-          </div>
-          <button
-            onClick={onClose}
-            style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--card)', border: '1px solid var(--border-strong)', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, lineHeight: 1 }}
-          >×</button>
-        </div>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-          {/* header row */}
-          <div style={{ display: 'grid', gridTemplateColumns: '60px 1fr 60px 60px', gap: 8, paddingBottom: 12, borderBottom: '1px solid var(--border)', marginBottom: 4 }}>
-            <span style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '1.5px', color: 'var(--text-muted)' }}>Ano</span>
-            <span style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '1.5px', color: 'var(--text-muted)' }}>Total</span>
-            <span style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '1.5px', color: 'var(--text-muted)' }}>✓</span>
-            <span style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '1.5px', color: 'var(--text-muted)' }}>▶</span>
-          </div>
-          {statsByYear.map(s => (
-            <div
-              key={s.year}
-              style={{
-                display: 'grid', gridTemplateColumns: '60px 1fr 60px 60px',
-                gap: 8, padding: '16px 0',
-                borderBottom: '1px solid var(--border)',
-                opacity: s.total === 0 ? 0.35 : 1,
-              }}
-            >
-              <span style={{ fontFamily: 'Space Grotesk, monospace', fontSize: 13, fontWeight: 500, color: s.year === currentYear ? 'var(--accent)' : 'var(--text-muted)' }}>{s.year}</span>
-              <span style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: 22, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{s.total}</span>
-              <span style={{ fontFamily: 'Space Grotesk, monospace', fontSize: 15, color: 'var(--accent)', fontVariantNumeric: 'tabular-nums' }}>{s.done}</span>
-              <span style={{ fontFamily: 'Space Grotesk, monospace', fontSize: 15, color: 'var(--v)', fontVariantNumeric: 'tabular-nums' }}>{s.prog}</span>
-            </div>
-          ))}
-        </div>
-
-        <div style={{ marginTop: 40, padding: '16px', background: 'var(--card)', borderRadius: 8, border: '1px solid var(--border)' }}>
-          <p style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>
-            Total na biblioteca: <strong style={{ color: 'var(--text-primary)' }}>{shelfItems.length} itens</strong>
-          </p>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 /* ─── Main Layout ─── */
 export function Layout() {
   const [searchOpen, setSearchOpen] = useState(false)
   const [dropOpen, setDropOpen] = useState(false)
-  const [profileOpen, setProfileOpen] = useState(false)
   const { dark, toggle } = useTheme()
   const navigate = useNavigate()
   const dropRef = useRef<HTMLDivElement>(null)
@@ -391,7 +281,7 @@ export function Layout() {
               transition: 'opacity .2s, transform .2s',
             }}>
               {[
-                { icon: '👤', label: 'Perfil', action: () => { setDropOpen(false); setProfileOpen(true) } },
+                { icon: '👤', label: 'Perfil', action: () => { setDropOpen(false); navigate('/profile') } },
                 { icon: '🔌', label: 'Integrações', action: () => { setDropOpen(false); navigate('/integrations') } },
                 { icon: '📦', label: 'Importação/Exportação', action: () => { setDropOpen(false); navigate('/import-export') } },
                 { icon: '⚙️', label: 'Configurações', action: () => { setDropOpen(false); navigate('/settings') } },
@@ -463,9 +353,6 @@ export function Layout() {
           </NavLink>
         ))}
       </nav>
-
-      {/* Profile overlay */}
-      <ProfileOverlay open={profileOpen} onClose={() => setProfileOpen(false)} />
 
       <SearchModal open={searchOpen} onClose={() => setSearchOpen(false)} />
 

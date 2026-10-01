@@ -322,6 +322,37 @@ export interface SteamSyncResult {
   errors:        string[]
 }
 
+/** Página de Perfil (ver server/profile.ts). `source` decide o selo da Steam. */
+export type ProfileDataSource = 'steam' | 'shelf'
+export interface ProfileView {
+  user: {
+    display_name:  string
+    avatar_url:    string | null
+    avatar_source: ProfileDataSource | null
+    member_since:  string
+  }
+  accounts: {
+    steam: { persona: string; avatar_url: string | null; profile_url: string; source: 'steam' } | null
+  }
+  totals: { library: number; wishlist: number; backlog: number; diary: number; rated: number }
+  shelf_by_year: { year: number; total: number; completed: number; in_progress: number }[]
+  games: {
+    year:                number
+    played_hours:        number
+    played_source:       ProfileDataSource
+    playing:             number
+    backlog:             number
+    completed_total:     number
+    platinum_total:      number
+    completed_this_year: number
+    platinum_this_year:  number
+    completed_source:    ProfileDataSource
+  }
+  favorites: { id: number; type: MediaType; title: string; cover_url: string | null; favorite: number }[]
+  recent_ratings: { id: number; media_item_id: number; type: MediaType; title: string; cover_url: string | null; rating: number; watched_at: string }[]
+  activity: { id: number; source: string; event_type: string; media_type: string; title: string; subtitle: string | null; cover_url: string | null; rating: number | null; occurred_at: string }[]
+}
+
 /** Diagnóstico só de leitura da conta Steam (ver server/steam/diagnostic.ts). */
 export interface SteamDiagnostic {
   started_at:  string
