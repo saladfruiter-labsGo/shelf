@@ -25,7 +25,8 @@ Após o code splitting, o JS inicial de referência ficou em aproximadamente 261
 | `/diary` | histórico de conclusões |
 | `/wishlist` | wishlist: o que quer comprar/consumir, com preços |
 | `/backlog` | jogos que você tem e não jogou (mesmo componente, `queue="backlog"`) |
-| `/media/:id` | detalhe, status, nota, histórico e metadados |
+| `/media/:id` | detalhe, status, nota, histórico e metadados (jogos redirecionam para `/games/:id`) |
+| `/games/:id` | página de jogo: ficha da loja da Steam (sinopse, trailer, screenshots), status com selo, nota, progresso, diário, preços (Wishlist) |
 | `/lists`, `/lists/:id` | listas, ranking e tierlist |
 | `/wrap` | estatísticas mensal/anual e story |
 | `/profile` | perfil: números gerais, games, prateleira por ano, favoritos, notas e atividade (substitui o antigo painel lateral) |

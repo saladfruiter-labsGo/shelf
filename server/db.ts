@@ -624,6 +624,20 @@ db.exec(`
       INSERT OR IGNORE INTO profile (id) VALUES (1);
     `)
   },
+}, {
+  version: 11,
+  name: 'steam-app-cache',
+  up: () => {
+    // Ficha da loja da Steam por AppID (página de jogo). Cache, não histórico:
+    // pode ser apagada a qualquer momento e é refeita na próxima visita.
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS steam_app_cache (
+        appid      INTEGER PRIMARY KEY,
+        data       TEXT    NOT NULL,
+        fetched_at INTEGER NOT NULL
+      );
+    `)
+  },
 }]
 
 if (databaseExisted && (hasPendingMigrations(db, migrations) || schemaNeedsUpgrade())) {

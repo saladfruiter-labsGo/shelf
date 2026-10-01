@@ -1,4 +1,4 @@
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, Navigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState, useRef, useEffect } from 'react'
 import { api } from '../lib/api'
@@ -7,76 +7,13 @@ import { StarRating } from '../components/StarRating'
 import { SeriesSeasons } from '../components/SeriesSeasons'
 import { DiaryEntryModal, type DiaryEntryValues } from '../components/DiaryEntryModal'
 import { ConfirmDialog } from '../components/ConfirmDialog'
-import { PricePanel } from '../components/PricePanel'
+import { AddToListDropdown } from '../components/AddToListDropdown'
 import type { MediaStatus, TmdbMediaPreview } from '../types'
-import { SourceBadge } from '../components/SourceBadge'
-import { STATUS_LABEL, GAME_STATUSES, GAME_STATUS_LABEL, gameStatusOf, formatRuntime, formatPlaytime, formatDate, fmtRating } from '../lib/utils'
+import { STATUS_LABEL, formatRuntime, formatDate, fmtRating } from '../lib/utils'
 import { imageUrl } from '../lib/images'
 import { diaryScope, diaryScopeText } from '../lib/diary'
 
 const STATUSES: MediaStatus[] = ['wishlist', 'in_progress', 'completed', 'dropped']
-
-// ─── Add to list dropdown ───────────────────────────────────────────
-function AddToListDropdown({ itemId }: { itemId: number }) {
-  const qc = useQueryClient()
-  const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
-
-  const { data: checks = [] } = useQuery({
-    queryKey: ['list-check', itemId],
-    queryFn: () => api.lists.check(itemId),
-    enabled: open,
-  })
-
-  const toggleMutation = useMutation({
-    mutationFn: ({ listId, contains }: { listId: number; contains: boolean }) =>
-      contains ? api.lists.removeItem(listId, itemId) : api.lists.addItem(listId, itemId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['list-check', itemId] }),
-  })
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [])
-
-  return (
-    <div ref={ref} className="relative">
-      <button
-        onClick={() => setOpen(o => !o)}
-        className="flex items-center gap-2 px-4 py-2 bg-surface border border-border rounded-lg text-sm text-secondary hover:border-border-strong hover:text-primary transition-colors"
-      >
-        <span>♡</span> Adicionar à lista
-        <span className="text-muted">▾</span>
-      </button>
-      {open && (
-        <div className="absolute top-full left-0 mt-1 w-56 bg-surface border border-border rounded-xl shadow-xl z-20 animate-fade-in overflow-hidden">
-          {checks.length === 0 ? (
-            <p className="text-center text-muted text-sm py-4 px-3">
-              Nenhuma lista criada.<br />
-              <a href="/lists" className="text-accent underline text-xs">Criar lista</a>
-            </p>
-          ) : (
-            checks.map(l => (
-              <button
-                key={l.id}
-                onClick={() => toggleMutation.mutate({ listId: l.id, contains: l.contains === 1 })}
-                className="w-full flex items-center gap-2 px-3 py-2.5 hover:bg-card transition-colors text-left text-sm"
-              >
-                <span className={l.contains ? 'text-accent' : 'text-muted'}>
-                  {l.contains ? '♥' : '♡'}
-                </span>
-                <span className={l.contains ? 'text-primary' : 'text-secondary'}>{l.name}</span>
-              </button>
-            ))
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
 
 function TmdbIdentificationDialog({
   open, currentTitle, tmdbId, preview, previewError, previewBusy, applyBusy,
@@ -328,6 +265,9 @@ export function MediaDetail() {
 
   if (!item) return <div className="px-6 py-8 text-muted">Item não encontrado.</div>
 
+  // Jogos têm página própria (ST-G).
+  if (item.type === 'game') return <Navigate to={`/games/${item.id}`} replace />
+
   return (
     <div className="px-6 py-8 max-w-3xl">
       <button onClick={() => navigate(-1)} className="text-muted hover:text-primary text-sm mb-6 flex items-center gap-1 transition-colors">
@@ -341,7 +281,7 @@ export function MediaDetail() {
             {item.cover_url
               ? <img src={imageUrl(item.cover_url, 640)!} alt={item.title} className="w-full h-full object-cover" />
               : <div className="w-full h-full flex items-center justify-center text-muted text-4xl">
-                  {item.type === 'movie' ? '🎬' : item.type === 'series' ? '📺' : item.type === 'game' ? '🎮' : item.type === 'music' ? '🎵' : '📚'}
+                  {item.type === 'movie' ? '🎬' : item.type === 'series' ? '📺' : item.type === 'music' ? '🎵' : '📚'}
                 </div>
             }
           </div>
@@ -365,26 +305,9 @@ export function MediaDetail() {
 
           {/* Status */}
           <div className="mb-4">
-            <p className="text-xs text-muted uppercase tracking-wide mb-2 flex items-center gap-2">
-              Status
-              {item.type === 'game' && <SourceBadge source={item.game_status_source} />}
-            </p>
+            <p className="text-xs text-muted uppercase tracking-wide mb-2">Status</p>
             <div className="flex flex-wrap gap-1.5">
-              {item.type === 'game' ? (
-                // Games têm status próprios; escolher um aqui vira status manual (sem selo)
-                GAME_STATUSES.map(s => (
-                  <button
-                    key={s}
-                    onClick={() => updateMutation.mutate({ game_status: s })}
-                    className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-                      gameStatusOf(item) === s ? 'bg-accent text-bg' : 'bg-card text-muted hover:text-primary border border-border'
-                    }`}
-                  >
-                    {GAME_STATUS_LABEL[s]}
-                  </button>
-                ))
-              ) : (
-                STATUSES.map(s => (
+              {STATUSES.map(s => (
                   <button
                     key={s}
                     onClick={() => onStatusClick(s)}
@@ -394,8 +317,7 @@ export function MediaDetail() {
                   >
                     {STATUS_LABEL[s]}
                   </button>
-                ))
-              )}
+              ))}
             </div>
           </div>
 
@@ -413,30 +335,6 @@ export function MediaDetail() {
                 {Math.round(item.progress * 100)}% lido
                 {item.pages_total ? ` · ${item.pages_read ?? 0}/${item.pages_total} páginas` : ''}
               </p>
-            </div>
-          )}
-
-          {/* Tempo de jogo + última vez jogado (games, via Steam/Playnite) */}
-          {item.type === 'game' && ((item.playtime_seconds ?? 0) > 0 || item.last_played_at) && (
-            <div className="mb-4 flex gap-8">
-              {(item.playtime_seconds ?? 0) > 0 && (
-                <div>
-                  <p className="text-xs text-muted uppercase tracking-wide mb-1 flex flex-wrap items-center gap-x-2 gap-y-1">
-                    <span className="whitespace-nowrap">Tempo de jogo</span> <SourceBadge source={item.playtime_source} />
-                  </p>
-                  <p className="font-display text-lg font-bold" style={{ color: 'var(--games)' }}>
-                    {formatPlaytime(item.playtime_seconds!)}
-                  </p>
-                </div>
-              )}
-              {item.last_played_at && (
-                <div>
-                  <p className="text-xs text-muted uppercase tracking-wide mb-1 flex flex-wrap items-center gap-x-2 gap-y-1">
-                    <span className="whitespace-nowrap">Última vez jogado</span> <SourceBadge source={item.playtime_source} />
-                  </p>
-                  <p className="font-display text-lg font-bold text-primary">{formatDate(item.last_played_at)}</p>
-                </div>
-              )}
             </div>
           )}
 
@@ -501,31 +399,13 @@ export function MediaDetail() {
         {creators && (
           <div className="mb-6">
             <p className="text-xs text-muted uppercase tracking-wide mb-1">
-              {item.type === 'movie' ? 'Direção' : item.type === 'series' ? 'Criação' : item.type === 'game' ? 'Desenvolvedor' : 'Editora'}
+              {item.type === 'movie' ? 'Direção' : item.type === 'series' ? 'Criação' : 'Editora'}
             </p>
             <p className="text-sm text-secondary">{creators}</p>
           </div>
         )}
 
-        {item.type === 'game' && item.publisher && (
-          <div className="mb-6">
-            <p className="text-xs text-muted uppercase tracking-wide mb-1">Distribuidora</p>
-            <p className="text-sm text-secondary">{item.publisher}</p>
-          </div>
-        )}
-
-        {item.type === 'game' && item.library && (
-          <div className="mb-6">
-            <p className="text-xs text-muted uppercase tracking-wide mb-1">Biblioteca</p>
-            <p className="text-sm text-secondary">{item.library}</p>
-          </div>
-        )}
       </div>
-
-      {/* Preços (só jogos da Wishlist; no Backlog você já tem o jogo) */}
-      {item.type === 'game' && item.status === 'wishlist' && gameStatusOf(item) !== 'backlog' && (
-        <PricePanel mediaItemId={item.id} title={item.title} />
-      )}
 
       {/* Temporadas e episódios (apenas séries) */}
       {item.type === 'series' && (

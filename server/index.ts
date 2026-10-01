@@ -15,6 +15,7 @@ import imgRoutes      from './routes/img.js'
 import coversRoutes   from './routes/covers.js'
 import steamAuthRoutes from './routes/steam-auth.js'
 import profileRoutes from './routes/profile.js'
+import gamesRoutes from './routes/games.js'
 import { stopSteamDiagnostic } from './steam/diagnostic.js'
 import integrationsRoutes, { startIntegrationPolling, stopIntegrationPolling } from './routes/integrations.js'
 import pricesRoutes    from './routes/prices.js'
@@ -53,6 +54,7 @@ app.route('/api/integrations', integrationsRoutes)
 app.route('/api/prices',  pricesRoutes)
 app.route('/api/transfer', transferRoutes)
 app.route('/api/profile',  profileRoutes)
+app.route('/api/games',    gamesRoutes)
 
 // "Entrar com a Steam": fora de /api porque a volta é navegação vinda da Steam.
 app.route('/auth/steam', steamAuthRoutes)
