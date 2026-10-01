@@ -12,6 +12,7 @@ import { PricePanel } from '../components/PricePanel'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { AddToListDropdown } from '../components/AddToListDropdown'
 import { GameAchievements } from '../components/GameAchievements'
+import { TimeToBeat } from '../components/TimeToBeat'
 import { isGameCompletion } from '../lib/diary'
 import type { MediaItem, SteamStorePage } from '../types'
 
@@ -247,6 +248,8 @@ export function GameDetail() {
                 : <div className="h-4 bg-card rounded w-3/4 animate-pulse" />}
             </section>
           )}
+
+          <TimeToBeat mediaId={item.id} playtimeSeconds={item.playtime_seconds} enabled={!!item.steam_appid} />
 
           <GameAchievements mediaId={item.id} enabled={!!item.steam_appid} />
 

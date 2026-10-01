@@ -5,6 +5,7 @@
 import { Hono } from 'hono'
 import { db } from '../db.js'
 import { getStorePage } from '../steam/store.js'
+import { igdbConfigured, refreshTimeToBeat, timeToBeatIsStale } from '../igdb.js'
 
 const app = new Hono()
 
@@ -42,6 +43,27 @@ app.get('/:id/steam', async (c) => {
     publisher: page.publishers.join(', ') || null,
   })
   return c.json({ available: true, page, filled: filled.changes > 0 })
+})
+
+/**
+ * Tempo para zerar (IGDB). Consulta na hora quando o dado não existe ou tem
+ * mais de 30 dias; falha da IGDB devolve o último valor gravado.
+ */
+app.get('/:id/time-to-beat', async (c) => {
+  const id = Number(c.req.param('id'))
+  if (!Number.isInteger(id) || id <= 0) return c.json({ error: 'Invalid media id' }, 400)
+  const read = () => db.prepare(`
+    SELECT steam_appid, ttb_main_seconds AS main, ttb_extra_seconds AS extra,
+           ttb_complete_seconds AS complete, ttb_fetched_at AS fetched_at
+      FROM media_items WHERE id = ? AND type = 'game'
+  `).get(id) as { steam_appid: number | null; main: number | null; extra: number | null; complete: number | null; fetched_at: string | null } | undefined
+  let row = read()
+  if (!row) return c.json({ error: 'Not found' }, 404)
+  if (!igdbConfigured()) return c.json({ configured: false, main: row.main, extra: row.extra, complete: row.complete })
+  if (row.steam_appid && timeToBeatIsStale(row.fetched_at)) {
+    try { await refreshTimeToBeat(id, row.steam_appid); row = read()! } catch { /* mantém o valor antigo */ }
+  }
+  return c.json({ configured: true, main: row.main, extra: row.extra, complete: row.complete })
 })
 
 /** Conquistas do jogo, como gravadas pela leitura da Steam (ST-03). */

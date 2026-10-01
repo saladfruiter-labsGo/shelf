@@ -19,7 +19,7 @@ Uma linha por obra, com `UNIQUE(external_id, type)`.
 - `rating`: escala 0–5; 0 significa sem nota na mídia. A UI trabalha em passos de 0,5.
 - metadados comuns: título, capa, ano, gênero, runtime, sinopse, criadores/autor e datas;
 - livros: `pages_total`, `pages_read`;
-- jogos: `playtime_seconds`, `game_status`, `last_played_at`, publisher, library, `steam_appid`;
+- jogos: `playtime_seconds`, `game_status`, `last_played_at`, publisher, library, `steam_appid`, resumo de conquistas (`achievements_total/unlocked`) e tempo para zerar da IGDB (`igdb_id`, `ttb_main/extra/complete_seconds`, `ttb_fetched_at`);
 - procedência de jogos: `game_status_source` e `playtime_source` (`steam | playnite | manual`). Só `steam` mostra o selo da Steam na UI. Edição pelo `PATCH /api/media/:id` grava `manual` no servidor (o cliente não escolhe a procedência);
 - filmes/séries do Plex podem usar GUID como `external_id`; `tmdb_id` mantém a identidade comum para deduplicação;
 - `favorite`: 0 fora dos favoritos, 1 favorito, 2 destaque coroado da categoria.

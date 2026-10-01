@@ -18,6 +18,7 @@ Os loops começam explicitamente por `startIntegrationPolling()` no bootstrap e 
 | Steam/ITAD | jobs próprios | 6 h |
 | Diagnóstico da Steam | job sob demanda | botão em Integrações |
 | Biblioteca da Steam | polling (`GetOwnedGames`) | 30 min, se `STEAM_LIBRARY_ENABLED` |
+| Tempo para zerar (IGDB) | job após conquistas | até 50 jogos por rodada; 30 dias de validade |
 
 Cada poll tem guarda de reentrância e entra no conjunto de promises aguardadas pelo shutdown.
 
@@ -79,6 +80,10 @@ O webhook recebe identidade, nome, playtime, completion status, user score, data
 Nota vazia nunca apaga avaliação existente. Só gere atividade/notificação quando a nota efetivamente mudar.
 
 A extensão envia no fechamento, na agenda diária, em catch-up e manualmente. Conclusões sem nota também entram na fila do Dashboard e no Telegram, portanto a avaliação não depende mais do timing do PC.
+
+## IGDB (tempo para zerar)
+
+`server/igdb.ts` autentica com Client ID/Secret de um app da Twitch (token em `IGDB_TOKEN`, renovado uma vez em 401), acha o jogo por `external_games` (`uid` = AppID, `external_game_source = 1`) e lê `game_time_to_beats` (`hastily`/`normally`/`completely`, segundos) para `ttb_*` em `media_items`. Respeita 4 req/s (300 ms entre chamadas). Consulta sem resultado também grava `ttb_fetched_at` para não repetir; validade de 30 dias. A UI cita "via IGDB" (atribuição) e esconde o bloco quando não há dado.
 
 ## Telegram
 

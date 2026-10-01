@@ -25,6 +25,7 @@ import { notifyLibraryActivity } from '../notify.js'
 import * as steam from './client.js'
 import { decideLibraryUpdate, type LibraryGameRow } from './library-plan.js'
 import { syncSteamAchievements } from './achievements.js'
+import { syncTimeToBeat } from '../igdb.js'
 
 const STATE_KEY = 'STEAM_LIBRARY_STATE'
 const LAST_SYNC_KEY = 'STEAM_LIBRARY_LAST_SYNC'
@@ -277,7 +278,11 @@ export function startSteamLibrarySync(): void {
   // Depois da biblioteca, as conquistas dos jogos que mudaram (zerado/platinado/abandonado).
   const tick = () => {
     if (!steamLibraryEnabled()) return
-    syncSteamLibrary().then(() => syncSteamAchievements()).catch(() => {})
+    syncSteamLibrary()
+      .then(() => syncSteamAchievements())
+      // Tempo para zerar dos jogos novos, em lotes pequenos (IGDB: 4 req/s).
+      .then(() => syncTimeToBeat(50))
+      .catch(() => {})
   }
   firstRunTimer = setTimeout(() => { firstRunTimer = null; tick() }, FIRST_RUN_DELAY_MS)
   intervalTimer = setInterval(tick, INTERVAL_MS)

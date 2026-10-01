@@ -666,6 +666,23 @@ db.exec(`
     if (!mediaCols.includes('achievements_total')) db.exec('ALTER TABLE media_items ADD COLUMN achievements_total INTEGER')
     if (!mediaCols.includes('achievements_unlocked')) db.exec('ALTER TABLE media_items ADD COLUMN achievements_unlocked INTEGER')
   },
+}, {
+  version: 13,
+  name: 'igdb-time-to-beat',
+  up: () => {
+    // Tempo para zerar (IGDB, ST-04), em segundos. `ttb_fetched_at` marca a
+    // última consulta, mesmo sem resultado, para não repetir toda hora.
+    const mediaCols = (db.prepare('PRAGMA table_info(media_items)').all() as { name: string }[]).map(c => c.name)
+    for (const [col, def] of [
+      ['igdb_id', 'INTEGER'],
+      ['ttb_main_seconds', 'INTEGER'],
+      ['ttb_extra_seconds', 'INTEGER'],
+      ['ttb_complete_seconds', 'INTEGER'],
+      ['ttb_fetched_at', 'TEXT'],
+    ] as const) {
+      if (!mediaCols.includes(col)) db.exec(`ALTER TABLE media_items ADD COLUMN ${col} ${def}`)
+    }
+  },
 }]
 
 if (databaseExisted && (hasPendingMigrations(db, migrations) || schemaNeedsUpgrade())) {

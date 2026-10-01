@@ -11,7 +11,7 @@ import { imageUrl } from '../lib/images'
 import type { MediaItem, MediaQueue, MediaType } from '../types'
 
 /* ─── Ordenações disponíveis ─── */
-type SortKey = 'added_desc' | 'added_asc' | 'release_desc' | 'release_asc' | 'price_asc' | 'discount_desc'
+type SortKey = 'added_desc' | 'added_asc' | 'release_desc' | 'release_asc' | 'price_asc' | 'discount_desc' | 'ttb_asc'
 const SORTS: { value: SortKey; label: string }[] = [
   { value: 'added_desc',    label: 'Adicionado — recente' },
   { value: 'added_asc',     label: 'Adicionado — antigo' },
@@ -19,6 +19,7 @@ const SORTS: { value: SortKey; label: string }[] = [
   { value: 'release_asc',   label: 'Lançamento — antigo' },
   { value: 'price_asc',     label: 'Menor preço' },
   { value: 'discount_desc', label: 'Maior desconto' },
+  { value: 'ttb_asc',       label: 'Mais curtos primeiro' },
 ]
 
 const TYPE_EMOJI: Record<MediaType, string> = {
@@ -33,6 +34,8 @@ const QUEUE_COPY: Record<MediaQueue, { eyebrow: string; title: string; empty: st
   backlog:  { eyebrow: 'Já tenho, falta jogar', title: 'Backlog', empty: 'Jogos que você tem e ainda não abriu aparecem aqui.' },
 }
 const PRICE_SORTS: SortKey[] = ['price_asc', 'discount_desc']
+// "Mais curtos" usa o tempo para zerar da IGDB, que só faz sentido no Backlog.
+const BACKLOG_SORTS: SortKey[] = ['ttb_asc']
 
 /** Mês (YYYY-MM) de added_at. */
 function addedMonthKey(iso: string): string {
@@ -219,6 +222,7 @@ function MediaQueuePage({ queue }: { queue: MediaQueue }) {
         case 'release_asc':   return time(a.release_date) - time(b.release_date)
         case 'price_asc':     return price(a.id) - price(b.id)
         case 'discount_desc': return discount(b.id) - discount(a.id)
+        case 'ttb_asc':       return (a.ttb_main_seconds ?? Number.POSITIVE_INFINITY) - (b.ttb_main_seconds ?? Number.POSITIVE_INFINITY)
         case 'added_desc':
         default:              return time(b.added_at) - time(a.added_at)
       }
@@ -230,6 +234,11 @@ function MediaQueuePage({ queue }: { queue: MediaQueue }) {
     filtered,
     [items.length, fName, fType, fGenre, fYear, fDecade, fDirector, fMonth, fShop, fOnSale, sort],
   )
+
+  // Soma do tempo da história dos jogos do Backlog que têm dado na IGDB.
+  const backlogHours = queue === 'backlog'
+    ? Math.round(items.reduce((sum, i) => sum + (i.ttb_main_seconds ?? 0), 0) / 3600)
+    : 0
 
   const anyFilter = Boolean(fName || fType || fGenre || fYear || fDecade || fDirector || fMonth || fShop || fOnSale)
   const clearAll = () => {
@@ -251,6 +260,7 @@ function MediaQueuePage({ queue }: { queue: MediaQueue }) {
           </h1>
           <p style={{ fontFamily: 'Space Grotesk, monospace', fontSize: 13, color: 'var(--text-muted)', paddingBottom: 8 }}>
             {filtered.length}{anyFilter ? ` de ${items.length}` : ''} {items.length === 1 ? 'item' : 'itens'}
+            {backlogHours > 0 && <> · ~{backlogHours}h para zerar tudo (história, via IGDB)</>}
           </p>
         </div>
 
@@ -337,7 +347,9 @@ function MediaQueuePage({ queue }: { queue: MediaQueue }) {
                     color: 'var(--text-secondary)',
                   }}
                 >
-                  {SORTS.filter(s => withPrices || !PRICE_SORTS.includes(s.value)).map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                  {SORTS
+                    .filter(s => (withPrices || !PRICE_SORTS.includes(s.value)) && (queue === 'backlog' || !BACKLOG_SORTS.includes(s.value)))
+                    .map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
                 </select>
               </label>
 
