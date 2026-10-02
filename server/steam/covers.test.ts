@@ -54,3 +54,38 @@ test('segunda passada não consulta de novo nem o que já trocou nem o que não 
   assert.equal(changed, 0)
   assert.deepEqual(heads, [])
 })
+
+test('jogo novo da Steam: usa os endereços com hash da API da loja (o antigo dá 404)', async () => {
+  const add = database.prepare(`
+    INSERT INTO media_items (external_id, type, title, status, steam_appid, cover_url, cover_custom)
+    VALUES (?, 'game', ?, 'in_progress', ?, ?, 0)
+  `)
+  add.run('rawg-control', 'CONTROL Resonant', 3669870, 'https://media.rawg.io/media/games/control-screenshot.jpg')
+  add.run('steam:4000000', 'Sem vertical', 4000000, 'https://cdn.cloudflare.steamstatic.com/steam/apps/4000000/header.jpg')
+
+  heads = []
+  const storeApi = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = new URL(String(input))
+    if (init?.method === 'HEAD') { heads.push(String(input)); return new Response(null, { status: 404 }) }
+    assert.match(url.pathname, /IStoreBrowseService\/GetItems/)
+    const ids = JSON.parse(url.searchParams.get('input_json')!).ids.map((i: { appid: number }) => i.appid)
+    return new Response(JSON.stringify({ response: { store_items: ids.map((appid: number) => ({
+      appid, success: 1,
+      assets: {
+        asset_url_format: `steam/apps/${appid}/\${FILENAME}?t=1790673363`,
+        header: 'h4sh/header.jpg',
+        ...(appid === 3669870 ? { library_capsule_2x: '7d4b/library_capsule_2x.jpg' } : {}),
+      },
+    })) } }), { headers: { 'content-type': 'application/json' } })
+  }) as typeof fetch
+
+  const changed = await covers.refreshSteamCovers(150, storeApi)
+  assert.equal(changed, 2)
+  assert.equal(cover('CONTROL Resonant'),
+    'https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/3669870/7d4b/library_capsule_2x.jpg?t=1790673363')
+  assert.ok(covers.isSteamVerticalCover(cover('CONTROL Resonant')))
+  // Sem arte vertical: o header antigo (quebrado) vira o header oficial com hash.
+  assert.equal(cover('Sem vertical'),
+    'https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/4000000/h4sh/header.jpg?t=1790673363')
+  assert.deepEqual(heads, [])
+})

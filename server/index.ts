@@ -26,6 +26,7 @@ import { startSteamLibrarySync, stopSteamLibrarySync } from './steam/library.js'
 import { stopSteamAchievements } from './steam/achievements.js'
 import { stopTimeToBeatSync } from './igdb.js'
 import { stopSteamCovers } from './steam/covers.js'
+import { purgeHiddenGames } from './steam/hidden.js'
 import { limitedApiBody, noStoreDynamicApi, sameOriginApi, shelfSecurityHeaders } from './security.js'
 import { startBackupScheduler, stopBackupScheduler } from './backup.js'
 import { db } from './db.js'
@@ -88,6 +89,9 @@ startSteamSync()
 
 // Biblioteca, tempo de jogo e última vez jogada vindos da Steam, a cada 30 min.
 startSteamLibrarySync()
+
+// Programas que não são jogo (Wallpaper Engine) saem já no boot, venham da Steam ou do Playnite.
+try { purgeHiddenGames() } catch (e) { console.error('[hidden-games]', (e as Error).message) }
 
 // Snapshot integral verificado, independente do export JSON portátil.
 startBackupScheduler()

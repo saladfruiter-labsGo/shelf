@@ -4,6 +4,7 @@ import path from 'node:path'
 import sharp from 'sharp'
 import { db } from './db.js'
 import { allowedImageUrl } from './routes/img.js'
+import { fetchSteamArt, steamVerticalCover } from './steam/covers.js'
 
 /**
  * Arte de capa personalizada.
@@ -125,7 +126,9 @@ async function gameArt(row: CoverRow): Promise<CoverOption[] | string> {
   const appid = Number(row.steam_appid)
   if (Number.isInteger(appid) && appid > 0) {
     // Arte vertical da biblioteca da Steam: é a que mais se parece com uma capa.
-    options.push({ url: `https://cdn.cloudflare.steamstatic.com/steam/apps/${appid}/library_600x900_2x.jpg`, source: 'steam' })
+    const art = (await fetchSteamArt([appid])).get(appid)
+    const vertical = art ? art.vertical : steamVerticalCover(appid)
+    if (vertical) options.push({ url: vertical, source: 'steam' })
   }
 
   const key = apiKey('RAWG_API_KEY')
