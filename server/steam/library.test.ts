@@ -54,6 +54,16 @@ before(async () => {
       return json({ results: [{ url: 'https://store.steampowered.com/app/292030/The_Witcher_3_Wild_Hunt/' }] })
     }
     if (url.hostname === 'api.rawg.io') return json({ results: [] })
+    if (url.pathname.includes('IStoreBrowseService/GetItems')) {
+      // Hollow Knight sem arte vertical: só o header, em caminho com hash (jogos novos).
+      const ids = JSON.parse(url.searchParams.get('input_json')!).ids.map((i: { appid: number }) => i.appid)
+      return json({ response: { store_items: ids.map((appid: number) => ({
+        appid, success: 1,
+        assets: appid === 367520
+          ? { asset_url_format: `steam/apps/${appid}/\${FILENAME}`, header: 'ab12/header.jpg' }
+          : { asset_url_format: `steam/apps/${appid}/\${FILENAME}`, library_capsule_2x: 'library_600x900_2x.jpg', header: 'header.jpg' },
+      })) } })
+    }
     if (init?.method === 'HEAD') return new Response(null, { status: url.pathname.includes('/367520/') ? 404 : 200 })
     throw new Error(`fetch inesperado: ${url}`)
   }) as typeof fetch
@@ -100,7 +110,7 @@ test('primeira leitura adota os jogos existentes, cria os novos e não inventa s
   const hollow = game('Hollow Knight')
   assert.equal(hollow.game_status, 'jogando')
   assert.equal(hollow.status, 'in_progress')
-  assert.match(hollow.cover_url, /header\.jpg$/) // sem arte vertical
+  assert.equal(hollow.cover_url, 'https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/367520/ab12/header.jpg') // sem arte vertical
 
   // Hollow Knight foi jogado há anos: sem atividade nem diário na primeira leitura.
   assert.equal(count("SELECT COUNT(*) AS n FROM activity_events WHERE source = 'steam'"), 0)

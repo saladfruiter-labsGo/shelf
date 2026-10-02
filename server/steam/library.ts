@@ -11,6 +11,10 @@
  * único); só sem nenhum casamento um card novo `steam:<appid>` é criado. O
  * `external_id` de um card existente nunca muda.
  *
+ * Relançamentos ("X (Legacy)" + "X") viram um card só, e dois cards que já
+ * existiam para o mesmo jogo são fundidos (ver `legacy.ts`). Programas que não
+ * são jogo (Wallpaper Engine) nunca entram (ver `hidden.ts`).
+ *
  * Proteções:
  * - biblioteca vazia com histórico (perfil que ficou privado) não muda nada;
  * - na primeira vez que um jogo é visto não há atividade, aviso nem diário —
@@ -26,7 +30,9 @@ import * as steam from './client.js'
 import { decideLibraryUpdate, type LibraryGameRow } from './library-plan.js'
 import { syncSteamAchievements } from './achievements.js'
 import { syncTimeToBeat } from '../igdb.js'
-import { refreshSteamCovers } from './covers.js'
+import { fetchSteamArt, refreshSteamCovers, steamCoverFor } from './covers.js'
+import { isHiddenGame, purgeHiddenGames } from './hidden.js'
+import { groupLegacyRelistings, legacyBaseName, mergeGameCards, pickKeeper } from './legacy.js'
 
 const STATE_KEY = 'STEAM_LIBRARY_STATE'
 const LAST_SYNC_KEY = 'STEAM_LIBRARY_LAST_SYNC'
@@ -46,6 +52,8 @@ export interface SteamLibraryResult {
   adopted: number
   updated: number
   started: number
+  /** Cards repetidos do mesmo jogo que foram fundidos. */
+  merged: number
   errors: string[]
 }
 
@@ -53,7 +61,7 @@ export function lastLibrarySync(): SteamLibraryResult | null {
   try { return JSON.parse(cfg(LAST_SYNC_KEY) || 'null') } catch { return null }
 }
 
-/** Último tempo de jogo visto por AppID — base para diário e atividade. */
+/** Último tempo de jogo visto por AppID (de cada AppID, sem somar) — base para diário e atividade. */
 type LibraryState = Record<string, number>
 
 function readState(): LibraryState {
@@ -95,21 +103,6 @@ async function resolveMissingAppIds(games: (LibraryGameRow & { external_id: stri
   setCfg(APPID_MISSES_KEY, JSON.stringify(misses))
 }
 
-/** Arte vertical da Steam quando existe; senão o header (que todo app tem). */
-async function steamCover(appid: number): Promise<string> {
-  const vertical = `https://cdn.cloudflare.steamstatic.com/steam/apps/${appid}/library_600x900_2x.jpg`
-  const ctrl = new AbortController()
-  const timer = setTimeout(() => ctrl.abort(), 8_000)
-  try {
-    const res = await fetch(vertical, { method: 'HEAD', signal: ctrl.signal })
-    return res.ok ? vertical : steam.headerImage(appid)
-  } catch {
-    return steam.headerImage(appid)
-  } finally {
-    clearTimeout(timer)
-  }
-}
-
 const insertGame = db.prepare(`
   INSERT INTO media_items
     (external_id, type, title, cover_url, status, game_status, game_status_source,
@@ -129,15 +122,18 @@ const insertActivity = db.prepare(`
 let running: Promise<SteamLibraryResult> | null = null
 
 async function runLibrarySync(): Promise<SteamLibraryResult> {
-  const result: SteamLibraryResult = { at: new Date().toISOString(), owned: 0, created: 0, adopted: 0, updated: 0, started: 0, errors: [] }
+  const result: SteamLibraryResult = { at: new Date().toISOString(), owned: 0, created: 0, adopted: 0, updated: 0, started: 0, merged: 0, errors: [] }
   const state = readState()
   try {
-    const owned = await steam.fetchOwnedGames()
-    result.owned = owned.length
-    if (owned.length === 0 && Object.keys(state).length > 0) {
+    const allOwned = await steam.fetchOwnedGames()
+    result.owned = allOwned.length
+    if (allOwned.length === 0 && Object.keys(state).length > 0) {
       result.errors.push('A Steam devolveu a biblioteca vazia — nada foi alterado. Confira se os detalhes de jogo do perfil continuam públicos.')
       return result
     }
+
+    purgeHiddenGames()
+    const groups = groupLegacyRelistings(allOwned.filter(g => !isHiddenGame({ appid: g.appid, title: g.name })))
 
     let games = selectGames()
     await resolveMissingAppIds(games)
@@ -152,38 +148,65 @@ async function runLibrarySync(): Promise<SteamLibraryResult> {
       const key = normalizeTitle(game.title)
       byTitle.set(key, byTitle.has(key) ? null : game)
     }
+    const titleMatch = (name: string) =>
+      byTitle.get(normalizeTitle(name)) ?? (legacyBaseName(name) ? byTitle.get(normalizeTitle(legacyBaseName(name)!)) : undefined) ?? null
 
     const now = Date.now()
     const nextState: LibraryState = { ...state }
     const setAppId = db.prepare('UPDATE media_items SET steam_appid = ? WHERE id = ?')
     const covers = new Map<number, string>()
-    const newOnes = owned.filter(g => !byAppId.has(g.appid) && !byTitle.get(normalizeTitle(g.name)))
+    const newOnes = groups.filter(g => !g.appids.some(id => byAppId.has(id)) && !titleMatch(g.game.name)).map(g => g.game)
+    const art = await fetchSteamArt(newOnes.map(g => g.appid))
     const coverQueue = [...newOnes]
     await Promise.all(Array.from({ length: 6 }, async () => {
-      for (let game = coverQueue.shift(); game; game = coverQueue.shift()) covers.set(game.appid, await steamCover(game.appid))
+      for (let game = coverQueue.shift(); game; game = coverQueue.shift()) {
+        const cover = await steamCoverFor(game.appid, art.get(game.appid))
+        if (cover) covers.set(game.appid, cover)
+      }
     }))
 
     const effects: (() => void)[] = []
     db.transaction(() => {
-      for (const game of owned) {
-        let current = byAppId.get(game.appid) ?? null
+      for (const group of groups) {
+        const game = group.game
+        // Mais de um card para o mesmo jogo (relançamento que já tinha virado dois): funde.
+        const linked = [...new Map(group.appids.flatMap(id => byAppId.get(id) ?? []).map(c => [c.id, c])).values()]
+        // Card criado pela Steam enquanto o mesmo jogo (título exato e único) já existia sem AppID.
+        const sameTitle = linked.length > 0 && linked.every(c => c.external_id.startsWith('steam:')) ? titleMatch(game.name) : null
+        if (sameTitle) {
+          linked.push(sameTitle)
+          byTitle.delete(normalizeTitle(sameTitle.title))
+        }
+        let current = linked.length > 0 ? pickKeeper(linked) : null
+        for (const dup of linked) {
+          if (dup === current) continue
+          mergeGameCards(current!.id, dup.id)
+          result.merged++
+        }
+        if (current && current.steam_appid !== game.appid) {
+          setAppId.run(game.appid, current.id)
+          current.steam_appid = game.appid
+        }
+        if (current) for (const id of group.appids) byAppId.set(id, current)
         if (!current) {
-          const adopted = byTitle.get(normalizeTitle(game.name))
+          const adopted = titleMatch(game.name)
           if (adopted) {
             setAppId.run(game.appid, adopted.id)
             adopted.steam_appid = game.appid
-            byTitle.delete(normalizeTitle(game.name))
-            byAppId.set(game.appid, adopted)
+            byTitle.delete(normalizeTitle(adopted.title))
+            for (const id of group.appids) byAppId.set(id, adopted)
             current = adopted
             result.adopted++
           }
         }
 
         const decision = decideLibraryUpdate(game, current)
-        const previousSeconds = state[String(game.appid)]
-        const seenBefore = previousSeconds !== undefined
+        // Tempo somado do grupo; a leitura anterior só vale se tinha todos os AppIDs.
+        const seen = group.appids.map(id => state[String(id)])
+        const seenBefore = seen.every(v => v !== undefined)
+        const previousSeconds = seenBefore ? seen.reduce((a, b) => a! + b!, 0)! : 0
         const steamSeconds = Math.round(game.playtime_minutes * 60)
-        nextState[String(game.appid)] = steamSeconds
+        for (const id of group.appids) nextState[String(id)] = group.seconds[id]
 
         let mediaId: number
         let title = game.name
@@ -193,7 +216,8 @@ async function runLibrarySync(): Promise<SteamLibraryResult> {
           insertGame.run({
             external_id: `steam:${game.appid}`,
             title: game.name,
-            cover_url: covers.get(game.appid) ?? steam.headerImage(game.appid),
+            // Sem arte conhecida fica sem capa; a passada de capas tenta de novo depois.
+            cover_url: covers.get(game.appid) ?? null,
             status: GAME_STATUS_TO_BASE[status],
             game_status: status,
             playtime_seconds: decision.playtimeSeconds,

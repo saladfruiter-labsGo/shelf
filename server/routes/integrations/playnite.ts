@@ -15,6 +15,7 @@ import { GAME_STATUS_TO_BASE } from '../../media-domain.js'
 import { notifyLibraryActivity } from '../../notify.js'
 import { rawgLookup } from '../search.js'
 import { normalizeTitle } from '../../prices/matcher.js'
+import { isHiddenGame } from '../../steam/hidden.js'
 
 const app = new Hono()
 
@@ -104,6 +105,8 @@ app.post('/playnite/webhook', async (c) => {
   const gameId = (payload.gameId ?? '').trim()
   const name = (payload.name ?? '').trim()
   if (!gameId || !name) return c.json({ error: 'gameId and name required' }, 400)
+  // Programa que não é jogo (Wallpaper Engine): aceito e descartado, para a extensão não reenviar.
+  if (isHiddenGame({ title: name })) return c.json({ ok: true, ignored: true })
 
   const playtime = Math.max(0, Math.round(payload.playtimeSeconds ?? 0))
   const gameStatus = playniteGameStatus(payload.completionStatus, playtime)
