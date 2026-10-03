@@ -1030,3 +1030,72 @@ body {
   .tier-drop .list-tile { width: 58px; }
   .list-progress-track { width: 110px; }
 }
+
+
+/* ─── Feed social ─── */
+.social-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 18px;
+}
+.social-composer { display: flex; gap: 12px; align-items: flex-start; }
+.social-composer.is-compact { gap: 0; }
+.social-action {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 10px; border-radius: 9999px;
+  font-size: 14px; color: var(--text-secondary);
+  background: transparent; border: 0; cursor: pointer;
+  transition: background .2s, color .2s;
+}
+.social-action:hover:not(:disabled) { background: var(--card); color: var(--text-primary); }
+.social-action:disabled { opacity: .5; cursor: default; }
+.social-action.is-on { color: var(--movies); }
+.social-pill {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 9px; border-radius: 9999px; font-size: 14px;
+  background: var(--card); border: 1px solid var(--border); color: var(--text-secondary); cursor: pointer;
+}
+.social-pill.is-mine { border-color: var(--accent); color: var(--text-primary); background: var(--accent-bg); }
+.social-picker {
+  position: absolute; bottom: calc(100% + 6px); left: 0; z-index: 60;
+  display: flex; gap: 2px; padding: 6px; border-radius: 9999px;
+  background: var(--card); border: 1px solid var(--border-strong); box-shadow: 0 12px 32px rgba(0,0,0,.4);
+}
+.social-picker button { font-size: 22px; width: 38px; height: 38px; border-radius: 50%; border: 0; background: transparent; cursor: pointer; transition: transform .15s; }
+.social-picker button:hover { transform: scale(1.25); background: var(--card-hover); }
+.social-chip {
+  display: inline-flex; align-items: center; gap: 4px; max-width: 100%;
+  padding: 1px 8px; margin: 0 1px; border-radius: 8px; vertical-align: baseline;
+  background: var(--accent-bg); color: var(--text-primary); border: 0; font: inherit; font-size: .95em; cursor: pointer;
+}
+.social-mention { color: var(--accent); font-weight: 600; }
+.social-mention:hover, .social-link:hover { text-decoration: underline; }
+.social-link { color: var(--accent); word-break: break-all; }
+.social-quote {
+  border-left: 3px solid var(--accent); padding: 2px 0 2px 12px;
+  color: var(--text-secondary); font-size: 16px; line-height: 1.55; white-space: pre-wrap;
+}
+.social-popover {
+  position: absolute; left: 0; top: calc(100% + 6px); z-index: 80;
+  width: min(420px, 100%); padding: 10px; border-radius: 14px;
+  background: var(--card); border: 1px solid var(--border-strong); box-shadow: 0 16px 48px rgba(0,0,0,.5);
+}
+.social-result {
+  display: flex; gap: 10px; align-items: center; width: 100%;
+  padding: 6px; border-radius: 10px; background: transparent; border: 0; cursor: pointer;
+}
+.social-result:hover { background: var(--card-hover); }
+.social-suggest {
+  position: absolute; left: 0; top: calc(100% + 2px); z-index: 70; min-width: 240px; overflow: hidden;
+  background: var(--card); border: 1px solid var(--border-strong); border-radius: 12px; box-shadow: 0 12px 32px rgba(0,0,0,.45);
+}
+.social-tier {
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  min-width: 44px; border-radius: 8px; color: #0b0b12; font-weight: 800; font-size: 18px;
+}
+.social-rank {
+  position: absolute; top: 4px; left: 4px; min-width: 22px; height: 22px; padding: 0 5px;
+  border-radius: 6px; background: rgba(0,0,0,.75); color: #fff; font-size: 12px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+}

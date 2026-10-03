@@ -21,7 +21,12 @@ import integrationsRoutes from './routes/integrations.js'
 import pricesRoutes    from './routes/prices.js'
 import transferRoutes  from './routes/transfer.js'
 import { limitedApiBody, noStoreDynamicApi, sameOriginApi, shelfSecurityHeaders } from './security.js'
-import { legacyDb } from './db.js'
+import { legacyDb, setAfterUserWork } from './db.js'
+import { feedRoutes, notificationRoutes, socialRoutes } from './routes/social.js'
+import { drainSocialOutbox } from './social/feed-sync.js'
+
+// Diário e conquistas novos chegam ao feed ao fim de cada requisição e job.
+setAfterUserWork(drainSocialOutbox)
 
 /**
  * A aplicação HTTP inteira, sem servidor nem jobs — o `index.ts` a serve, e
@@ -43,6 +48,9 @@ export function createApp(options: { log?: boolean; isShuttingDown?: () => boole
   app.route('/api/account',  accountRoutes)
   app.route('/api/users',    usersRoutes)
   app.route('/api/admin',    adminRoutes)
+  app.route('/api/feed',     feedRoutes)
+  app.route('/api/social',   socialRoutes)
+  app.route('/api/notifications', notificationRoutes)
 
   app.route('/api/search',   searchRoutes)
   app.route('/api/media',    mediaRoutes)

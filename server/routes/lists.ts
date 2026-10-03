@@ -107,10 +107,10 @@ app.get('/check/:mediaItemId', (c) => {
   `).all(c.req.param('mediaItemId')))
 })
 
-app.get('/:id', (c) => {
-  const id = c.req.param('id')
-  const list = db.prepare('SELECT * FROM lists WHERE id = ?').get(id)
-  if (!list) return c.json({ error: 'Not found' }, 404)
+/** Lista completa (itens na ordem manual + tiers) — também usada pelo feed. */
+export function listView(id: number | string): (Record<string, unknown> & { items: Record<string, unknown>[]; tiers: unknown[] }) | null {
+  const list = db.prepare('SELECT * FROM lists WHERE id = ?').get(id) as Record<string, unknown> | undefined
+  if (!list) return null
   // `position` é a ordem manual (ranking) e `tier_id` o tier em que a capa está.
   // Os itens isolados usam id negativo apenas na resposta, para não colidir
   // com ids de media_items nas ações de arrastar/remover do frontend.
@@ -134,7 +134,13 @@ app.get('/:id', (c) => {
   const items = [...mediaItems, ...listOnlyItems].sort((a, b) =>
     Number(a.list_position) - Number(b.list_position) || Number(a.id) - Number(b.id),
   )
-  return c.json({ ...list, items, tiers: tiersStmt.all(id) })
+  return { ...list, items, tiers: tiersStmt.all(id) }
+}
+
+app.get('/:id', (c) => {
+  const view = listView(c.req.param('id'))
+  if (!view) return c.json({ error: 'Not found' }, 404)
+  return c.json(view)
 })
 
 app.post('/', async (c) => {

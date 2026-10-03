@@ -73,6 +73,80 @@ export const coreMigrations: Migration[] = [{
       );
     `)
   },
+}, {
+  version: 2,
+  name: 'social',
+  up: () => {
+    coreDb.exec(`
+      -- Tudo o que aparece no feed: posts escritos, registros do diário,
+      -- conquistas (uma entrada por jogo e dia) e listas compartilhadas.
+      -- media_json/data_json guardam um retrato do que foi compartilhado,
+      -- para o feed não depender do banco pessoal de quem postou.
+      CREATE TABLE IF NOT EXISTS feed_posts (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        author_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        kind        TEXT    NOT NULL CHECK (kind IN ('post', 'diary', 'achievements', 'list')),
+        body        TEXT,
+        media_json  TEXT,
+        data_json   TEXT,
+        refs_json   TEXT,
+        mentions_json TEXT,
+        source_key  TEXT    UNIQUE,
+        created_at  TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+        updated_at  TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_feed_created ON feed_posts(created_at DESC, id DESC);
+      CREATE INDEX IF NOT EXISTS idx_feed_author  ON feed_posts(author_id, created_at DESC, id DESC);
+
+      CREATE TABLE IF NOT EXISTS feed_images (
+        id       INTEGER PRIMARY KEY AUTOINCREMENT,
+        post_id  INTEGER NOT NULL REFERENCES feed_posts(id) ON DELETE CASCADE,
+        file     TEXT    NOT NULL UNIQUE,
+        width    INTEGER NOT NULL,
+        height   INTEGER NOT NULL,
+        position INTEGER NOT NULL DEFAULT 0
+      );
+      CREATE INDEX IF NOT EXISTS idx_feed_images_post ON feed_images(post_id, position);
+
+      -- Um nível de resposta: a resposta de uma resposta vai para o mesmo fio.
+      CREATE TABLE IF NOT EXISTS feed_comments (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        post_id       INTEGER NOT NULL REFERENCES feed_posts(id) ON DELETE CASCADE,
+        author_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        parent_id     INTEGER REFERENCES feed_comments(id) ON DELETE CASCADE,
+        body          TEXT    NOT NULL,
+        refs_json     TEXT,
+        mentions_json TEXT,
+        created_at    TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+        updated_at    TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+        deleted_at    TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_feed_comments_post ON feed_comments(post_id, created_at, id);
+
+      CREATE TABLE IF NOT EXISTS feed_reactions (
+        target_type TEXT    NOT NULL CHECK (target_type IN ('post', 'comment')),
+        target_id   INTEGER NOT NULL,
+        user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        emoji       TEXT    NOT NULL,
+        created_at  TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+        PRIMARY KEY (target_type, target_id, user_id, emoji)
+      );
+      CREATE INDEX IF NOT EXISTS idx_feed_reactions_target ON feed_reactions(target_type, target_id);
+
+      CREATE TABLE IF NOT EXISTS notifications (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        actor_id   INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        type       TEXT    NOT NULL,
+        post_id    INTEGER REFERENCES feed_posts(id) ON DELETE CASCADE,
+        comment_id INTEGER REFERENCES feed_comments(id) ON DELETE CASCADE,
+        detail     TEXT,
+        created_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+        read_at    TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, read_at, id DESC);
+    `)
+  },
 }]
 
 runMigrations(coreDb, coreMigrations)

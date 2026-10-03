@@ -8,6 +8,7 @@ import type {
   LetterboxdKind, LetterboxdPlan, LetterboxdPreview, LetterboxdApplyResult,
   PlexFilenameSyncResult, SearchApiKeySettings,
   AuthState, SessionUser, MemberSummary, AdminUser,
+  FeedPage, FeedPost, FeedComment, MediaRef, ReactionSummary, NotificationItem, FeedPreferences, PublicProfile, SharedListView,
 } from '../types'
 
 /**
@@ -65,6 +66,53 @@ export const api = {
 
   users: {
     list: (): Promise<MemberSummary[]> => request('/users'),
+  },
+
+  feed: {
+    list: (params: { before?: string | null; author?: string } = {}): Promise<FeedPage> => {
+      const qs = new URLSearchParams()
+      if (params.before) qs.set('before', params.before)
+      if (params.author) qs.set('author', params.author)
+      return request(`/feed?${qs}`)
+    },
+    /** Post novo: texto, mídias anexadas e até 4 imagens (multipart). */
+    create: async (data: { body: string; refs: MediaRef[]; images: File[] }): Promise<FeedPost> => {
+      const form = new FormData()
+      form.append('body', data.body)
+      form.append('refs', JSON.stringify(data.refs))
+      for (const image of data.images) form.append('images', image)
+      const res = await fetch('/api/feed/posts', { method: 'POST', body: form })
+      if (!res.ok) return failure(res)
+      return res.json()
+    },
+    get: (id: number): Promise<{ post: FeedPost; comments: FeedComment[] }> => request(`/feed/posts/${id}`),
+    remove: (id: number): Promise<{ ok: boolean }> => request(`/feed/posts/${id}`, { method: 'DELETE' }),
+    comments: (postId: number): Promise<FeedComment[]> => request(`/feed/posts/${postId}/comments`),
+    comment: (postId: number, data: { body: string; parent_id?: number | null; refs?: MediaRef[] }): Promise<FeedComment[]> =>
+      request(`/feed/posts/${postId}/comments`, { method: 'POST', body: JSON.stringify(data) }),
+    editComment: (id: number, data: { body: string; refs?: MediaRef[] }): Promise<FeedComment[]> =>
+      request(`/feed/comments/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    removeComment: (id: number): Promise<FeedComment[]> => request(`/feed/comments/${id}`, { method: 'DELETE' }),
+    react: (target_type: 'post' | 'comment', target_id: number, emoji: string): Promise<{ reactions: ReactionSummary[] }> =>
+      request('/feed/reactions', { method: 'PUT', body: JSON.stringify({ target_type, target_id, emoji }) }),
+    shareList: (data: { list_id: number; body: string }): Promise<FeedPost> =>
+      request('/feed/share-list', { method: 'POST', body: JSON.stringify(data) }),
+    preferences: (): Promise<FeedPreferences> => request('/feed/preferences'),
+    updatePreferences: (data: Partial<FeedPreferences>): Promise<FeedPreferences> =>
+      request('/feed/preferences', { method: 'PATCH', body: JSON.stringify(data) }),
+  },
+
+  social: {
+    user: (username: string): Promise<PublicProfile> => request(`/social/users/${encodeURIComponent(username)}`),
+    list: (username: string, listId: number): Promise<SharedListView> =>
+      request(`/social/users/${encodeURIComponent(username)}/lists/${listId}`),
+  },
+
+  notifications: {
+    list: (): Promise<{ unread: number; items: NotificationItem[] }> => request('/notifications'),
+    count: (): Promise<{ unread: number }> => request('/notifications/count'),
+    read: (ids?: number[]): Promise<{ unread: number; items: NotificationItem[] }> =>
+      request('/notifications/read', { method: 'POST', body: JSON.stringify(ids ? { ids } : {}) }),
   },
 
   admin: {

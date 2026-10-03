@@ -781,3 +781,135 @@ export interface AdminUser extends MemberSummary {
   created_at: string
   last_seen_at: string | null
 }
+
+/* ─────────────────────────────── Feed social ─────────────────────────────── */
+
+export interface PersonRef {
+  id: number
+  username: string
+  display_name: string
+  avatar_url: string | null
+}
+
+/** Mídia marcada num post/comentário (retrato do momento em que foi marcada). */
+export interface MediaRef {
+  type: MediaType
+  external_id: string
+  title: string
+  cover_url: string | null
+  year: number | null
+}
+
+export interface Mention { id: number; username: string; display_name: string }
+
+export interface ReactionSummary { emoji: string; count: number; mine: boolean; names: string[] }
+
+export interface FeedMedia {
+  local_id?: number
+  type: MediaType
+  external_id: string
+  title: string
+  cover_url: string | null
+  year: number | null
+}
+
+export interface FeedDiaryData {
+  entry_id: number
+  watched_at: string
+  rating: number | null
+  comment: string | null
+  source: string
+  season_number: number | null
+  episode_number: number | null
+  episode_title: string | null
+  progress: { value: number; total: number | null; unit: string } | null
+  status: string | null
+  game_status: string | null
+}
+
+export interface FeedAchievementsData {
+  appid: number
+  day: string
+  items: { api_name: string; name: string; description: string | null; icon: string | null; percent: number | null; unlocked_at: string | null }[]
+  unlocked: number | null
+  total: number | null
+}
+
+export interface FeedListPreviewItem { title: string; cover_url: string | null; type: MediaType; rating?: number | null }
+
+export interface FeedListData {
+  list_id: number
+  name: string
+  description: string | null
+  mode: 'list' | 'ranking' | 'tier'
+  item_count: number
+  tiers: { name: string; color: string; count: number; items: FeedListPreviewItem[] }[]
+  items: FeedListPreviewItem[]
+}
+
+export interface FeedPost {
+  id: number
+  kind: 'post' | 'diary' | 'achievements' | 'list'
+  created_at: string
+  updated_at: string
+  author: PersonRef
+  body: string | null
+  media: FeedMedia | null
+  data: FeedDiaryData | FeedAchievementsData | FeedListData | null
+  refs: MediaRef[]
+  mentions: Mention[]
+  images: { url: string; width: number; height: number }[]
+  reactions: ReactionSummary[]
+  comment_count: number
+  can_delete: boolean
+}
+
+export interface FeedComment {
+  id: number
+  post_id: number
+  parent_id: number | null
+  author: PersonRef
+  body: string | null
+  deleted: boolean
+  refs: MediaRef[]
+  mentions: Mention[]
+  created_at: string
+  edited: boolean
+  reactions: ReactionSummary[]
+  can_edit: boolean
+  can_delete: boolean
+}
+
+export interface FeedPage { posts: FeedPost[]; next: string | null }
+
+export type NotificationType = 'comment' | 'reply' | 'reaction' | 'mention' | 'dm'
+
+export interface NotificationItem {
+  id: number
+  type: NotificationType
+  actor: PersonRef | null
+  post_id: number | null
+  comment_id: number | null
+  detail: string | null
+  snippet: string | null
+  created_at: string
+  read: boolean
+}
+
+export interface FeedPreferences { share_diary: boolean; share_achievements: boolean }
+
+export interface PublicProfile {
+  is_me: boolean
+  profile: ProfileView
+  shared_lists: { post_id: number; list_id: number; name: string; mode: string; item_count: number; created_at: string }[]
+}
+
+export interface SharedListView {
+  id: number
+  name: string
+  description: string | null
+  mode: 'list' | 'ranking' | 'tier'
+  owner: PersonRef
+  tiers: { id: number; name: string; color: string; position: number }[]
+  items: { id: number; type: MediaType; external_id: string; title: string; cover_url: string | null; year: number | null; rating: number | null; tier_id: number | null; list_position: number }[]
+}
