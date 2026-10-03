@@ -18,6 +18,8 @@ interface PendingLogin {
   state: string
   returnTo: string
   expiresAt: number
+  /** Tela de volta: Integrações ou a configuração guiada. */
+  next?: 'integrations' | 'welcome'
 }
 
 function readPending(): PendingLogin | null {
@@ -43,10 +45,11 @@ function sameState(a: string, b: string): boolean {
   return left.length === right.length && timingSafeEqual(left, right)
 }
 
-function backToIntegrations(c: Context, result: 'conectado' | 'erro', reason?: string) {
+function backToIntegrations(c: Context, result: 'conectado' | 'erro', reason?: string, next: PendingLogin['next'] = 'integrations') {
   const qs = new URLSearchParams({ steam: result })
   if (reason) qs.set('motivo', reason)
-  return c.redirect(`/integrations?${qs}`, 302)
+  // Só destinos conhecidos: o `next` nunca vira um redirect aberto.
+  return c.redirect(`/${next === 'welcome' ? 'welcome' : 'integrations'}?${qs}`, 302)
 }
 
 export function createSteamAuthRoutes(fetchImpl: typeof fetch = fetch) {
@@ -56,7 +59,8 @@ export function createSteamAuthRoutes(fetchImpl: typeof fetch = fetch) {
     const origin = browserOrigin(c)
     const state = randomBytes(16).toString('hex')
     const returnTo = `${origin}/auth/steam/callback?state=${state}`
-    setCfg(STATE_KEY, JSON.stringify({ state, returnTo, expiresAt: Date.now() + STATE_TTL_MS } satisfies PendingLogin))
+    const next: PendingLogin['next'] = c.req.query('next') === 'welcome' ? 'welcome' : 'integrations'
+    setCfg(STATE_KEY, JSON.stringify({ state, returnTo, expiresAt: Date.now() + STATE_TTL_MS, next } satisfies PendingLogin))
     c.header('Cache-Control', 'no-store')
     return c.redirect(buildSteamLoginUrl(returnTo, origin), 302)
   })
@@ -69,21 +73,21 @@ export function createSteamAuthRoutes(fetchImpl: typeof fetch = fetch) {
     setCfg(STATE_KEY, '')
 
     if (!pending || !params.state || !sameState(params.state, pending.state)) {
-      return backToIntegrations(c, 'erro', 'Login expirado ou iniciado em outra aba. Tente de novo.')
+      return backToIntegrations(c, 'erro', 'Login expirado ou iniciado em outra aba. Tente de novo.', pending?.next)
     }
     if (Date.now() > pending.expiresAt) {
-      return backToIntegrations(c, 'erro', 'Login expirado. Tente de novo.')
+      return backToIntegrations(c, 'erro', 'Login expirado. Tente de novo.', pending.next)
     }
 
     const shape = checkAssertionShape(params, pending.returnTo)
-    if (!shape.ok) return backToIntegrations(c, 'erro', shape.reason)
+    if (!shape.ok) return backToIntegrations(c, 'erro', shape.reason, pending.next)
 
     if (!(await verifyWithSteam(params, fetchImpl))) {
-      return backToIntegrations(c, 'erro', 'A Steam não confirmou o login.')
+      return backToIntegrations(c, 'erro', 'A Steam não confirmou o login.', pending.next)
     }
 
     setCfg('STEAM_ID', shape.steamId)
-    return backToIntegrations(c, 'conectado')
+    return backToIntegrations(c, 'conectado', undefined, pending.next)
   })
 
   return app

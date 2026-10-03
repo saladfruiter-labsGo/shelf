@@ -781,3 +781,16 @@ export interface AdminUser extends MemberSummary {
   created_at: string
   last_seen_at: string | null
 }
+
+/* ─────────────────────────── Configuração guiada ─────────────────────────── */
+
+export type OnboardingStepId =
+  | 'profile' | 'instance' | 'steam' | 'lastfm' | 'plex' | 'kavita' | 'playnite' | 'telegram' | 'letterboxd'
+
+export interface OnboardingView {
+  auto_open: boolean
+  dismissed: boolean
+  steps: { id: OnboardingStepId; status: 'done' | 'skipped' | 'pending' }[]
+  done: number
+  total: number
+}

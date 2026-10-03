@@ -7,7 +7,7 @@ import type {
   SteamSyncResult, SteamLibraryResult, SteamStorePage, GameAchievement, LatestAchievement, SteamDiagnostic, ProfileView, ExportScope, ExportSummary, ImportReport, BackupStatus, DatabaseBackupInfo,
   LetterboxdKind, LetterboxdPlan, LetterboxdPreview, LetterboxdApplyResult,
   PlexFilenameSyncResult, SearchApiKeySettings,
-  AuthState, SessionUser, MemberSummary, AdminUser,
+  AuthState, SessionUser, MemberSummary, AdminUser, OnboardingView, OnboardingStepId,
 } from '../types'
 
 /**
@@ -65,6 +65,12 @@ export const api = {
 
   users: {
     list: (): Promise<MemberSummary[]> => request('/users'),
+  },
+
+  onboarding: {
+    get: (): Promise<OnboardingView> => request('/onboarding'),
+    act: (action: { skip: OnboardingStepId } | { unskip: OnboardingStepId } | { dismiss: boolean } | { reset: true }): Promise<OnboardingView> =>
+      request('/onboarding', { method: 'PATCH', body: JSON.stringify(action) }),
   },
 
   admin: {

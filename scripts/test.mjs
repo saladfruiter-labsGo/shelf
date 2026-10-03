@@ -10,15 +10,16 @@
  * testes — acontece depois que tudo rodou e some ao repetir. A imagem de
  * produção usa Node 22 e não é afetada.
  *
- * Este script repete um arquivo APENAS quando a saída traz essa assinatura
- * nativa. Falha de asserção normal (linhas "not ok") é reportada na hora.
+ * O `retain-statements.mjs` evita a maior parte desses aborts (o GC deixa de
+ * destruir statements no meio da execução). Este script ainda repete um
+ * arquivo APENAS quando a saída traz essa assinatura nativa. Falha de asserção normal (linhas "not ok") é reportada na hora.
  */
 import { readdirSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
 import { join } from 'node:path'
 
 const DIRS = ['server', 'server/integrations', 'server/prices', 'server/routes', 'server/steam', 'server/transfer']
-const MAX_TRIES = 6
+const MAX_TRIES = 10
 const NATIVE_ABORT = /RemoveEnvironmentCleanupHook|Assertion failed: \(env\) != nullptr/
 
 const files = DIRS.flatMap(dir =>
@@ -31,7 +32,7 @@ for (const file of files) {
   let ok = false
 
   for (let attempt = 1; attempt <= MAX_TRIES; attempt++) {
-    const r = spawnSync(process.execPath, ['--import', 'tsx', '--test-reporter', 'tap', '--test', file], {
+    const r = spawnSync(process.execPath, ['--import', 'tsx', '--import', './scripts/retain-statements.mjs', '--test-reporter', 'tap', '--test', file], {
       encoding: 'utf-8',
       env: process.env,
     })

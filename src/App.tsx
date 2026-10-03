@@ -26,6 +26,7 @@ const Lists = lazy(() => import('./pages/Lists').then(module => ({ default: modu
 const ListDetail = lazy(() => import('./pages/ListDetail').then(module => ({ default: module.ListDetail })))
 const Account = lazy(() => import('./pages/Account').then(module => ({ default: module.Account })))
 const AdminUsers = lazy(() => import('./pages/AdminUsers').then(module => ({ default: module.AdminUsers })))
+const Welcome = lazy(() => import('./pages/Welcome').then(module => ({ default: module.Welcome })))
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 60_000, retry: 1 } },
@@ -60,6 +61,7 @@ export function App() {
               <Route path="lists/:id"  element={<ListDetail />} />
               <Route path="account"    element={<Account />} />
               <Route path="admin/users" element={<AdminUsers />} />
+              <Route path="welcome"    element={<Welcome />} />
             </Route>
           </Routes>
         </MediaPreviewProvider>
