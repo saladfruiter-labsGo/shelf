@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { db } from '../db.js'
+import { db, forEachActiveUser } from '../db.js'
 import { sendTelegram, telegramDetectChats } from '../notify.js'
 import { backlogGames } from '../prices/repository.js'
 import { syncState } from '../prices/sync.js'
@@ -8,7 +8,8 @@ import { lastSync as steamLastSync, syncRunning as steamSyncRunning } from '../s
 import { lastLibrarySync as steamLibraryLastSync } from '../steam/library.js'
 import { autoAbandonDays, lastAchievementsSync } from '../steam/achievements.js'
 import { igdbConfigured, lastTimeToBeatSync, syncTimeToBeat, timeToBeatForSteamApp } from '../igdb.js'
-import { cfg, setCfg } from '../integrations/config.js'
+import { cfg, isInstanceKey, setCfg as writeCfg } from '../integrations/config.js'
+import { isAdmin } from '../auth/accounts.js'
 import type { NowPlaying } from '../integrations/now-playing.js'
 import kavitaIntegrationRoutes, { pollKavita, resetKavitaAuth } from './integrations/kavita.js'
 import lastfmIntegrationRoutes, { getLastfmNowPlaying, pollLastfm } from './integrations/lastfm.js'
@@ -48,29 +49,19 @@ app.post('/igdb/sync', async (c) => {
 
 /* ─────────────────────────────────────── Loops ────────────────────────────────────── */
 
-let plexBusy = false
-let lastfmBusy = false
-let kavitaBusy = false
-let telegramBusy = false
+/** Um poll de cada tipo por vez; o mesmo poll roda para cada conta ativa. */
+const busy = new Set<string>()
 let pollTimers: NodeJS.Timeout[] = []
 const activePolls = new Set<Promise<void>>()
 
 function runPoll(name: 'plex' | 'lastfm' | 'kavita' | 'telegram', poll: () => Promise<void>): void {
-  const busy = name === 'plex' ? plexBusy : name === 'lastfm' ? lastfmBusy : name === 'kavita' ? kavitaBusy : telegramBusy
-  if (busy) return
-  if (name === 'plex') plexBusy = true
-  else if (name === 'lastfm') lastfmBusy = true
-  else if (name === 'kavita') kavitaBusy = true
-  else telegramBusy = true
+  if (busy.has(name)) return
+  busy.add(name)
 
   let task: Promise<void>
-  task = poll()
-    .catch(error => console.error(`[${name}] poll falhou:`, error))
+  task = forEachActiveUser(() => poll().catch(error => console.error(`[${name}] poll falhou:`, error)), name)
     .finally(() => {
-      if (name === 'plex') plexBusy = false
-      else if (name === 'lastfm') lastfmBusy = false
-      else if (name === 'kavita') kavitaBusy = false
-      else telegramBusy = false
+      busy.delete(name)
       activePolls.delete(task)
     })
   activePolls.add(task)
@@ -101,6 +92,8 @@ export async function stopIntegrationPolling(): Promise<void> {
 
 // Status + configuração (segredos mascarados)
 app.get('/', (c) => {
+  const user = c.get('user')
+  const admin = !user || isAdmin(user)
   const secret = ensurePlexWebhookSecret()
   const mask = (v: string) => (v ? '••••' + v.slice(-4) : '')
   return c.json({
@@ -155,6 +148,7 @@ app.get('/', (c) => {
       achievements_last_sync: lastAchievementsSync(),
       auto_abandon_days: autoAbandonDays(),
     },
+    instance: { can_edit: admin },
     prices: {
       enabled:        cfg('ITAD_ENABLED') === '1',
       api_key_set:    !!cfg('ITAD_API_KEY'),
@@ -166,7 +160,7 @@ app.get('/', (c) => {
     },
     igdb: {
       configured:     igdbConfigured(),
-      client_id:      cfg('IGDB_CLIENT_ID'),
+      client_id:      admin ? cfg('IGDB_CLIENT_ID') : (cfg('IGDB_CLIENT_ID') ? '••••' : ''),
       secret_set:     !!cfg('IGDB_CLIENT_SECRET'),
       secret_masked:  mask(cfg('IGDB_CLIENT_SECRET')),
       last_sync:      lastTimeToBeatSync(),
@@ -177,6 +171,14 @@ app.get('/', (c) => {
 // Salvar configuração
 app.patch('/', async (c) => {
   const b = (await c.req.json()) as Record<string, unknown>
+  const user = c.get('user')
+  // Credenciais de metadados (IGDB, IsThereAnyDeal) valem para todo mundo:
+  // quem não é administrador simplesmente não as altera.
+  const admin = !user || isAdmin(user)
+  const setCfg = (key: string, value: string) => {
+    if (isInstanceKey(key) && !admin) return
+    writeCfg(key, value)
+  }
   const str = (v: unknown) => (typeof v === 'string' ? v.trim() : undefined)
   const bool = (v: unknown) => (typeof v === 'boolean' ? (v ? '1' : '0') : undefined)
   // 0 desliga o abandono automático; o teto evita valor absurdo digitado sem querer.

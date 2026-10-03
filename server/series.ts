@@ -2,16 +2,14 @@ import { db } from './db.js'
 import { tmdbIdFromGuid } from './plex.js'
 import { isQuickRating } from './quick-rating.js'
 import type Database from 'better-sqlite3'
+import { cfg } from './integrations/config.js'
 
 export { tmdbIdFromGuid } from './plex.js'
 
 /* ─────────────────────────── helpers de config ─────────────────────────── */
 
-const readSetting = db.prepare('SELECT value FROM settings WHERE key = ?')
-
 function apiKey(name: string): string | undefined {
-  const row = readSetting.get(name) as { value: string } | undefined
-  return row?.value?.trim() || process.env[name]
+  return cfg(name) || undefined
 }
 
 /* ─────────────────────────── statements ─────────────────────────── */

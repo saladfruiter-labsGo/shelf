@@ -12,6 +12,7 @@ import { readZip, looksLikeZip, stripRoot } from '../transfer/zip.js'
 import { importSteamWishlist } from '../steam/sync.js'
 import * as steam from '../steam/client.js'
 import { backupStatus, createDatabaseBackup } from '../backup.js'
+import { currentUserId } from '../db.js'
 
 const app = new Hono()
 
@@ -96,7 +97,7 @@ const MAX_ZIP_ENTRY = 32 * 1024 * 1024
 const MAX_ZIP_TOTAL = 128 * 1024 * 1024
 const MAX_ZIP_ENTRIES = 200
 const PLAN_TTL_MS = 30 * 60_000
-const MAX_PLANS   = 4
+const MAX_PLANS   = 12
 
 interface StoredPlan {
   plan: LetterboxdPlan
@@ -106,6 +107,8 @@ interface StoredPlan {
 }
 
 const plans = new Map<string, StoredPlan>()
+/** Uma prévia só vale para quem a criou: a chave carrega a conta. */
+const planKey = (id: string) => `${currentUserId() ?? 0}:${id}`
 
 /** Prévia é rascunho: a que expirou e as antigas demais são lixo. */
 function sweepPlans(): void {
@@ -182,7 +185,7 @@ app.post('/import/letterboxd/preview', async (c) => {
 
   sweepPlans()
   const planId = randomUUID()
-  plans.set(planId, { plan, sources, origin, at: Date.now() })
+  plans.set(planKey(planId), { plan, sources, origin, at: Date.now() })
   return c.json({ planId, origin, filename: file.name, plan, existingDiary })
 })
 
@@ -199,7 +202,7 @@ app.post('/import/letterboxd/replan', async (c) => {
     | null
 
   const planId = body?.planId ?? ''
-  const stored = plans.get(planId)
+  const stored = plans.get(planKey(planId))
   if (!stored) return c.json({ error: 'A prévia expirou. Envie o arquivo de novo.' }, 404)
 
   const overrides: Record<string, LetterboxdKind> = {}
@@ -208,7 +211,7 @@ app.post('/import/letterboxd/replan', async (c) => {
   }
 
   const plan = planLetterboxd(stored.sources, { origin: stored.origin, overrides })
-  plans.set(planId, { ...stored, plan, at: Date.now() })
+  plans.set(planKey(planId), { ...stored, plan, at: Date.now() })
   return c.json({ planId, origin: stored.origin, plan })
 })
 
@@ -218,7 +221,7 @@ app.post('/import/letterboxd/apply', async (c) => {
   const body = (await c.req.json().catch(() => null)) as { planId?: string; redo?: boolean } | null
 
   const planId = body?.planId ?? ''
-  const stored = plans.get(planId)
+  const stored = plans.get(planKey(planId))
   if (!stored) return c.json({ error: 'A prévia expirou ou já foi usada. Envie o arquivo de novo.' }, 404)
 
   try {
@@ -228,7 +231,7 @@ app.post('/import/letterboxd/apply', async (c) => {
   }
 
   try {
-    plans.delete(planId)
+    plans.delete(planKey(planId))
     return c.json(await applyLetterboxdPlan(stored.sources, stored.plan, { redo: body?.redo === true }))
   } catch (error) {
     return c.json({ error: (error as Error).message }, 400)
@@ -238,7 +241,7 @@ app.post('/import/letterboxd/apply', async (c) => {
 /** Aborta: descarta o plano e o conteúdo do upload sem escrever nada. */
 app.post('/import/letterboxd/abort', async (c) => {
   const body = (await c.req.json().catch(() => null)) as { planId?: string } | null
-  const discarded = body?.planId ? plans.delete(body.planId) : false
+  const discarded = body?.planId ? plans.delete(planKey(body.planId)) : false
   sweepPlans()
   return c.json({ ok: true, discarded })
 })

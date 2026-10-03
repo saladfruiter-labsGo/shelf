@@ -1,11 +1,11 @@
 import { Hono } from 'hono'
 import { db } from '../db.js'
+import { cfg } from '../integrations/config.js'
 
 const app = new Hono()
 
 function apiKey(name: string): string | undefined {
-  const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(name) as { value: string } | undefined
-  return row?.value?.trim() || process.env[name]
+  return cfg(name) || undefined
 }
 
 interface Details {

@@ -1,25 +1,11 @@
 import 'dotenv/config'
 import { serve } from '@hono/node-server'
 import { serveStatic } from '@hono/node-server/serve-static'
-import { Hono } from 'hono'
-import { logger } from 'hono/logger'
-import searchRoutes   from './routes/search.js'
-import mediaRoutes    from './routes/media.js'
-import wrapRoutes     from './routes/wrap.js'
-import settingsRoutes from './routes/settings.js'
-import detailsRoutes  from './routes/details.js'
-import listsRoutes    from './routes/lists.js'
-import seriesRoutes   from './routes/series.js'
-import diaryRoutes    from './routes/diary.js'
-import imgRoutes      from './routes/img.js'
-import coversRoutes   from './routes/covers.js'
-import steamAuthRoutes from './routes/steam-auth.js'
-import profileRoutes from './routes/profile.js'
-import gamesRoutes from './routes/games.js'
+import { createApp } from './app.js'
+import { announceSetupCode } from './routes/auth.js'
+import { pruneExpiredSessions } from './auth/accounts.js'
 import { stopSteamDiagnostic } from './steam/diagnostic.js'
-import integrationsRoutes, { startIntegrationPolling, stopIntegrationPolling } from './routes/integrations.js'
-import pricesRoutes    from './routes/prices.js'
-import transferRoutes  from './routes/transfer.js'
+import { startIntegrationPolling, stopIntegrationPolling } from './routes/integrations.js'
 import { startPriceSync, stopPriceSync } from './prices/sync.js'
 import { startSteamSync, stopSteamSync } from './steam/sync.js'
 import { startSteamLibrarySync, stopSteamLibrarySync } from './steam/library.js'
@@ -27,51 +13,14 @@ import { stopSteamAchievements } from './steam/achievements.js'
 import { stopTimeToBeatSync } from './igdb.js'
 import { stopSteamCovers } from './steam/covers.js'
 import { purgeHiddenGames } from './steam/hidden.js'
-import { limitedApiBody, noStoreDynamicApi, sameOriginApi, shelfSecurityHeaders } from './security.js'
 import { startBackupScheduler, stopBackupScheduler } from './backup.js'
-import { db } from './db.js'
+import { allDatabases, forEachActiveUser } from './db.js'
 import { shutdownServices } from './lifecycle.js'
 import { startActivityRetention, stopActivityRetention } from './activity-retention.js'
 import { startDiaryProgressJob, stopDiaryProgressJob } from './diary-progress.js'
 
-const app = new Hono()
 let shuttingDown = false
-const healthQuery = db.prepare('SELECT 1 AS ok')
-
-app.use('*', logger())
-app.use('*', shelfSecurityHeaders)
-app.use('/api/*', sameOriginApi)
-app.use('/api/*', limitedApiBody)
-app.use('/api/*', noStoreDynamicApi)
-
-app.route('/api/search',   searchRoutes)
-app.route('/api/media',    mediaRoutes)
-app.route('/api/wrap',     wrapRoutes)
-app.route('/api/settings', settingsRoutes)
-app.route('/api/details',  detailsRoutes)
-app.route('/api/lists',    listsRoutes)
-app.route('/api/series',   seriesRoutes)
-app.route('/api/diary',    diaryRoutes)
-app.route('/api/img',      imgRoutes)
-app.route('/api/covers',   coversRoutes)
-app.route('/api/integrations', integrationsRoutes)
-app.route('/api/prices',  pricesRoutes)
-app.route('/api/transfer', transferRoutes)
-app.route('/api/profile',  profileRoutes)
-app.route('/api/games',    gamesRoutes)
-
-// "Entrar com a Steam": fora de /api porque a volta é navegação vinda da Steam.
-app.route('/auth/steam', steamAuthRoutes)
-
-app.get('/api/health', (c) => {
-  if (shuttingDown) return c.json({ ok: false, reason: 'shutting_down' }, 503)
-  try {
-    healthQuery.get()
-    return c.json({ ok: true })
-  } catch {
-    return c.json({ ok: false, reason: 'database_unavailable' }, 503)
-  }
-})
+const app = createApp({ isShuttingDown: () => shuttingDown })
 
 app.use('/*', serveStatic({ root: './dist/public' }))
 app.get('/*', serveStatic({ path: './dist/public/index.html' }))
@@ -91,7 +40,11 @@ startSteamSync()
 startSteamLibrarySync()
 
 // Programas que não são jogo (Wallpaper Engine) saem já no boot, venham da Steam ou do Playnite.
-try { purgeHiddenGames() } catch (e) { console.error('[hidden-games]', (e as Error).message) }
+forEachActiveUser(() => purgeHiddenGames(), 'hidden-games').catch(e => console.error('[hidden-games]', (e as Error).message))
+
+// Sem contas ainda: o log mostra o código para criar a conta de dono.
+announceSetupCode()
+try { pruneExpiredSessions() } catch { /* limpeza oportunista */ }
 
 // Snapshot integral verificado, independente do export JSON portátil.
 startBackupScheduler()
@@ -112,7 +65,7 @@ function requestShutdown(reason: string, exitCode: number): void {
   console.log(`[shutdown] ${reason}: drenando conexões e jobs...`)
   shutdownPromise = shutdownServices({
     server,
-    database: db,
+    database: allDatabases as never,
     stopBackgroundJobs: [
       stopIntegrationPolling,
       stopPriceSync,

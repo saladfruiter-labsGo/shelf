@@ -1,4 +1,4 @@
-import { db } from './db.js'
+import { db, forEachActiveUser } from './db.js'
 
 export type DiaryProgressSource = 'kavita' | 'playnite' | 'steam'
 export type DiaryProgressUnit = 'pages' | 'seconds'
@@ -144,12 +144,14 @@ let progressTimer: NodeJS.Timeout | null = null
 export function startDiaryProgressJob(): void {
   if (progressTimer) return
   const tick = () => {
-    try {
-      const created = runDiaryProgressJob()
-      if (created > 0) console.log(`[diary] ${created} progresso(s) adicionado(s) ao diário`)
-    } catch (error) {
-      console.error('[diary] job de progresso falhou:', error)
-    }
+    forEachActiveUser(() => {
+      try {
+        const created = runDiaryProgressJob()
+        if (created > 0) console.log(`[diary] ${created} progresso(s) adicionado(s) ao diário`)
+      } catch (error) {
+        console.error('[diary] job de progresso falhou:', error)
+      }
+    }, 'diary').catch(() => {})
   }
   tick()
   progressTimer = setInterval(tick, 60_000)

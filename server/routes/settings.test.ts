@@ -8,9 +8,11 @@ process.env.DATA_DIR = mkdtempSync(join(tmpdir(), 'shelf-settings-'))
 
 let app: typeof import('./settings.js').default
 let db: import('better-sqlite3').Database
+let coreDb: import('better-sqlite3').Database
 
 before(async () => {
   db = (await import('../db.js')).db
+  coreDb = (await import('../core-db.js')).coreDb
   app = (await import('./settings.js')).default
 })
 
@@ -31,7 +33,8 @@ test('PATCH só troca valor explícito e suporta remoção explícita', async ()
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ RAWG_API_KEY: 'nova-chave-rawg' }),
   })
-  assert.equal((db.prepare("SELECT value FROM settings WHERE key = 'RAWG_API_KEY'").get() as any).value, 'nova-chave-rawg')
+  // Chaves de metadados são da instância: gravadas no banco núcleo.
+  assert.equal((coreDb.prepare("SELECT value FROM instance_settings WHERE key = 'RAWG_API_KEY'").get() as any).value, 'nova-chave-rawg')
   assert.equal((db.prepare("SELECT value FROM settings WHERE key = 'TMDB_API_KEY'").get() as any).value, 'abcd-segredo-1234')
 
   await app.request('/', {
@@ -39,5 +42,7 @@ test('PATCH só troca valor explícito e suporta remoção explícita', async ()
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ TMDB_API_KEY_clear: true }),
   })
-  assert.equal(db.prepare("SELECT 1 FROM settings WHERE key = 'TMDB_API_KEY'").get(), undefined)
+  // A remoção explícita apaga a chave da instância (e o valor antigo do banco único).
+  const body = await (await app.request('/')).json()
+  assert.deepEqual(body.TMDB_API_KEY, { set: false, masked: '' })
 })

@@ -20,7 +20,7 @@
  * - na primeira vez que um jogo é visto não há atividade, aviso nem diário —
  *   senão a primeira leitura inventaria sessões de anos atrás.
  */
-import { db } from '../db.js'
+import { db, forEachActiveUser } from '../db.js'
 import { cfg, setCfg } from '../integrations/config.js'
 import { GAME_STATUS_TO_BASE, type GameStatus } from '../media-domain.js'
 import { normalizeTitle, steamAppIdFromRawg } from '../prices/matcher.js'
@@ -33,6 +33,7 @@ import { syncTimeToBeat } from '../igdb.js'
 import { fetchSteamArt, refreshSteamCovers, steamCoverFor } from './covers.js'
 import { isHiddenGame, purgeHiddenGames } from './hidden.js'
 import { groupLegacyRelistings, legacyBaseName, mergeGameCards, pickKeeper } from './legacy.js'
+import { PerUser } from '../user-state.js'
 
 const STATE_KEY = 'STEAM_LIBRARY_STATE'
 const LAST_SYNC_KEY = 'STEAM_LIBRARY_LAST_SYNC'
@@ -119,7 +120,7 @@ const insertActivity = db.prepare(`
   VALUES ('steam', 'playing', 'game', @external_ref, @title, NULL, @cover_url, NULL, NULL, NULL, @occurred_at, NULL)
 `)
 
-let running: Promise<SteamLibraryResult> | null = null
+const running = new PerUser<Promise<SteamLibraryResult> | null>(() => null)
 
 async function runLibrarySync(): Promise<SteamLibraryResult> {
   const result: SteamLibraryResult = { at: new Date().toISOString(), owned: 0, created: 0, adopted: 0, updated: 0, started: 0, merged: 0, errors: [] }
@@ -287,8 +288,12 @@ async function runLibrarySync(): Promise<SteamLibraryResult> {
 
 /** Uma leitura por vez; quem chega durante uma em andamento recebe o mesmo resultado. */
 export function syncSteamLibrary(): Promise<SteamLibraryResult> {
-  if (!running) running = runLibrarySync().finally(() => { running = null })
-  return running
+  let task = running.get()
+  if (!task) {
+    task = runLibrarySync().finally(() => { running.set(null) })
+    running.set(task)
+  }
+  return task
 }
 
 /* ──────────────────────────────── Agendamento ────────────────────────────── */
@@ -302,13 +307,15 @@ export function startSteamLibrarySync(): void {
   if (firstRunTimer || intervalTimer) return
   // Depois da biblioteca, as conquistas dos jogos que mudaram (zerado/platinado/abandonado).
   const tick = () => {
-    if (!steamLibraryEnabled()) return
-    syncSteamLibrary()
-      .then(() => refreshSteamCovers())
-      .then(() => syncSteamAchievements())
-      // Tempo para zerar dos jogos novos, em lotes pequenos (IGDB: 4 req/s).
-      .then(() => syncTimeToBeat(50))
-      .catch(() => {})
+    forEachActiveUser(async () => {
+      if (!steamLibraryEnabled()) return
+      await syncSteamLibrary()
+        .then(() => refreshSteamCovers())
+        .then(() => syncSteamAchievements())
+        // Tempo para zerar dos jogos novos, em lotes pequenos (IGDB: 4 req/s).
+        .then(() => syncTimeToBeat(50))
+        .catch(() => {})
+    }, 'steam-library').catch(() => {})
   }
   firstRunTimer = setTimeout(() => { firstRunTimer = null; tick() }, FIRST_RUN_DELAY_MS)
   intervalTimer = setInterval(tick, INTERVAL_MS)
@@ -321,5 +328,5 @@ export async function stopSteamLibrarySync(): Promise<void> {
   if (intervalTimer) clearInterval(intervalTimer)
   firstRunTimer = null
   intervalTimer = null
-  await running?.catch(() => {})
+  await Promise.allSettled(running.all())
 }

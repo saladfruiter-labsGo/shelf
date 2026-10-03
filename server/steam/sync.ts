@@ -18,16 +18,10 @@ import { rawgLookup } from '../routes/search.js'
 import { planWishlistSync, nextKnown, type SteamSyncOptions } from './plan.js'
 import * as steam from './client.js'
 import { refreshSteamCovers } from './covers.js'
+import { cfg, setCfg } from '../integrations/config.js'
+import { forEachActiveUser } from '../db.js'
+import { PerUser } from '../user-state.js'
 
-const getSetting = db.prepare('SELECT value FROM settings WHERE key = ?')
-const setSetting = db.prepare(
-  'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
-)
-
-function cfg(key: string): string {
-  const row = getSetting.get(key) as { value: string } | undefined
-  return row?.value?.trim() || process.env[key] || ''
-}
 
 /* ─────────────────────────────────── Estado ──────────────────────────────── */
 
@@ -44,7 +38,7 @@ function readState(): SteamState {
     return { known: [] }
   }
 }
-function writeState(s: SteamState) { setSetting.run('STEAM_STATE', JSON.stringify(s)) }
+function writeState(s: SteamState) { setCfg('STEAM_STATE', JSON.stringify(s)) }
 
 export interface SteamSyncResult {
   at: string
@@ -195,8 +189,8 @@ export function syncOptions(): SteamSyncOptions {
   }
 }
 
-let running = false
-export function syncRunning(): boolean { return running }
+const running = new PerUser(() => false)
+export function syncRunning(): boolean { return running.get() }
 
 interface RunOptions {
   /** Exige o conector ligado. A importação avulsa roda só com o SteamID. */
@@ -211,14 +205,14 @@ async function runSync(opts: SteamSyncOptions, run: RunOptions): Promise<SteamSy
     pulled: 0, pushed: 0, removed_shelf: 0, removed_steam: 0,
     unmatched: [], pending_push: 0, can_write: steam.steamCanWrite(), errors: [],
   }
-  if (running) { result.errors.push('Uma sincronização já está em andamento.'); return result }
+  if (running.get()) { result.errors.push('Uma sincronização já está em andamento.'); return result }
   if (run.requireEnabled && !steam.steamEnabled()) {
     result.errors.push('Conector da Steam desativado ou sem SteamID.')
     return result
   }
   if (!steam.cfg('STEAM_ID')) { result.errors.push('SteamID não configurado.'); return result }
 
-  running = true
+  running.set(true)
   try {
     const wishlist = await steam.fetchWishlist()
     const steamIds = wishlist.map(w => w.appid)
@@ -305,10 +299,10 @@ async function runSync(opts: SteamSyncOptions, run: RunOptions): Promise<SteamSy
   } catch (e) {
     result.errors.push((e as Error).message)
   } finally {
-    running = false
+    running.set(false)
   }
 
-  if (run.persistLastSync) setSetting.run('STEAM_LAST_SYNC', JSON.stringify(result))
+  if (run.persistLastSync) setCfg('STEAM_LAST_SYNC', JSON.stringify(result))
   return result
 }
 
@@ -337,7 +331,11 @@ let intervalTimer: NodeJS.Timeout | null = null
 export function startSteamSync(): void {
   if (firstRunTimer || intervalTimer) return
   // Depois da wishlist, a arte vertical da Steam para os jogos ligados a ela.
-  const tick = () => { if (steam.steamEnabled()) syncSteamBacklog().then(() => refreshSteamCovers()).catch(() => {}) }
+  const tick = () => {
+    forEachActiveUser(async () => {
+      if (steam.steamEnabled()) await syncSteamBacklog().then(() => refreshSteamCovers())
+    }, 'steam-sync').catch(() => {})
+  }
   firstRunTimer = setTimeout(() => { firstRunTimer = null; tick() }, FIRST_RUN_DELAY_MS)
   intervalTimer = setInterval(tick, INTERVAL_MS)
   firstRunTimer.unref()
@@ -350,5 +348,5 @@ export async function stopSteamSync(): Promise<void> {
   if (intervalTimer) clearInterval(intervalTimer)
   firstRunTimer = null
   intervalTimer = null
-  while (running) await new Promise(resolve => setTimeout(resolve, 50))
+  while (running.all().some(Boolean)) await new Promise(resolve => setTimeout(resolve, 50))
 }

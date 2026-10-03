@@ -1,16 +1,10 @@
-import { db } from './db.js'
 import { telegramRatingKeyboard } from './telegram-rating.js'
+import { cfg } from './integrations/config.js'
 
 /* Base da API do Telegram (sobrescrevível em testes via env). */
 const TG_BASE = process.env.TELEGRAM_API_BASE ?? 'https://api.telegram.org'
 
-/* Config lida da tabela settings (mesma usada pelas integrações). */
-const readSetting = db.prepare('SELECT value FROM settings WHERE key = ?')
-
-function cfg(key: string): string {
-  const row = readSetting.get(key) as { value: string } | undefined
-  return row?.value ?? ''
-}
+/* Config pessoal de quem está no contexto (mesma usada pelas integrações). */
 
 const TYPE_LABEL: Record<string, string> = {
   movie:  'Filme',

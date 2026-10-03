@@ -1,4 +1,4 @@
-import { db } from './db.js'
+import { cfg } from './integrations/config.js'
 
 export type TmdbMediaType = 'movie' | 'series'
 
@@ -16,11 +16,8 @@ export interface TmdbMediaDetails {
   release_date: string | null
 }
 
-const readSetting = db.prepare('SELECT value FROM settings WHERE key = ?')
-
 function apiKey(): string | undefined {
-  const row = readSetting.get('TMDB_API_KEY') as { value: string } | undefined
-  return row?.value?.trim() || process.env.TMDB_API_KEY
+  return cfg('TMDB_API_KEY') || undefined
 }
 
 function yearFromDate(date: unknown): number | null {

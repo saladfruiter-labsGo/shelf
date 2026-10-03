@@ -7,6 +7,7 @@ import * as itad from './providers/isthereanydeal.js'
 import * as repo from './repository.js'
 import { resolveMatch, rankCandidates } from './matcher.js'
 import { buildSeries, computeStats, parseRange, rangeStart, shopStats, type Range } from './stats.js'
+import { PerUser } from '../user-state.js'
 
 const selGame = db.prepare(`SELECT id, title, external_id FROM media_items WHERE id = ? AND type = 'game'`)
 
@@ -15,7 +16,7 @@ const STALE_HOURS = 12
 /** Intervalo mínimo entre duas atualizações manuais do mesmo jogo. */
 const REFRESH_COOLDOWN_MS = 5 * 60_000
 
-const lastManualRefresh = new Map<number, number>()
+const lastManualRefresh = new PerUser(() => new Map<number, number>())
 
 /**
  * Uma linha da lista de lojas. Lojas sem oferta ativa também entram: mostram o
@@ -305,10 +306,10 @@ export async function refreshGame(mediaItemId: number): Promise<{ ok: boolean; e
   if (!itad.itadEnabled()) return { ok: false, error: 'Integração de preços desativada ou sem chave de API.' }
 
   const product = repo.ensureProduct(mediaItemId)
-  const last = lastManualRefresh.get(product.id) ?? 0
+  const last = lastManualRefresh.get().get(product.id) ?? 0
   const wait = REFRESH_COOLDOWN_MS - (Date.now() - last)
   if (wait > 0) return { ok: false, error: 'Aguarde antes de atualizar de novo.', retry_in: Math.ceil(wait / 1000) }
-  lastManualRefresh.set(product.id, Date.now())
+  lastManualRefresh.get().set(product.id, Date.now())
 
   const game = selGame.get(mediaItemId) as repo.BacklogGame | undefined
   if (!game) return { ok: false, error: 'Jogo não encontrado.' }
