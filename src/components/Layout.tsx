@@ -1,5 +1,7 @@
 import { Suspense, useState, useCallback, useEffect, useRef } from 'react'
-import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
+import { api } from '../lib/api'
 import { useHotkey } from '../hooks/useHotkey'
 import { useTheme } from '../hooks/useTheme'
 import { SearchModal } from './SearchModal'
@@ -145,6 +147,21 @@ export function Layout() {
   const { dark, toggle } = useTheme()
   const { user, logout } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
+
+  // Conta sem nada conectado: o roteiro de configuração abre uma vez por sessão.
+  const { data: onboarding } = useQuery({ queryKey: ['onboarding'], queryFn: api.onboarding.get, staleTime: 5 * 60_000 })
+  useEffect(() => {
+    if (!onboarding?.auto_open || location.pathname === '/welcome') return
+    const key = `shelf:welcome-shown:${user.id}`
+    try {
+      if (sessionStorage.getItem(key)) return
+      sessionStorage.setItem(key, '1')
+    } catch { /* sem sessionStorage: abre mesmo assim */ }
+    navigate('/welcome', { replace: true })
+    // Só na chegada: navegar depois não reabre o roteiro.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onboarding?.auto_open])
   const dropRef = useRef<HTMLDivElement>(null)
 
   const openSearch = useCallback(() => setSearchOpen(true), [])
@@ -284,6 +301,13 @@ export function Layout() {
               {[
                 { icon: '👤', label: 'Perfil', action: () => { setDropOpen(false); navigate('/profile') } },
                 { icon: '🪪', label: 'Minha conta', action: () => { setDropOpen(false); navigate('/account') } },
+                {
+                  icon: '🧭',
+                  label: onboarding && onboarding.done < onboarding.total
+                    ? `Configuração guiada (${onboarding.done}/${onboarding.total})`
+                    : 'Configuração guiada',
+                  action: () => { setDropOpen(false); navigate('/welcome') },
+                },
                 ...(user.is_admin ? [{ icon: '🛡️', label: 'Usuários', action: () => { setDropOpen(false); navigate('/admin/users') } }] : []),
                 { icon: '🔌', label: 'Integrações', action: () => { setDropOpen(false); navigate('/integrations') } },
                 { icon: '📦', label: 'Importação/Exportação', action: () => { setDropOpen(false); navigate('/import-export') } },
