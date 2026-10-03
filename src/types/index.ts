@@ -926,3 +926,47 @@ export interface OnboardingView {
   done: number
   total: number
 }
+
+/* ─────────────────────────────── Mensagens ─────────────────────────────── */
+
+/** Retrato de um item da biblioteca de quem mandou a mensagem. */
+export interface SharedItem {
+  local_id?: number
+  type: MediaType
+  external_id: string
+  title: string
+  cover_url: string | null
+  year: number | null
+  genre: string | null
+  rating: number | null
+  status: MediaStatus
+  game_status: string | null
+  playtime_seconds: number | null
+  review: { comment: string; rating: number | null; watched_at: string } | null
+}
+
+export interface DirectMessage {
+  id: number
+  sender_id: number
+  mine: boolean
+  deleted: boolean
+  body: string | null
+  media: SharedItem | null
+  refs: MediaRef[]
+  created_at: string
+}
+
+export interface ConversationSummary {
+  id: number
+  other: PersonRef
+  last_message_at: string
+  last: { mine: boolean; text: string } | null
+  unread: number
+}
+
+export interface ConversationThread {
+  conversation_id: number | null
+  other: PersonRef
+  messages: DirectMessage[]
+  has_more: boolean
+}

@@ -10,6 +10,7 @@ import { CATEGORIES } from '../lib/categories'
 import { useAuth } from '../lib/auth'
 import { Avatar } from './Avatar'
 import { NotificationBell } from './social/NotificationBell'
+import { MessagesButton } from './social/MessagesButton'
 
 const NAV = [
   { to: '/',         label: 'Home',        end: true  },
@@ -255,6 +256,7 @@ export function Layout() {
             <span className="desktop-only" style={{ fontFamily: 'Space Grotesk, monospace', fontSize: 11, color: 'var(--dim)' }}>⌘K</span>
           </button>
 
+          <MessagesButton />
           <NotificationBell />
 
           {/* Theme toggle */}

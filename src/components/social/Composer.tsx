@@ -64,7 +64,7 @@ function MediaPicker({ onPick, onClose }: { onPick: (ref: MediaRef) => void; onC
  */
 export function Composer({
   placeholder, submitLabel = 'Publicar', allowImages = false, compact = false, autoFocus = false,
-  initial, onSubmit, onCancel,
+  initial, onSubmit, onCancel, allowEmpty = false, extraActions,
 }: {
   placeholder: string
   submitLabel?: string
@@ -74,6 +74,10 @@ export function Composer({
   initial?: Partial<ComposerValue>
   onSubmit: (value: ComposerValue) => Promise<void>
   onCancel?: () => void
+  /** Permite enviar sem texto (ex.: mensagem que só leva um item anexado). */
+  allowEmpty?: boolean
+  /** Botões extras na barra de ações (ex.: anexar item da biblioteca). */
+  extraActions?: React.ReactNode
 }) {
   const { user } = useAuth()
   const [body, setBody] = useState(initial?.body ?? '')
@@ -148,7 +152,7 @@ export function Composer({
 
   const submit = async () => {
     if (busy) return
-    if (!body.trim() && !images.length && !refs.length) return setError('Escreva algo primeiro.')
+    if (!allowEmpty && !body.trim() && !images.length && !refs.length) return setError('Escreva algo primeiro.')
     setBusy(true)
     setError(null)
     try {
@@ -234,6 +238,7 @@ export function Composer({
               <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={e => { addImages(e.target.files); e.target.value = '' }} />
             </>
           )}
+          {extraActions}
           <span className="flex-1" />
           {onCancel && (
             <button type="button" onClick={onCancel} className="px-3 py-1.5 text-sm text-muted hover:text-primary">Cancelar</button>

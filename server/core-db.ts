@@ -147,6 +147,43 @@ export const coreMigrations: Migration[] = [{
       CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, read_at, id DESC);
     `)
   },
+}, {
+  version: 3,
+  name: 'direct-messages',
+  up: () => {
+    coreDb.exec(`
+      -- Conversa a dois; o par é guardado sempre na mesma ordem (menor id primeiro).
+      CREATE TABLE IF NOT EXISTS dm_conversations (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_a          INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        user_b          INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+        last_message_at TEXT,
+        CHECK (user_a < user_b),
+        UNIQUE (user_a, user_b)
+      );
+
+      -- media_json: retrato do item da biblioteca compartilhado (com a nota de quem mandou).
+      CREATE TABLE IF NOT EXISTS dm_messages (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        conversation_id INTEGER NOT NULL REFERENCES dm_conversations(id) ON DELETE CASCADE,
+        sender_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        body            TEXT,
+        media_json      TEXT,
+        refs_json       TEXT,
+        created_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+        deleted_at      TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_dm_messages_conv ON dm_messages(conversation_id, id);
+
+      CREATE TABLE IF NOT EXISTS dm_reads (
+        conversation_id      INTEGER NOT NULL REFERENCES dm_conversations(id) ON DELETE CASCADE,
+        user_id              INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        last_read_message_id INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (conversation_id, user_id)
+      );
+    `)
+  },
 }]
 
 runMigrations(coreDb, coreMigrations)
