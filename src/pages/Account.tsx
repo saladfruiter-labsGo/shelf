@@ -1,5 +1,5 @@
 import { useRef, useState, type FormEvent } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { Avatar } from '../components/Avatar'
@@ -119,6 +119,8 @@ export function Account() {
         </button>
       </form>
 
+      <FeedPrivacy />
+
       <section className="bg-surface border border-border rounded-xl p-5 mb-4" aria-labelledby="account-password">
         <h2 id="account-password" className="font-medium text-primary mb-4">Trocar senha</h2>
         <ChangePasswordForm onDone={setUser} />
@@ -128,5 +130,33 @@ export function Account() {
         Sair desta conta
       </button>
     </div>
+  )
+}
+
+/** O que entra sozinho no feed. Posts escritos e listas compartilhadas são sempre escolha explícita. */
+function FeedPrivacy() {
+  const qc = useQueryClient()
+  const { data } = useQuery({ queryKey: ['feed-preferences'], queryFn: api.feed.preferences })
+  const update = async (patch: { share_diary?: boolean; share_achievements?: boolean }) => {
+    qc.setQueryData(['feed-preferences'], await api.feed.updatePreferences(patch))
+  }
+  return (
+    <section className="bg-surface border border-border rounded-xl p-5 mb-4" aria-labelledby="account-feed">
+      <h2 id="account-feed" className="font-medium text-primary mb-1">Feed</h2>
+      <p className="text-sm text-muted mb-4">O que vai para o feed dos amigos sozinho. Registros antigos e importações nunca entram — só o que acontece daqui pra frente.</p>
+      {[
+        { key: 'share_diary' as const, label: 'Registros do diário', hint: 'Filmes, episódios, jogos e livros que você registrar, com nota e resenha.' },
+        { key: 'share_achievements' as const, label: 'Conquistas da Steam', hint: 'Agrupadas por jogo: um post por dia com todas as conquistas daquele jogo.' },
+      ].map(opt => (
+        <label key={opt.key} className="flex items-start gap-3 mb-3 cursor-pointer">
+          <input type="checkbox" className="mt-1 accent-[var(--accent)]" checked={data?.[opt.key] ?? true} disabled={!data}
+            onChange={e => update({ [opt.key]: e.target.checked })} />
+          <span>
+            <span className="block text-primary" style={{ fontSize: 16 }}>{opt.label}</span>
+            <span className="block text-sm text-muted">{opt.hint}</span>
+          </span>
+        </label>
+      ))}
+    </section>
   )
 }

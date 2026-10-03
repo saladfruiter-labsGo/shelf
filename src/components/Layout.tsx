@@ -9,9 +9,11 @@ import { NowPlayingBar } from './NowPlayingBar'
 import { CATEGORIES } from '../lib/categories'
 import { useAuth } from '../lib/auth'
 import { Avatar } from './Avatar'
+import { NotificationBell } from './social/NotificationBell'
 
 const NAV = [
   { to: '/',         label: 'Home',        end: true  },
+  { to: '/feed',     label: 'Feed',        end: false },
   { to: '/library',  label: 'Biblioteca',  end: false },
   { to: '/wishlist', label: 'Wishlist',  end: false },
   { to: '/backlog',  label: 'Backlog',   end: false },
@@ -128,16 +130,16 @@ function DiaryIcon()   { return (<svg {...iconProps}><path d="M6 3h11a2 2 0 012 
 function WishlistIcon() { return (<svg {...iconProps}><path d="M20.8 4.6a5.5 5.5 0 00-7.8 0L12 5.6l-1-1a5.5 5.5 0 00-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 000-7.8z"/></svg>) }
 function BacklogIcon()  { return (<svg {...iconProps}><rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10a1 1 0 001 1h12a1 1 0 001-1V9"/><path d="M10 13h4"/></svg>) }
 function ListsIcon()   { return (<svg {...iconProps}><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>) }
-function WrapIcon()    { return (<svg {...iconProps}><path d="M12 3v18"/><path d="M5 8s2-3 7-3 7 3 7 3M5 8v8c0 2 3 3 7 3s7-1 7-3V8"/></svg>) }
+function FeedIcon()    { return (<svg {...iconProps}><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>) }
 
 const BOTTOM_NAV = [
   { to: '/',         label: 'Home',   end: true,  Icon: HomeIcon },
+  { to: '/feed',     label: 'Feed',   end: false, Icon: FeedIcon },
   { to: '/library',  label: 'Biblioteca', end: false, Icon: LibraryIcon },
   { to: '/wishlist', label: 'Wishlist', end: false, Icon: WishlistIcon },
   { to: '/backlog',  label: 'Backlog', end: false, Icon: BacklogIcon },
   { to: '/diary',    label: 'Diário', end: false, Icon: DiaryIcon },
   { to: '/lists',    label: 'Listas', end: false, Icon: ListsIcon },
-  { to: '/wrap',     label: 'Wrap',   end: false, Icon: WrapIcon },
 ]
 
 /* ─── Main Layout ─── */
@@ -252,6 +254,8 @@ export function Layout() {
             <SearchIcon />
             <span className="desktop-only" style={{ fontFamily: 'Space Grotesk, monospace', fontSize: 11, color: 'var(--dim)' }}>⌘K</span>
           </button>
+
+          <NotificationBell />
 
           {/* Theme toggle */}
           <button

@@ -6,6 +6,7 @@ import { api } from '../lib/api'
 import { ListPosterTile } from '../components/ListPosterTile'
 import { ListTierBoard } from '../components/ListTierBoard'
 import { ConfirmDialog } from '../components/ConfirmDialog'
+import { ShareListDialog } from '../components/social/ShareListDialog'
 import { useMediaPreview } from '../components/MediaSummaryModal'
 import { usePosterDrag, type DropTarget } from '../hooks/usePosterDrag'
 import { MODES, MODE_LABEL, isConsumed, orderPayload, reorderItems } from '../lib/lists'
@@ -311,6 +312,7 @@ export function ListDetail() {
   const [desc,    setDesc]    = useState('')
   const [picker,  setPicker]  = useState<{ id: number | null; name: string } | undefined | false>(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [sharing, setSharing] = useState(false)
   const [deletingTier, setDeletingTier] = useState<ListTier | null>(null)
 
   const [fDecade, setFDecade] = useState('')
@@ -606,6 +608,12 @@ export function ListDetail() {
                 <span style={{ fontSize: 16, lineHeight: 1 }}>+</span> Adicionar
               </button>
               <button
+                onClick={() => setSharing(true)}
+                className="link-accent"
+                title="Compartilhar no feed"
+                style={{ background: 'none', border: 0, color: 'var(--text-muted)', font: 'inherit', fontSize: 14, cursor: 'pointer' }}
+              >Compartilhar</button>
+              <button
                 onClick={() => { setName(data.name); setDesc(data.description ?? ''); setEditing(true) }}
                 className="link-accent"
                 style={{ background: 'none', border: 0, color: 'var(--text-muted)', font: 'inherit', fontSize: 14, cursor: 'pointer' }}
@@ -799,6 +807,8 @@ export function ListDetail() {
         onCancel={() => { if (!deleteTierMutation.isPending) setDeletingTier(null) }}
         onConfirm={() => { if (deletingTier) deleteTierMutation.mutate(deletingTier.id) }}
       />
+
+      <ShareListDialog listId={data.id} listName={data.name} open={sharing} onClose={() => setSharing(false)} />
     </div>
   )
 }

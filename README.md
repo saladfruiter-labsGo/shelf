@@ -140,6 +140,19 @@ Cada conta tem o **próprio SQLite** em `DATA_DIR/users/`, com biblioteca, diár
 
 Senhas são guardadas com scrypt; sessões usam cookie `HttpOnly` + `SameSite=Lax` (e `Secure` quando servido por HTTPS, como no `tailscale serve`), e o banco guarda só o hash do token. Login, setup e troca de senha têm limite de tentativas.
 
+### Feed social
+
+O **Feed** reúne a turma inteira da instância (todas as contas ativas veem o feed de todas):
+
+- **Diário e conquistas entram sozinhos.** Gatilhos no banco de cada conta anotam o que muda no diário e nas conquistas da Steam; ao fim de cada requisição e de cada job isso vira post no núcleo. Só entra o que é **recente** (últimos 3 dias): importações do Letterboxd e a primeira leitura de milhares de conquistas antigas não inundam o feed. Conquistas são **agrupadas por jogo e dia** num post só, que volta ao topo a cada conquista nova. Cada pessoa desliga isso em **Minha conta → Feed**.
+- **Posts** com texto, até 4 imagens (prints — regravadas em WebP, sem EXIF), **@menções** a pessoas e **mídias marcadas** (viram cartões com capa e um botão "Quero" que leva a obra para a sua Wishlist).
+- **Comentários** com um nível de respostas, edição pelo autor; **curtir** e **reagir** (❤️ 🔥 😂 😮 😢 👏) em posts e comentários.
+- **Listas e tier lists** compartilhadas pelo botão **Compartilhar** da lista aparecem com prévia no feed e abrem completas (somente leitura, sempre atualizadas). Listas não compartilhadas continuam privadas.
+- **Notificações** (sino na barra): comentário no seu post, resposta, reação e menção.
+- **Perfis** de cada pessoa (`/u/usuario`) com números, favoritos, listas compartilhadas e o que ela postou.
+
+Moderação: quem posta (ou um admin) apaga o post; comentários idem. Texto é sempre texto puro, renderizado escapado. Notas pessoais, arquivos de mídia e credenciais nunca saem do banco de cada um — o feed guarda só o retrato do que foi compartilhado.
+
 ### Segurança de acesso
 
 Mesmo com login, use o Shelf numa LAN confiável ou por uma VPN como o Tailscale; não publique a porta `3000` diretamente na internet.

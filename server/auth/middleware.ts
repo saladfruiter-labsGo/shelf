@@ -3,7 +3,7 @@ import type { Context, MiddlewareHandler, Next } from 'hono'
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie'
 import { getConnInfo } from '@hono/node-server/conninfo'
 import { core } from '../core-db.js'
-import { instanceHasUsers, runAsUser } from '../db.js'
+import { instanceHasUsers, runAfterUserWork, runAsUser } from '../db.js'
 import { cfg } from '../integrations/config.js'
 import {
   SESSION_COOKIE, SESSION_DAYS, isAdmin, sessionUser, touchSession, type UserRow,
@@ -88,7 +88,11 @@ async function requireSession(c: Context, next: Next) {
   }
   c.set('user', lookup.user)
   c.set('sessionToken', token)
-  return runAsUser(lookup.user.id, () => next())
+  return runAsUser(lookup.user.id, async () => {
+    await next()
+    // O que a requisição escreveu no diário chega ao feed na mesma hora.
+    runAfterUserWork()
+  })
 }
 
 /**
@@ -106,7 +110,10 @@ export const apiAuth: MiddlewareHandler = async (c, next) => {
     const token = c.req.query('token') ?? ''
     const owner = findWebhookOwner(webhookKey, token)
     if (owner == null) return c.json({ error: 'unauthorized' }, 401)
-    return runAsUser(owner, () => next())
+    return runAsUser(owner, async () => {
+      await next()
+      runAfterUserWork()
+    })
   }
 
   return requireSession(c, next)
@@ -118,7 +125,10 @@ export const pageAuth: MiddlewareHandler = async (c, next) => {
   const lookup = sessionUser(token)
   if (!lookup || lookup.user.must_change_password === 1) return c.redirect('/', 302)
   c.set('user', lookup.user)
-  return runAsUser(lookup.user.id, () => next())
+  return runAsUser(lookup.user.id, async () => {
+    await next()
+    runAfterUserWork()
+  })
 }
 
 export const requireAdmin: MiddlewareHandler = async (c, next) => {

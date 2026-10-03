@@ -813,6 +813,53 @@ db.exec(`
       if (!mediaCols.includes(col)) db.exec(`ALTER TABLE media_items ADD COLUMN ${col} ${def}`)
     }
   },
+}, {
+  version: 14,
+  name: 'social-outbox',
+  up: () => {
+    // O feed social mora no banco núcleo, mas o diário e as conquistas nascem
+    // em muitos lugares (manual, Plex, Kavita, Playnite, Steam, importações).
+    // Gatilhos anotam cada mudança numa caixa de saída local; o servidor a
+    // esvazia para o feed depois de cada requisição e de cada job.
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS social_outbox (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        kind       TEXT    NOT NULL CHECK (kind IN ('diary', 'achievement')),
+        ref_id     INTEGER NOT NULL,
+        ref_text   TEXT,
+        op         TEXT    NOT NULL CHECK (op IN ('upsert', 'delete')),
+        created_at TEXT    NOT NULL DEFAULT (datetime('now'))
+      );
+
+      CREATE TRIGGER IF NOT EXISTS social_diary_insert AFTER INSERT ON diary_entries
+      BEGIN
+        INSERT INTO social_outbox (kind, ref_id, op) VALUES ('diary', NEW.id, 'upsert');
+      END;
+
+      CREATE TRIGGER IF NOT EXISTS social_diary_update
+      AFTER UPDATE OF rating, comment, watched_at, progress_value ON diary_entries
+      BEGIN
+        INSERT INTO social_outbox (kind, ref_id, op) VALUES ('diary', NEW.id, 'upsert');
+      END;
+
+      CREATE TRIGGER IF NOT EXISTS social_diary_delete AFTER DELETE ON diary_entries
+      BEGIN
+        INSERT INTO social_outbox (kind, ref_id, op) VALUES ('diary', OLD.id, 'delete');
+      END;
+
+      CREATE TRIGGER IF NOT EXISTS social_achievement_insert AFTER INSERT ON steam_achievements
+      WHEN NEW.achieved = 1
+      BEGIN
+        INSERT INTO social_outbox (kind, ref_id, ref_text, op) VALUES ('achievement', NEW.appid, NEW.api_name, 'upsert');
+      END;
+
+      CREATE TRIGGER IF NOT EXISTS social_achievement_unlock AFTER UPDATE OF achieved ON steam_achievements
+      WHEN NEW.achieved = 1 AND OLD.achieved = 0
+      BEGIN
+        INSERT INTO social_outbox (kind, ref_id, ref_text, op) VALUES ('achievement', NEW.appid, NEW.api_name, 'upsert');
+      END;
+    `)
+  },
 }]
 
 /* ───────────────────────────── Abertura e migração ───────────────────────────── */
@@ -890,6 +937,26 @@ export function requireUserId(): number {
  * Falha de uma pessoa não impede as demais. Antes da primeira conta, roda
  * uma vez no banco único, como o Shelf sempre fez.
  */
+/**
+ * Rotina que roda depois de cada requisição autenticada e de cada job por
+ * usuário (hoje: levar diário e conquistas novos para o feed). Registrada de
+ * fora para o db.ts não depender do módulo social.
+ */
+let afterUserWork: (() => void) | null = null
+export function setAfterUserWork(hook: () => void): void {
+  afterUserWork = hook
+}
+
+/** Executa a rotina pós-trabalho de quem está no contexto; nunca lança. */
+export function runAfterUserWork(): void {
+  if (!afterUserWork || currentUserId() == null) return
+  try {
+    afterUserWork()
+  } catch (error) {
+    console.error(`[social] usuário ${currentUserId()}: ${(error as Error).message}`)
+  }
+}
+
 export async function forEachActiveUser(task: (userId: number | null) => unknown, label = 'job'): Promise<void> {
   if (!instanceHasUsers()) {
     await task(null)
@@ -898,7 +965,13 @@ export async function forEachActiveUser(task: (userId: number | null) => unknown
   const ids = core("SELECT id FROM users WHERE status = 'active' ORDER BY id").all() as { id: number }[]
   for (const { id } of ids) {
     try {
-      await runAsUser(id, () => task(id))
+      await runAsUser(id, async () => {
+        try {
+          await task(id)
+        } finally {
+          runAfterUserWork()
+        }
+      })
     } catch (error) {
       console.error(`[${label}] usuário ${id}: ${(error as Error).message}`)
     }

@@ -26,6 +26,10 @@ const Lists = lazy(() => import('./pages/Lists').then(module => ({ default: modu
 const ListDetail = lazy(() => import('./pages/ListDetail').then(module => ({ default: module.ListDetail })))
 const Account = lazy(() => import('./pages/Account').then(module => ({ default: module.Account })))
 const AdminUsers = lazy(() => import('./pages/AdminUsers').then(module => ({ default: module.AdminUsers })))
+const Feed = lazy(() => import('./pages/Feed').then(module => ({ default: module.Feed })))
+const FeedPostPage = lazy(() => import('./pages/Feed').then(module => ({ default: module.FeedPostPage })))
+const UserProfile = lazy(() => import('./pages/UserProfile').then(module => ({ default: module.UserProfile })))
+const SharedList = lazy(() => import('./pages/SharedList').then(module => ({ default: module.SharedList })))
 const Welcome = lazy(() => import('./pages/Welcome').then(module => ({ default: module.Welcome })))
 
 const queryClient = new QueryClient({
@@ -61,6 +65,10 @@ export function App() {
               <Route path="lists/:id"  element={<ListDetail />} />
               <Route path="account"    element={<Account />} />
               <Route path="admin/users" element={<AdminUsers />} />
+              <Route path="feed"       element={<Feed />} />
+              <Route path="feed/:id"   element={<FeedPostPage />} />
+              <Route path="u/:username" element={<UserProfile />} />
+              <Route path="u/:username/lists/:id" element={<SharedList />} />
               <Route path="welcome"    element={<Welcome />} />
             </Route>
           </Routes>
