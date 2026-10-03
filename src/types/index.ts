@@ -913,3 +913,16 @@ export interface SharedListView {
   tiers: { id: number; name: string; color: string; position: number }[]
   items: { id: number; type: MediaType; external_id: string; title: string; cover_url: string | null; year: number | null; rating: number | null; tier_id: number | null; list_position: number }[]
 }
+
+/* ─────────────────────────── Configuração guiada ─────────────────────────── */
+
+export type OnboardingStepId =
+  | 'profile' | 'instance' | 'steam' | 'lastfm' | 'plex' | 'kavita' | 'playnite' | 'telegram' | 'letterboxd'
+
+export interface OnboardingView {
+  auto_open: boolean
+  dismissed: boolean
+  steps: { id: OnboardingStepId; status: 'done' | 'skipped' | 'pending' }[]
+  done: number
+  total: number
+}

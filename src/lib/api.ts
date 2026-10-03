@@ -7,7 +7,7 @@ import type {
   SteamSyncResult, SteamLibraryResult, SteamStorePage, GameAchievement, LatestAchievement, SteamDiagnostic, ProfileView, ExportScope, ExportSummary, ImportReport, BackupStatus, DatabaseBackupInfo,
   LetterboxdKind, LetterboxdPlan, LetterboxdPreview, LetterboxdApplyResult,
   PlexFilenameSyncResult, SearchApiKeySettings,
-  AuthState, SessionUser, MemberSummary, AdminUser,
+  AuthState, SessionUser, MemberSummary, AdminUser, OnboardingView, OnboardingStepId,
   FeedPage, FeedPost, FeedComment, MediaRef, ReactionSummary, NotificationItem, FeedPreferences, PublicProfile, SharedListView,
 } from '../types'
 
@@ -113,6 +113,12 @@ export const api = {
     count: (): Promise<{ unread: number }> => request('/notifications/count'),
     read: (ids?: number[]): Promise<{ unread: number; items: NotificationItem[] }> =>
       request('/notifications/read', { method: 'POST', body: JSON.stringify(ids ? { ids } : {}) }),
+  },
+
+  onboarding: {
+    get: (): Promise<OnboardingView> => request('/onboarding'),
+    act: (action: { skip: OnboardingStepId } | { unskip: OnboardingStepId } | { dismiss: boolean } | { reset: true }): Promise<OnboardingView> =>
+      request('/onboarding', { method: 'PATCH', body: JSON.stringify(action) }),
   },
 
   admin: {

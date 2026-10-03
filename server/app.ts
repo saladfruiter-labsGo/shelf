@@ -15,6 +15,7 @@ import profileRoutes from './routes/profile.js'
 import gamesRoutes from './routes/games.js'
 import authRoutes from './routes/auth.js'
 import adminRoutes from './routes/admin.js'
+import onboardingRoutes from './routes/onboarding.js'
 import { accountRoutes, usersRoutes } from './routes/account.js'
 import { apiAuth, pageAuth } from './auth/middleware.js'
 import integrationsRoutes from './routes/integrations.js'
@@ -51,6 +52,7 @@ export function createApp(options: { log?: boolean; isShuttingDown?: () => boole
   app.route('/api/feed',     feedRoutes)
   app.route('/api/social',   socialRoutes)
   app.route('/api/notifications', notificationRoutes)
+  app.route('/api/onboarding', onboardingRoutes)
 
   app.route('/api/search',   searchRoutes)
   app.route('/api/media',    mediaRoutes)

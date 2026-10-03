@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../lib/api'
 import { timeAgo } from '../lib/utils'
@@ -50,9 +50,26 @@ export function Integrations() {
         <p className="text-muted text-sm">Chaves de API e serviços que abastecem sua prateleira automaticamente</p>
       </div>
 
+      <GuidedSetupCard />
       <ApiKeysSection />
       <IntegrationsSection />
     </div>
+  )
+}
+
+/** Atalho para o roteiro guiado enquanto ainda há o que conectar. */
+function GuidedSetupCard() {
+  const { data } = useQuery({ queryKey: ['onboarding'], queryFn: api.onboarding.get })
+  if (!data || data.done >= data.total) return null
+  return (
+    <Link to="/welcome" className="flex items-center gap-4 bg-surface border border-border rounded-xl p-5 mb-8 hover:border-accent transition-colors">
+      <span style={{ fontSize: 28 }} aria-hidden>🧭</span>
+      <span className="flex-1">
+        <span className="block text-primary font-medium" style={{ fontSize: 16 }}>Configuração guiada</span>
+        <span className="block text-sm text-muted">{data.done} de {data.total} conectados — um serviço por vez, com o passo a passo de cada um.</span>
+      </span>
+      <span className="text-accent text-sm whitespace-nowrap">Abrir →</span>
+    </Link>
   )
 }
 
