@@ -8,6 +8,7 @@ import { SeriesSeasons } from '../components/SeriesSeasons'
 import { DiaryEntryModal, type DiaryEntryValues } from '../components/DiaryEntryModal'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { AddToListDropdown } from '../components/AddToListDropdown'
+import { ShareItemButton } from '../components/social/ShareItemButton'
 import type { MediaStatus, TmdbMediaPreview } from '../types'
 import { STATUS_LABEL, formatRuntime, formatDate, fmtRating } from '../lib/utils'
 import { imageUrl } from '../lib/images'
@@ -456,6 +457,7 @@ export function MediaDetail() {
       {/* Actions */}
       <div className="flex flex-wrap items-center gap-3 pt-4 border-t border-border">
         <AddToListDropdown itemId={item.id} />
+        <ShareItemButton mediaItemId={item.id} title={item.title} />
 
         {(item.type === 'movie' || item.type === 'series') && (
           <button

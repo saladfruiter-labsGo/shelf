@@ -46,7 +46,9 @@ export function UserProfile() {
               <> · <a href={profile.accounts.steam.profile_url} target="_blank" rel="noopener noreferrer" className="hover:underline">Steam: {profile.accounts.steam.persona}</a></>
             )}
           </p>
-          {isMe && <Link to="/account" className="inline-block text-sm text-accent hover:underline mt-2">✎ Editar meu perfil</Link>}
+          {isMe
+            ? <Link to="/account" className="inline-block text-sm text-accent hover:underline mt-2">✎ Editar meu perfil</Link>
+            : <Link to={`/messages/${u.username}`} className="inline-flex items-center gap-2 mt-3 px-4 py-2 rounded-lg border border-border-strong text-primary hover:border-accent">✉️ Mandar mensagem</Link>}
         </div>
       </header>
 

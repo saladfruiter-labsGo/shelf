@@ -11,6 +11,7 @@ import { SourceBadge, SteamVerifiedMark } from '../components/SourceBadge'
 import { PricePanel } from '../components/PricePanel'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { AddToListDropdown } from '../components/AddToListDropdown'
+import { ShareItemButton } from '../components/social/ShareItemButton'
 import { GameAchievements } from '../components/GameAchievements'
 import { TimeToBeat } from '../components/TimeToBeat'
 import { TrailerPlayer } from '../components/TrailerPlayer'
@@ -334,6 +335,7 @@ export function GameDetail() {
 
           <div className="flex flex-wrap items-center gap-3 pt-4 border-t border-border">
             <AddToListDropdown itemId={item.id} />
+            <ShareItemButton mediaItemId={item.id} title={item.title} />
             <button type="button" onClick={() => setConfirmRemove(true)} disabled={remove.isPending}
               className="ml-auto text-xs text-muted hover:text-red-400 transition-colors">
               Remover

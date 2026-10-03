@@ -9,6 +9,7 @@ import type {
   PlexFilenameSyncResult, SearchApiKeySettings,
   AuthState, SessionUser, MemberSummary, AdminUser, OnboardingView, OnboardingStepId,
   FeedPage, FeedPost, FeedComment, MediaRef, ReactionSummary, NotificationItem, FeedPreferences, PublicProfile, SharedListView,
+  ConversationSummary, ConversationThread, DirectMessage,
 } from '../types'
 
 /**
@@ -106,6 +107,18 @@ export const api = {
     user: (username: string): Promise<PublicProfile> => request(`/social/users/${encodeURIComponent(username)}`),
     list: (username: string, listId: number): Promise<SharedListView> =>
       request(`/social/users/${encodeURIComponent(username)}/lists/${listId}`),
+  },
+
+  messages: {
+    conversations: (): Promise<ConversationSummary[]> => request('/messages'),
+    unread: (): Promise<{ unread: number }> => request('/messages/unread'),
+    thread: (username: string, before?: number): Promise<ConversationThread> =>
+      request(`/messages/with/${encodeURIComponent(username)}${before ? `?before=${before}` : ''}`),
+    send: (username: string, data: { body: string; media_item_id?: number; refs?: MediaRef[] }): Promise<DirectMessage> =>
+      request(`/messages/with/${encodeURIComponent(username)}`, { method: 'POST', body: JSON.stringify(data) }),
+    markRead: (username: string): Promise<{ ok: boolean }> =>
+      request(`/messages/with/${encodeURIComponent(username)}/read`, { method: 'POST' }),
+    remove: (id: number): Promise<DirectMessage> => request(`/messages/items/${id}`, { method: 'DELETE' }),
   },
 
   notifications: {

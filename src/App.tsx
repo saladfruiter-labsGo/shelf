@@ -30,6 +30,7 @@ const Feed = lazy(() => import('./pages/Feed').then(module => ({ default: module
 const FeedPostPage = lazy(() => import('./pages/Feed').then(module => ({ default: module.FeedPostPage })))
 const UserProfile = lazy(() => import('./pages/UserProfile').then(module => ({ default: module.UserProfile })))
 const SharedList = lazy(() => import('./pages/SharedList').then(module => ({ default: module.SharedList })))
+const Messages = lazy(() => import('./pages/Messages').then(module => ({ default: module.Messages })))
 const Welcome = lazy(() => import('./pages/Welcome').then(module => ({ default: module.Welcome })))
 
 const queryClient = new QueryClient({
@@ -69,6 +70,8 @@ export function App() {
               <Route path="feed/:id"   element={<FeedPostPage />} />
               <Route path="u/:username" element={<UserProfile />} />
               <Route path="u/:username/lists/:id" element={<SharedList />} />
+              <Route path="messages"   element={<Messages />} />
+              <Route path="messages/:username" element={<Messages />} />
               <Route path="welcome"    element={<Welcome />} />
             </Route>
           </Routes>

@@ -151,6 +151,8 @@ O **Feed** reúne a turma inteira da instância (todas as contas ativas veem o f
 - **Notificações** (sino na barra): comentário no seu post, resposta, reação e menção.
 - **Perfis** de cada pessoa (`/u/usuario`) com números, favoritos, listas compartilhadas e o que ela postou.
 
+**Mensagens diretas** (envelope na barra): conversas a dois, com texto e mídias marcadas. Pelo botão **Enviar para um amigo** (página de mídia e de jogo) ou pelo 📚 da conversa, um item da sua biblioteca vai junto com um comentário — com a sua nota, o seu status e a sua última resenha, num retrato tirado do seu banco. Só os dois participantes leem a conversa (nem administradores); cada um apaga as próprias mensagens.
+
 Moderação: quem posta (ou um admin) apaga o post; comentários idem. Texto é sempre texto puro, renderizado escapado. Notas pessoais, arquivos de mídia e credenciais nunca saem do banco de cada um — o feed guarda só o retrato do que foi compartilhado.
 
 ### Segurança de acesso
