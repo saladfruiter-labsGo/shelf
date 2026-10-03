@@ -1,5 +1,5 @@
 import type Database from 'better-sqlite3'
-import { db } from './db.js'
+import { db, forEachActiveUser } from './db.js'
 
 const HOUR_MS = 60 * 60 * 1000
 const DAY_MS = 24 * HOUR_MS
@@ -37,10 +37,12 @@ export function startActivityRetention(): void {
   enabled = true
   const intervalMs = intervalHours * HOUR_MS
 
-  const tick = () => {
+  const tick = async () => {
     try {
-      const pruned = pruneActivityPayloads()
-      if (pruned > 0) console.log(`[retention] ${pruned} payload(s) bruto(s) removido(s).`)
+      await forEachActiveUser(() => {
+        const pruned = pruneActivityPayloads()
+        if (pruned > 0) console.log(`[retention] ${pruned} payload(s) bruto(s) removido(s).`)
+      }, 'retention')
     } catch (error) {
       console.error(`[retention] falha: ${(error as Error).message}`)
     } finally {

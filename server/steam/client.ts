@@ -11,14 +11,9 @@
  *    da sessão do navegador (`steamLoginSecure` + `sessionid`). Sem esses
  *    cookies o conector funciona só no sentido Steam → Shelf.
  */
-import { db } from '../db.js'
+import { cfg } from '../integrations/config.js'
 
-const getSetting = db.prepare('SELECT value FROM settings WHERE key = ?')
-
-export function cfg(key: string): string {
-  const row = getSetting.get(key) as { value: string } | undefined
-  return row?.value?.trim() || process.env[key] || ''
-}
+export { cfg }
 
 export function steamEnabled(): boolean {
   return cfg('STEAM_ENABLED') === '1' && !!cfg('STEAM_ID')

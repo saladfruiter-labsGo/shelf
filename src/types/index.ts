@@ -248,7 +248,7 @@ export interface PlexFilenameSyncResult {
 }
 
 export type SearchApiKey = 'TMDB_API_KEY' | 'RAWG_API_KEY' | 'GOOGLE_BOOKS_KEY'
-export type SearchApiKeySettings = Record<SearchApiKey, { set: boolean; masked: string }>
+export type SearchApiKeySettings = Record<SearchApiKey, { set: boolean; masked: string }> & { can_edit?: boolean }
 
 export interface IntegrationStatus {
   plex: {
@@ -303,6 +303,8 @@ export interface IntegrationStatus {
     achievements_last_sync: SteamAchievementsResult | null
     auto_abandon_days: number
   }
+  /** Chaves da instância (IGDB, IsThereAnyDeal) só são editáveis por administradores. */
+  instance: { can_edit: boolean }
   igdb: {
     configured:     boolean
     client_id:      string
@@ -412,6 +414,9 @@ export interface SteamStorePage {
 export type ProfileDataSource = 'steam' | 'shelf'
 export interface ProfileView {
   user: {
+    id:            number | null
+    username:      string | null
+    bio:           string | null
     display_name:  string
     avatar_url:    string | null
     avatar_source: ProfileDataSource | null
@@ -738,4 +743,41 @@ export interface GamePriceCandidate {
   title:  string
   type:   string | null
   mature: boolean
+}
+
+/* ─────────────────────────────── Contas ─────────────────────────────── */
+
+export type UserRole = 'owner' | 'admin' | 'member'
+
+/** A própria conta, como o servidor a descreve para o navegador. */
+export interface SessionUser {
+  id: number
+  username: string
+  display_name: string
+  role: UserRole
+  is_admin: boolean
+  avatar_url: string | null
+  bio: string | null
+  must_change_password: boolean
+}
+
+export interface AuthState {
+  setup_required: boolean
+  user: SessionUser | null
+}
+
+/** Pessoa da instância (diretório público para menções e mensagens). */
+export interface MemberSummary {
+  id: number
+  username: string
+  display_name: string
+  avatar_url: string | null
+}
+
+export interface AdminUser extends MemberSummary {
+  role: UserRole
+  status: 'active' | 'disabled'
+  must_change_password: boolean
+  created_at: string
+  last_seen_at: string | null
 }

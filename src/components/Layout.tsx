@@ -5,6 +5,8 @@ import { useTheme } from '../hooks/useTheme'
 import { SearchModal } from './SearchModal'
 import { NowPlayingBar } from './NowPlayingBar'
 import { CATEGORIES } from '../lib/categories'
+import { useAuth } from '../lib/auth'
+import { Avatar } from './Avatar'
 
 const NAV = [
   { to: '/',         label: 'Home',        end: true  },
@@ -116,14 +118,6 @@ function SearchIcon() {
   )
 }
 
-function MenuIcon() {
-  return (
-    <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
-      <path d="M4 6h16M4 12h16M4 18h16"/>
-    </svg>
-  )
-}
-
 /* ─── Bottom-nav icons (mobile) ─── */
 const iconProps = { width: 22, height: 22, fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const }
 function HomeIcon()    { return (<svg {...iconProps}><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg>) }
@@ -149,6 +143,7 @@ export function Layout() {
   const [searchOpen, setSearchOpen] = useState(false)
   const [dropOpen, setDropOpen] = useState(false)
   const { dark, toggle } = useTheme()
+  const { user, logout } = useAuth()
   const navigate = useNavigate()
   const dropRef = useRef<HTMLDivElement>(null)
 
@@ -260,31 +255,40 @@ export function Layout() {
           <div ref={dropRef} style={{ position: 'relative' }}>
             <button
               onClick={() => setDropOpen(o => !o)}
+              aria-label={`Menu da conta de ${user.display_name}`}
+              aria-expanded={dropOpen}
               style={{
-                width: 40, height: 40, borderRadius: '50%',
+                width: 40, height: 40, borderRadius: '50%', padding: 0,
                 background: 'var(--card)', border: '1.5px solid var(--border-strong)',
                 cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                color: 'var(--text-muted)', transition: 'background .2s, border-color .2s',
+                color: 'var(--text-muted)', transition: 'background .2s, border-color .2s', overflow: 'hidden',
               }}
             >
-              <MenuIcon />
+              <Avatar name={user.display_name} url={user.avatar_url} id={user.id} size={37} />
             </button>
 
             {/* Dropdown */}
             <div style={{
               position: 'absolute', top: 'calc(100% + 8px)', right: 0,
-              minWidth: 160, background: 'var(--card)',
+              minWidth: 220, background: 'var(--card)',
               border: '1px solid var(--border-strong)', borderRadius: 12,
               padding: 8, boxShadow: '0 16px 48px rgba(0,0,0,.6)',
               opacity: dropOpen ? 1 : 0, pointerEvents: dropOpen ? 'all' : 'none',
               transform: dropOpen ? 'translateY(0)' : 'translateY(-6px)',
               transition: 'opacity .2s, transform .2s',
             }}>
+              <div style={{ padding: '8px 16px 10px', borderBottom: '1px solid var(--border)', marginBottom: 6 }}>
+                <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>{user.display_name}</div>
+                <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>@{user.username}</div>
+              </div>
               {[
                 { icon: '👤', label: 'Perfil', action: () => { setDropOpen(false); navigate('/profile') } },
+                { icon: '🪪', label: 'Minha conta', action: () => { setDropOpen(false); navigate('/account') } },
+                ...(user.is_admin ? [{ icon: '🛡️', label: 'Usuários', action: () => { setDropOpen(false); navigate('/admin/users') } }] : []),
                 { icon: '🔌', label: 'Integrações', action: () => { setDropOpen(false); navigate('/integrations') } },
                 { icon: '📦', label: 'Importação/Exportação', action: () => { setDropOpen(false); navigate('/import-export') } },
                 { icon: '⚙️', label: 'Configurações', action: () => { setDropOpen(false); navigate('/settings') } },
+                { icon: '🚪', label: 'Sair', action: () => { setDropOpen(false); logout() } },
               ].map(item => (
                 <button
                   key={item.label}

@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Layout }       from './components/Layout'
 import { MediaPreviewProvider } from './components/MediaSummaryModal'
+import { AuthGate } from './lib/auth'
 
 const Dashboard = lazy(() => import('./pages/Dashboard').then(module => ({ default: module.Dashboard })))
 const Library = lazy(() => import('./pages/Library').then(module => ({ default: module.Library })))
@@ -23,6 +24,8 @@ const GameDetail = lazy(() => import('./pages/GameDetail').then(module => ({ def
 const Profile = lazy(() => import('./pages/Profile').then(module => ({ default: module.Profile })))
 const Lists = lazy(() => import('./pages/Lists').then(module => ({ default: module.Lists })))
 const ListDetail = lazy(() => import('./pages/ListDetail').then(module => ({ default: module.ListDetail })))
+const Account = lazy(() => import('./pages/Account').then(module => ({ default: module.Account })))
+const AdminUsers = lazy(() => import('./pages/AdminUsers').then(module => ({ default: module.AdminUsers })))
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 60_000, retry: 1 } },
@@ -31,6 +34,7 @@ const queryClient = new QueryClient({
 export function App() {
   return (
     <QueryClientProvider client={queryClient}>
+      <AuthGate>
       <BrowserRouter>
         <MediaPreviewProvider>
           <Routes>
@@ -54,10 +58,13 @@ export function App() {
               <Route path="import-export" element={<ImportExport />} />
               <Route path="lists"      element={<Lists />} />
               <Route path="lists/:id"  element={<ListDetail />} />
+              <Route path="account"    element={<Account />} />
+              <Route path="admin/users" element={<AdminUsers />} />
             </Route>
           </Routes>
         </MediaPreviewProvider>
       </BrowserRouter>
+      </AuthGate>
     </QueryClientProvider>
   )
 }

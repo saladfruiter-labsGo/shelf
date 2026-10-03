@@ -5,6 +5,7 @@ import sharp from 'sharp'
 import { db } from './db.js'
 import { allowedImageUrl } from './routes/img.js'
 import { fetchSteamArt, steamVerticalCover } from './steam/covers.js'
+import { cfg } from './integrations/config.js'
 
 /**
  * Arte de capa personalizada.
@@ -76,10 +77,8 @@ export function defaultCoverOf(row: CoverRow): string | null {
   return row.cover_custom ? row.default_cover_url : row.cover_url
 }
 
-const readSetting = db.prepare('SELECT value FROM settings WHERE key = ?')
 function apiKey(name: string): string | undefined {
-  const row = readSetting.get(name) as { value: string } | undefined
-  return row?.value?.trim() || process.env[name]
+  return cfg(name) || undefined
 }
 
 async function fetchJson(url: string): Promise<any | null> {

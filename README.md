@@ -78,7 +78,8 @@ O servidor, em produção, também serve o build estático do frontend (ver `ser
 | Variável | Descrição |
 |---|---|
 | `PORT` | Porta do servidor (default `3000`) |
-| `DATA_DIR` | Diretório do banco (default `./data`) |
+| `DATA_DIR` | Diretório dos bancos (default `./data`) |
+| `SHELF_SETUP_TOKEN` | Opcional. Código fixo para criar a conta de dono no primeiro acesso; sem ele, um código aleatório aparece no log a cada boot enquanto não houver contas |
 | `SHELF_TIMEZONE` | Fuso do fechamento diário de progresso (default `America/Sao_Paulo`) |
 | `IMG_PROXY_ALLOWED_HOSTS` | Hosts HTTPS extras aceitos pelo proxy de capas, separados por vírgula |
 | `IMG_CACHE_TTL_DAYS` | Dias em que uma capa local é considerada fresca antes de uma nova busca (default `30`) |
@@ -109,6 +110,8 @@ O servidor, em produção, também serve o build estático do frontend (ver `ser
 | `STEAM_SYNC_REMOVALS` | `1` para propagar remoções entre os dois lados |
 
 > Todas as integrações (chaves de API, Last.fm, Plex, Kavita, Steam, …) podem ser definidas por `.env` **ou** pela tela **Integrações**. Quando definidas na UI ficam gravadas no banco e **têm prioridade** sobre o `.env`; se estiverem em branco na UI, o valor do ambiente é usado.
+>
+> Com várias contas, as chaves de metadados (`TMDB_API_KEY`, `RAWG_API_KEY`, `GOOGLE_BOOKS_KEY`, `IGDB_*`, `ITAD_API_KEY`, `ITAD_COUNTRY`) são **da instância** e só administradores as alteram. As demais (Steam, Plex, Last.fm, Kavita, Telegram, Playnite) são **pessoais**: cada conta configura as suas, e o `.env` só vale como padrão para a conta do dono.
 
 ## 🐳 Rodando com Docker
 
@@ -117,7 +120,7 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
-O compose sobe o container na porta `3000` e persiste o banco e o cache de capas em `/app/data`, além dos snapshots integrais em `/app/backups`. No exemplo, ambos ficam sob `/mnt/user/appdata/shelf`; inclua as pastas `data` e `backups` na sua cópia externa do appdata. Snapshots no mesmo servidor protegem contra corrupção e importações ruins, mas não substituem uma cópia em outro dispositivo.
+O compose sobe o container na porta `3000` e persiste os bancos (o seu, o das outras contas e o núcleo), fotos de perfil e o cache de capas em `/app/data`, além dos snapshots integrais em `/app/backups`. No exemplo, ambos ficam sob `/mnt/user/appdata/shelf`; inclua as pastas `data` e `backups` na sua cópia externa do appdata. Snapshots no mesmo servidor protegem contra corrupção e importações ruins, mas não substituem uma cópia em outro dispositivo.
 
 O Shelf cria um snapshot consistente pela Online Backup API do SQLite, abre a cópia com `PRAGMA quick_check` e só então publica o arquivo definitivo. Também cria uma cópia preventiva antes de atualizar um schema antigo e antes de aplicar importações. A tela **Importação/Exportação** mostra o último snapshot e permite criar um sob demanda.
 
@@ -125,9 +128,21 @@ Saúde: `GET /api/health` consulta também o SQLite e responde `{ "ok": true }`;
 
 No `SIGTERM`/`SIGINT`, o Shelf para de aceitar conexões, cancela novos polls, espera requisições e jobs correntes, faz checkpoint do WAL e fecha o banco. O compose concede 30 segundos para esse ciclo. O entrypoint ajusta a propriedade dos volumes legados e executa o processo Node como o usuário não privilegiado `node`.
 
+### Contas e primeiro acesso
+
+O Shelf é multiusuário, com login. Não há cadastro aberto: **só um administrador cria contas**, com senha provisória que a pessoa troca no primeiro acesso.
+
+1. Na primeira vez que o site abre, ele pede para criar a **conta de dono**. Para ninguém na rede chegar antes, a criação exige o **código de instalação** que aparece no log do container (`docker logs shelf`) — ou o valor de `SHELF_SETUP_TOKEN`, se definido.
+2. A conta de dono herda tudo o que já existia: o `shelf.db` histórico vira o banco dela, sem cópia nem migração de linhas.
+3. Em **Usuários** (menu da conta), o administrador cria as demais contas. A senha provisória aparece uma única vez; envie por um canal privado.
+
+Cada conta tem o **próprio SQLite** em `DATA_DIR/users/`, com biblioteca, diário, listas, integrações e estados de sincronização. Contas, sessões e as chaves da instância moram em `DATA_DIR/core.db`. O isolamento é físico: nenhuma consulta de uma conta enxerga o banco de outra, e os jobs de fundo (Steam, Last.fm, Kavita, preços, diário) rodam uma vez por conta ativa. Desativar uma conta derruba as sessões na hora e para as integrações dela; nada é apagado.
+
+Senhas são guardadas com scrypt; sessões usam cookie `HttpOnly` + `SameSite=Lax` (e `Secure` quando servido por HTTPS, como no `tailscale serve`), e o banco guarda só o hash do token. Login, setup e troca de senha têm limite de tentativas.
+
 ### Segurança de acesso
 
-O Shelf ainda é uma aplicação de instância única, sem login. Use-o apenas numa LAN confiável ou por uma VPN como o Tailscale; não publique a porta `3000` diretamente na internet. Se precisar colocá-lo atrás de um domínio público antes da autenticação multiusuário, aplique autenticação no reverse proxy.
+Mesmo com login, use o Shelf numa LAN confiável ou por uma VPN como o Tailscale; não publique a porta `3000` diretamente na internet.
 
 A API aceita navegadores apenas no mesmo host do Shelf e não habilita CORS. Clientes de webhook sem cabeçalho `Origin` continuam funcionando com o token próprio. Respostas dinâmicas da API não são gravadas no cache do navegador/service worker; chaves de API e cookies configurados são devolvidos à interface somente como estado e máscara. Os tokens que aparecem nas URLs de webhook são credenciais: compartilhe-os apenas com o Plex ou o Playnite correspondente.
 

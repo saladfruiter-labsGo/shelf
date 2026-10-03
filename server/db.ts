@@ -1,28 +1,158 @@
 import Database from 'better-sqlite3'
+import { AsyncLocalStorage } from 'node:async_hooks'
+import { randomBytes } from 'node:crypto'
 import path from 'path'
 import fs from 'fs'
+import { core, coreDb, dataDir } from './core-db.js'
 import { writeVerifiedDatabaseBackup } from './database-backup.js'
 import { hasPendingMigrations, runMigrations, type Migration } from './migrations.js'
 import { ensureMediaItemsAllowsMusic, rebuildMediaItemsWithBacklogStatuses, rebuildMediaItemsWithDomainChecks } from './media-schema.js'
 
-export const dataDir = path.resolve(process.env.DATA_DIR ?? './data')
-fs.mkdirSync(dataDir, { recursive: true })
+export { dataDir }
 
-export const dbPath = path.join(dataDir, 'shelf.db')
-const databaseExisted = fs.existsSync(dbPath) && fs.statSync(dbPath).size > 0
-export const db = new Database(dbPath)
+/**
+ * Cada pessoa tem o próprio SQLite com o esquema completo da biblioteca. O
+ * arquivo histórico `shelf.db` é o do dono da instância — a conta criada no
+ * primeiro acesso herda tudo o que já existia, sem copiar uma linha.
+ */
+export const OWNER_DB_FILE = 'shelf.db'
+export const dbPath = path.join(dataDir, OWNER_DB_FILE)
+export const backupRoot = path.resolve(process.env.BACKUP_DIR ?? path.join(dataDir, 'backups'))
 
-db.pragma('journal_mode = WAL')
-db.pragma('foreign_keys = ON')
+interface UserScope { userId: number | null; db: Database.Database }
+const scope = new AsyncLocalStorage<UserScope>()
+
+/** Acesso ao banco pessoal fora de uma requisição autenticada ou de um job por usuário. */
+export class NoUserScopeError extends Error {
+  constructor() {
+    super('Acesso aos dados pessoais sem usuário definido (use runAsUser).')
+    this.name = 'NoUserScopeError'
+  }
+}
+
+let usersExist = false
+/** Enquanto ninguém criou conta, o Shelf funciona como antes: um banco só. */
+export function instanceHasUsers(): boolean {
+  if (usersExist) return true
+  usersExist = Boolean(core('SELECT 1 FROM users LIMIT 1').get())
+  return usersExist
+}
+
+const openDatabases = new Map<string, Database.Database>()
+
+function openDatabase(file: string): { conn: Database.Database; existed: boolean } {
+  const cached = openDatabases.get(file)
+  if (cached) return { conn: cached, existed: true }
+  const full = path.join(dataDir, file)
+  if (path.relative(dataDir, full).startsWith('..')) throw new Error('Arquivo de banco fora do diretório de dados')
+  fs.mkdirSync(path.dirname(full), { recursive: true })
+  const existed = fs.existsSync(full) && fs.statSync(full).size > 0
+  const conn = new Database(full)
+  conn.pragma('journal_mode = WAL')
+  conn.pragma('foreign_keys = ON')
+  conn.pragma('busy_timeout = 5000')
+  openDatabases.set(file, conn)
+  return { conn, existed }
+}
+
+function currentDatabase(): Database.Database {
+  const store = scope.getStore()
+  if (store) return store.db
+  if (!instanceHasUsers()) return legacyDb
+  throw new NoUserScopeError()
+}
+
+/**
+ * Statement preparado contra o banco de quem está no contexto. Os módulos
+ * preparam SQL no import (antes de existir usuário), então a compilação real
+ * acontece por banco, na primeira execução, e fica em cache.
+ */
+class ScopedStatement {
+  private readonly perDb = new WeakMap<Database.Database, Database.Statement>()
+  constructor(readonly source: string) {
+    // Valida o SQL cedo quando já há um banco à mão, como o better-sqlite3 faz.
+    const store = scope.getStore()
+    if (store) this.statementFor(store.db)
+    else if (!instanceHasUsers()) this.statementFor(legacyDb)
+  }
+  private statementFor(conn: Database.Database): Database.Statement {
+    let statement = this.perDb.get(conn)
+    if (!statement) {
+      statement = conn.prepare(this.source)
+      this.perDb.set(conn, statement)
+    }
+    return statement
+  }
+  private current() { return this.statementFor(currentDatabase()) }
+  run(...params: unknown[]) { return this.current().run(...params) }
+  get(...params: unknown[]) { return this.current().get(...params) }
+  all(...params: unknown[]) { return this.current().all(...params) }
+  iterate(...params: unknown[]) { return this.current().iterate(...params) }
+  columns() { return this.current().columns() }
+  get reader() { return this.current().reader }
+}
+
+type TransactionVariant = 'deferred' | 'immediate' | 'exclusive'
+function scopedTransaction<F extends (...args: any[]) => any>(fn: F) {
+  const perDb = new WeakMap<Database.Database, Database.Transaction<F>>()
+  const make = (variant?: TransactionVariant) => (...args: Parameters<F>): ReturnType<F> => {
+    const conn = currentDatabase()
+    let tx = perDb.get(conn)
+    if (!tx) {
+      tx = conn.transaction(fn)
+      perDb.set(conn, tx)
+    }
+    return (variant ? tx[variant] : tx)(...(args as any))
+  }
+  return Object.assign(make(), {
+    deferred: make('deferred'),
+    immediate: make('immediate'),
+    exclusive: make('exclusive'),
+    default: make(),
+  }) as unknown as Database.Transaction<F>
+}
+
+/**
+ * O banco pessoal de quem está no contexto (requisição autenticada ou job
+ * rodando com `runAsUser`). Fora de contexto, com contas já criadas, qualquer
+ * uso falha — nunca cai silenciosamente no banco de outra pessoa.
+ */
+/**
+ * O mesmo SQL devolve o mesmo statement: rotas que chamam `db.prepare` a cada
+ * requisição deixam de recompilar, e statements não ficam sendo coletados
+ * pelo GC (o better-sqlite3 11 aborta no Node 24/Windows ao destruí-los).
+ */
+const statementCache = new Map<string, ScopedStatement>()
+const STATEMENT_CACHE_MAX = 4000
+
+function scopedPrepare(sql: string): ScopedStatement {
+  let statement = statementCache.get(sql)
+  if (!statement) {
+    statement = new ScopedStatement(sql)
+    if (statementCache.size >= STATEMENT_CACHE_MAX) statementCache.delete(statementCache.keys().next().value as string)
+    statementCache.set(sql, statement)
+  }
+  return statement
+}
+
+export const db: Database.Database = new Proxy({} as Database.Database, {
+  get(_target, prop) {
+    if (prop === 'prepare') return scopedPrepare
+    if (prop === 'transaction') return scopedTransaction
+    const real = currentDatabase() as unknown as Record<PropertyKey, unknown>
+    const value = real[prop]
+    return typeof value === 'function' ? (value as (...a: unknown[]) => unknown).bind(real) : value
+  },
+})
 
 /**
  * Detecta estruturas anteriores à versão-base para decidir se o startup precisa
  * proteger o banco antes do primeiro DDL. Falhar o backup impede a migration.
  */
-function schemaNeedsUpgrade(): boolean {
-  if (!databaseExisted) return false
+function schemaNeedsUpgrade(conn: Database.Database, existed: boolean): boolean {
+  if (!existed) return false
   const tables = new Set(
-    (db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all() as { name: string }[]).map(r => r.name),
+    (conn.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all() as { name: string }[]).map(r => r.name),
   )
   if (!tables.has('media_items')) return false
 
@@ -34,7 +164,7 @@ function schemaNeedsUpgrade(): boolean {
   if (requiredTables.some(table => !tables.has(table))) return true
 
   const columns = (table: string) => new Set(
-    (db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map(r => r.name),
+    (conn.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map(r => r.name),
   )
   const media = columns('media_items')
   const requiredMedia = [
@@ -59,7 +189,7 @@ function schemaNeedsUpgrade(): boolean {
     || !seasons.has('rating')
 }
 
-const migrations: Migration[] = [{
+export const userMigrations: Migration[] = [{
   version: 1,
   name: 'baseline-schema',
   up: () => {
@@ -685,15 +815,118 @@ db.exec(`
   },
 }]
 
-if (databaseExisted && (hasPendingMigrations(db, migrations) || schemaNeedsUpgrade())) {
-  const destination = path.resolve(process.env.BACKUP_DIR ?? path.join(dataDir, 'backups'))
-  try {
-    const backup = await writeVerifiedDatabaseBackup(db, destination, 'before-migration')
-    console.log(`[backup] snapshot antes da migration: ${backup.filename}`)
-  } catch (error) {
-    db.close()
-    throw new Error(`Não foi possível proteger o banco antes da migration: ${(error as Error).message}`)
+/* ───────────────────────────── Abertura e migração ───────────────────────────── */
+
+function backupDirFor(file: string, userId: number | null): string {
+  // O banco do dono continua na raiz dos backups, como sempre esteve.
+  return file === OWNER_DB_FILE ? backupRoot : path.join(backupRoot, `user-${userId}`)
+}
+
+const migrated = new WeakSet<Database.Database>()
+
+async function migrateDatabase(conn: Database.Database, file: string, existed: boolean, userId: number | null): Promise<void> {
+  if (existed && (hasPendingMigrations(conn, userMigrations) || schemaNeedsUpgrade(conn, existed))) {
+    try {
+      const backup = await writeVerifiedDatabaseBackup(conn, backupDirFor(file, userId), 'before-migration')
+      console.log(`[backup] snapshot antes da migration: ${backup.filename}`)
+    } catch (error) {
+      conn.close()
+      throw new Error(`Não foi possível proteger o banco antes da migration: ${(error as Error).message}`)
+    }
+  }
+  scope.run({ userId, db: conn }, () => runMigrations(conn, userMigrations))
+  migrated.add(conn)
+}
+
+const ownerRow = core('SELECT id FROM users WHERE db_file = ?').get(OWNER_DB_FILE) as { id: number } | undefined
+const legacy = openDatabase(OWNER_DB_FILE)
+/** O banco histórico (`shelf.db`): do dono, ou o único banco antes do primeiro acesso. */
+export const legacyDb = legacy.conn
+await migrateDatabase(legacy.conn, OWNER_DB_FILE, legacy.existed, ownerRow?.id ?? null)
+
+// Os bancos das demais contas abrem e migram já no boot, com o mesmo backup
+// protetor; depois disso só uma conta recém-criada abre um arquivo novo.
+for (const row of core('SELECT id, db_file FROM users WHERE db_file != ?').all(OWNER_DB_FILE) as { id: number; db_file: string }[]) {
+  const opened = openDatabase(row.db_file)
+  await migrateDatabase(opened.conn, row.db_file, opened.existed, row.id)
+}
+
+/* ───────────────────────────── Contexto por usuário ───────────────────────────── */
+
+export function userDatabase(userId: number): Database.Database {
+  const row = core('SELECT db_file FROM users WHERE id = ?').get(userId) as { db_file: string } | undefined
+  if (!row) throw new Error(`Usuário ${userId} não existe`)
+  const { conn } = openDatabase(row.db_file)
+  if (!migrated.has(conn)) {
+    scope.run({ userId, db: conn }, () => runMigrations(conn, userMigrations))
+    migrated.add(conn)
+  }
+  return conn
+}
+
+/** Nome de arquivo para o banco de uma conta nova (relativo a DATA_DIR). */
+export function newUserDatabaseFile(): string {
+  return `users/${randomBytes(12).toString('hex')}.db`
+}
+
+/** Executa `fn` com os dados pessoais de `userId` — inclusive o que for assíncrono dentro dela. */
+export function runAsUser<T>(userId: number, fn: () => T): T {
+  return scope.run({ userId, db: userDatabase(userId) }, fn)
+}
+
+/** Quem está no contexto; `null` antes da primeira conta existir. */
+export function currentUserId(): number | null {
+  return scope.getStore()?.userId ?? null
+}
+
+export function requireUserId(): number {
+  const id = currentUserId()
+  if (id == null) throw new NoUserScopeError()
+  return id
+}
+
+/**
+ * Roda um job de fundo uma vez por conta ativa, cada uma no próprio banco.
+ * Falha de uma pessoa não impede as demais. Antes da primeira conta, roda
+ * uma vez no banco único, como o Shelf sempre fez.
+ */
+export async function forEachActiveUser(task: (userId: number | null) => unknown, label = 'job'): Promise<void> {
+  if (!instanceHasUsers()) {
+    await task(null)
+    return
+  }
+  const ids = core("SELECT id FROM users WHERE status = 'active' ORDER BY id").all() as { id: number }[]
+  for (const { id } of ids) {
+    try {
+      await runAsUser(id, () => task(id))
+    } catch (error) {
+      console.error(`[${label}] usuário ${id}: ${(error as Error).message}`)
+    }
   }
 }
 
-runMigrations(db, migrations)
+/** Todos os bancos pessoais conhecidos (para backup). */
+export function personalDatabases(): { userId: number | null; file: string; conn: Database.Database; backupDir: string }[] {
+  const rows = core('SELECT id, db_file FROM users').all() as { id: number; db_file: string }[]
+  const byFile = new Map(rows.map(r => [r.db_file, r.id]))
+  const result: { userId: number | null; file: string; conn: Database.Database; backupDir: string }[] = []
+  if (!byFile.has(OWNER_DB_FILE)) result.push({ userId: null, file: OWNER_DB_FILE, conn: legacyDb, backupDir: backupRoot })
+  for (const row of rows) {
+    const conn = row.db_file === OWNER_DB_FILE ? legacyDb : userDatabase(row.id)
+    result.push({ userId: row.id, file: row.db_file, conn, backupDir: backupDirFor(row.db_file, row.id) })
+  }
+  return result
+}
+
+/** Fecha tudo no desligamento: checkpoint do WAL de cada banco, núcleo por último. */
+export const allDatabases = {
+  pragma(sql: string) {
+    for (const conn of openDatabases.values()) if (conn.open) conn.pragma(sql)
+    if (coreDb.open) coreDb.pragma(sql)
+  },
+  close() {
+    for (const conn of openDatabases.values()) if (conn.open) conn.close()
+    openDatabases.clear()
+    if (coreDb.open) coreDb.close()
+  },
+}

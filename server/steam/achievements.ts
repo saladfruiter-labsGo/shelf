@@ -18,6 +18,7 @@ import { notifyLibraryActivity } from '../notify.js'
 import * as steam from './client.js'
 import { classifyFinale } from './finale.js'
 import { decideAchievementStatus, shouldAutoAbandon } from './achievement-rules.js'
+import { PerUser } from '../user-state.js'
 
 const STATE_KEY = 'STEAM_ACHIEVEMENTS_STATE'
 const LAST_SYNC_KEY = 'STEAM_ACHIEVEMENTS_LAST_SYNC'
@@ -193,7 +194,7 @@ function applyStatus(appid: number, result: SteamAchievementsResult, now: number
   }
 }
 
-let running: Promise<SteamAchievementsResult> | null = null
+const running = new PerUser<Promise<SteamAchievementsResult> | null>(() => null)
 let aborted = false
 
 async function run(): Promise<SteamAchievementsResult> {
@@ -260,14 +261,16 @@ async function run(): Promise<SteamAchievementsResult> {
 
 /** Uma leitura por vez; quem chega durante uma em andamento recebe o mesmo resultado. */
 export function syncSteamAchievements(): Promise<SteamAchievementsResult> {
-  if (!running) {
+  let task = running.get()
+  if (!task) {
     aborted = false
-    running = run().finally(() => { running = null })
+    task = run().finally(() => { running.set(null) })
+    running.set(task)
   }
-  return running
+  return task
 }
 
 export async function stopSteamAchievements(): Promise<void> {
   aborted = true
-  await running?.catch(() => {})
+  await Promise.allSettled(running.all())
 }

@@ -1,6 +1,8 @@
 import { readdir, stat, unlink } from 'node:fs/promises'
 import path from 'node:path'
-import { db, dataDir } from './db.js'
+import type Database from 'better-sqlite3'
+import { coreDb } from './core-db.js'
+import { backupRoot, currentUserId, db, instanceHasUsers, personalDatabases } from './db.js'
 import {
   writeVerifiedDatabaseBackup,
   type BackupReason,
@@ -11,7 +13,9 @@ const HOUR_MS = 60 * 60 * 1000
 const DAY_MS = 24 * HOUR_MS
 const BACKUP_PATTERN = /^shelf-(automatic|before-import|before-migration|manual)-.+\.db$/
 
-export const backupDir = path.resolve(process.env.BACKUP_DIR ?? path.join(dataDir, 'backups'))
+/** Raiz dos backups: o banco do dono fica aqui; cada conta e o núcleo têm subpasta. */
+export const backupDir = backupRoot
+const coreBackupDir = path.join(backupRoot, 'core')
 
 function intSetting(name: string, fallback: number, min: number, max: number): number {
   const parsed = Number.parseInt(process.env[name] ?? '', 10)
@@ -27,13 +31,13 @@ interface StoredBackup extends DatabaseBackupInfo {
   mtime_ms: number
 }
 
-let running: Promise<DatabaseBackupInfo> | null = null
+const running = new Map<string, Promise<DatabaseBackupInfo>>()
 let lastError: { at: string; message: string } | null = null
 let schedulerEnabled = false
 let schedulerTimer: NodeJS.Timeout | null = null
 
-async function storedBackups(): Promise<StoredBackup[]> {
-  const names = await readdir(backupDir).catch(error => {
+async function storedBackups(dir = backupDir): Promise<StoredBackup[]> {
+  const names = await readdir(dir).catch(error => {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []
     throw error
   })
@@ -41,9 +45,9 @@ async function storedBackups(): Promise<StoredBackup[]> {
   for (const filename of names) {
     const match = filename.match(BACKUP_PATTERN)
     if (!match) continue
-    const filePath = path.resolve(backupDir, filename)
+    const filePath = path.resolve(dir, filename)
     // Não segue nomes que escapem do diretório configurado.
-    if (path.dirname(filePath) !== backupDir) continue
+    if (path.dirname(filePath) !== path.resolve(dir)) continue
     const file = await stat(filePath)
     if (!file.isFile()) continue
     rows.push({
@@ -67,8 +71,8 @@ function isoWeekKey(date: Date): string {
 }
 
 /** Mantém os diários recentes, uma cópia semanal antiga e poucos snapshots de segurança. */
-export async function pruneBackups(now = new Date()): Promise<void> {
-  const files = await storedBackups()
+export async function pruneBackups(now = new Date(), dir = backupDir): Promise<void> {
+  const files = await storedBackups(dir)
   const keep = new Set<string>()
   const recentCutoff = now.getTime() - dailyDays * DAY_MS
 
@@ -92,34 +96,60 @@ export async function pruneBackups(now = new Date()): Promise<void> {
   }
 }
 
-export async function createDatabaseBackup(reason: BackupReason): Promise<DatabaseBackupInfo> {
-  if (running) return running
-  running = (async () => {
+/** O banco pessoal de quem está no contexto e a pasta onde os backups dele moram. */
+function currentTarget(): { conn: Database.Database; dir: string } {
+  const userId = currentUserId()
+  if (userId == null || !instanceHasUsers()) return { conn: db, dir: backupDir }
+  const target = personalDatabases().find(entry => entry.userId === userId)
+  if (!target) throw new Error('Banco pessoal não encontrado')
+  return { conn: target.conn, dir: target.backupDir }
+}
+
+async function backupInto(conn: Database.Database, dir: string, reason: BackupReason): Promise<DatabaseBackupInfo> {
+  const pending = running.get(dir)
+  if (pending) return pending
+  const task = (async () => {
     try {
-      const info = await writeVerifiedDatabaseBackup(db, backupDir, reason)
-      await pruneBackups()
+      const info = await writeVerifiedDatabaseBackup(conn, dir, reason)
+      await pruneBackups(new Date(), dir)
       lastError = null
       return info
     } catch (error) {
       lastError = { at: new Date().toISOString(), message: (error as Error).message }
       throw error
     } finally {
-      running = null
+      running.delete(dir)
     }
   })()
-  return running
+  running.set(dir, task)
+  return task
+}
+
+/** Backup do banco de quem pediu (manual ou antes de uma importação). */
+export async function createDatabaseBackup(reason: BackupReason): Promise<DatabaseBackupInfo> {
+  const { conn, dir } = currentTarget()
+  return backupInto(conn, dir, reason)
+}
+
+/** Ciclo automático: o núcleo (contas, feed, mensagens) e o banco de cada pessoa. */
+async function backupEverything(reason: BackupReason): Promise<DatabaseBackupInfo[]> {
+  const infos: DatabaseBackupInfo[] = []
+  for (const target of personalDatabases()) infos.push(await backupInto(target.conn, target.backupDir, reason))
+  infos.push(await backupInto(coreDb, coreBackupDir, reason))
+  return infos
 }
 
 export async function backupStatus() {
-  const files = await storedBackups()
+  const { dir } = currentTarget()
+  const files = await storedBackups(dir)
   return {
     enabled: process.env.BACKUP_ENABLED !== '0',
-    directory: backupDir,
+    directory: dir,
     interval_hours: intervalHours,
     retention: { daily_days: dailyDays, weekly_weeks: weeklyWeeks, safety_copies: safetyCopies },
     latest: files[0] ?? null,
     count: files.length,
-    running: running != null,
+    running: running.has(dir),
     last_error: lastError,
   }
 }
@@ -134,8 +164,8 @@ export function startBackupScheduler(): void {
     try {
       const latest = (await storedBackups()).find(f => f.reason === 'automatic')
       if (!latest || Date.now() - latest.mtime_ms >= intervalMs) {
-        const info = await createDatabaseBackup('automatic')
-        console.log(`[backup] snapshot verificado: ${info.filename}`)
+        const infos = await backupEverything('automatic')
+        for (const info of infos) console.log(`[backup] snapshot verificado: ${info.filename}`)
       }
     } catch (error) {
       console.error(`[backup] falha: ${(error as Error).message}`)
@@ -156,5 +186,5 @@ export async function stopBackupScheduler(): Promise<void> {
   schedulerEnabled = false
   if (schedulerTimer) clearTimeout(schedulerTimer)
   schedulerTimer = null
-  if (running) await running.catch(() => {})
+  await Promise.allSettled([...running.values()])
 }

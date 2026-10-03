@@ -14,7 +14,7 @@ app.get('/:file', async (c) => {
   bytes.set(body)
   return c.body(bytes, 200, {
     'Content-Type': 'image/webp',
-    'Cache-Control': 'public, max-age=31536000, immutable',
+    'Cache-Control': 'private, max-age=31536000, immutable',
   })
 })
 

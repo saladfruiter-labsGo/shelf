@@ -7,17 +7,30 @@ import type {
   SteamSyncResult, SteamLibraryResult, SteamStorePage, GameAchievement, LatestAchievement, SteamDiagnostic, ProfileView, ExportScope, ExportSummary, ImportReport, BackupStatus, DatabaseBackupInfo,
   LetterboxdKind, LetterboxdPlan, LetterboxdPreview, LetterboxdApplyResult,
   PlexFilenameSyncResult, SearchApiKeySettings,
+  AuthState, SessionUser, MemberSummary, AdminUser,
 } from '../types'
+
+/**
+ * Sessão expirada, revogada ou senha provisória pendente: a API responde
+ * 401/403 com um `code`, e a tela de entrada (AuthGate) reage ao evento.
+ */
+export const AUTH_EVENT = 'shelf:auth'
+const AUTH_CODES = new Set(['unauthenticated', 'setup_required', 'password_change_required'])
+
+async function failure(res: Response): Promise<never> {
+  const err = await res.json().catch(() => ({ error: res.statusText })) as { error?: string; code?: string }
+  if ((res.status === 401 || res.status === 403) && err.code && AUTH_CODES.has(err.code)) {
+    window.dispatchEvent(new CustomEvent(AUTH_EVENT, { detail: err.code }))
+  }
+  throw new Error(err.error ?? res.statusText)
+}
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`/api${path}`, {
     headers: { 'Content-Type': 'application/json' },
     ...init,
   })
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: res.statusText }))
-    throw new Error((err as { error: string }).error ?? res.statusText)
-  }
+  if (!res.ok) return failure(res)
   return res.json()
 }
 
@@ -26,14 +39,44 @@ async function upload<T>(path: string, file: File): Promise<T> {
   const form = new FormData()
   form.append('file', file)
   const res = await fetch(`/api${path}`, { method: 'POST', body: form })
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: res.statusText }))
-    throw new Error((err as { error: string }).error ?? res.statusText)
-  }
+  if (!res.ok) return failure(res)
   return res.json()
 }
 
 export const api = {
+  auth: {
+    state: (): Promise<AuthState> => request('/auth/state'),
+    setup: (data: { setup_code: string; username: string; display_name: string; password: string }): Promise<{ user: SessionUser }> =>
+      request('/auth/setup', { method: 'POST', body: JSON.stringify(data) }),
+    login: (data: { username: string; password: string }): Promise<{ user: SessionUser }> =>
+      request('/auth/login', { method: 'POST', body: JSON.stringify(data) }),
+    logout: (): Promise<{ ok: boolean }> => request('/auth/logout', { method: 'POST' }),
+    changePassword: (data: { current_password: string; new_password: string }): Promise<{ user: SessionUser }> =>
+      request('/auth/password', { method: 'POST', body: JSON.stringify(data) }),
+  },
+
+  account: {
+    get: (): Promise<SessionUser> => request('/account'),
+    update: (data: { display_name?: string; bio?: string }): Promise<SessionUser> =>
+      request('/account', { method: 'PATCH', body: JSON.stringify(data) }),
+    uploadAvatar: (file: File): Promise<SessionUser> => upload('/account/avatar', file),
+    removeAvatar: (): Promise<SessionUser> => request('/account/avatar', { method: 'DELETE' }),
+  },
+
+  users: {
+    list: (): Promise<MemberSummary[]> => request('/users'),
+  },
+
+  admin: {
+    users: (): Promise<AdminUser[]> => request('/admin/users'),
+    createUser: (data: { username: string; display_name: string; role: 'admin' | 'member'; password?: string }): Promise<{ user: AdminUser; temporary_password: string | null }> =>
+      request('/admin/users', { method: 'POST', body: JSON.stringify(data) }),
+    updateUser: (id: number, data: { display_name?: string; role?: 'admin' | 'member'; status?: 'active' | 'disabled' }): Promise<AdminUser> =>
+      request(`/admin/users/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    resetPassword: (id: number): Promise<{ user: AdminUser; temporary_password: string }> =>
+      request(`/admin/users/${id}/reset-password`, { method: 'POST' }),
+  },
+
   search: (q: string, type?: MediaType): Promise<{ results: SearchResult[] }> =>
     request(`/search?q=${encodeURIComponent(q)}${type ? `&type=${type}` : ''}`),
 

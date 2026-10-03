@@ -6,8 +6,8 @@
  * Por isso a ordem é sempre: Steam AppID → título exato → revisão manual, e
  * qualquer dúvida vira `ambiguous` (que não exibe preço até confirmação).
  */
-import { db } from '../db.js'
 import { lookupByAppId, lookupByTitle, searchGames, type ItadGame } from './providers/isthereanydeal.js'
+import { cfg } from '../integrations/config.js'
 
 const RAWG_HOST = 'api.rawg.io'
 
@@ -89,8 +89,7 @@ export function steamAppIdFromUrl(url: string): number | null {
 }
 
 function rawgKey(): string {
-  const row = db.prepare('SELECT value FROM settings WHERE key = ?').get('RAWG_API_KEY') as { value: string } | undefined
-  return row?.value?.trim() || process.env.RAWG_API_KEY || ''
+  return cfg('RAWG_API_KEY')
 }
 
 /**

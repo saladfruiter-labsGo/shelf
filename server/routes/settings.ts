@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
-import { db } from '../db.js'
+import { cfg, setCfg } from '../integrations/config.js'
+import { isAdmin } from '../auth/accounts.js'
 
 const app = new Hono()
 
@@ -21,35 +22,35 @@ function mask(value: string): string {
 function getPublicSettings(): Record<AllowedKey, KeyState> {
   const result = {} as Record<AllowedKey, KeyState>
   for (const key of ALLOWED_KEYS) {
-    const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value: string } | undefined
-    const value = row?.value ?? ''
+    const value = cfg(key)
     result[key] = { set: !!value, masked: mask(value) }
   }
   return result
 }
 
 app.get('/', (c) => {
-  return c.json(getPublicSettings())
+  return c.json({ ...getPublicSettings(), can_edit: canEdit(c.get('user')) })
 })
 
-app.patch('/', async (c) => {
-  const body = (await c.req.json()) as Record<string, unknown>
+/** Chaves de metadados são da instância: só administradores mexem nelas. */
+function canEdit(user: Parameters<typeof isAdmin>[0] | undefined): boolean {
+  return !user || isAdmin(user)
+}
 
-  const upsert = db.prepare(
-    'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'
-  )
-  const remove = db.prepare('DELETE FROM settings WHERE key = ?')
+app.patch('/', async (c) => {
+  if (!canEdit(c.get('user'))) return c.json({ error: 'Apenas administradores alteram as chaves de API.' }, 403)
+  const body = (await c.req.json()) as Record<string, unknown>
 
   for (const key of ALLOWED_KEYS) {
     if (body[`${key}_clear`] === true) {
-      remove.run(key)
+      setCfg(key, '')
       continue
     }
     const val = typeof body[key] === 'string' ? body[key].trim() : ''
-    if (val) upsert.run(key, val)
+    if (val) setCfg(key, val)
   }
 
-  return c.json(getPublicSettings())
+  return c.json({ ...getPublicSettings(), can_edit: true })
 })
 
 export default app

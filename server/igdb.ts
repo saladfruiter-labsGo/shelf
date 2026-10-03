@@ -13,6 +13,7 @@
  */
 import { db } from './db.js'
 import { cfg, setCfg } from './integrations/config.js'
+import { PerUser } from './user-state.js'
 
 const API = 'https://api.igdb.com/v4'
 const STEAM_SOURCE = 1
@@ -118,14 +119,15 @@ export function timeToBeatIsStale(fetchedAt: string | null, now = Date.now()): b
 
 export interface TimeToBeatSyncResult { at: string; checked: number; found: number; errors: string[] }
 
-let running: Promise<TimeToBeatSyncResult> | null = null
+const running = new PerUser<Promise<TimeToBeatSyncResult> | null>(() => null)
 let aborted = false
 
 /** Completa o tempo para zerar dos jogos com AppID que nunca foram consultados ou estão velhos. */
 export function syncTimeToBeat(limit = 200, fetchImpl: typeof fetch = fetch): Promise<TimeToBeatSyncResult> {
-  if (running) return running
+  const existing = running.get()
+  if (existing) return existing
   aborted = false
-  running = (async () => {
+  const task = (async () => {
     const result: TimeToBeatSyncResult = { at: new Date().toISOString(), checked: 0, found: 0, errors: [] }
     if (!igdbConfigured()) return result
     const games = db.prepare(`
@@ -146,8 +148,9 @@ export function syncTimeToBeat(limit = 200, fetchImpl: typeof fetch = fetch): Pr
     }
     setCfg('IGDB_LAST_SYNC', JSON.stringify(result))
     return result
-  })().finally(() => { running = null })
-  return running
+  })().finally(() => { running.set(null) })
+  running.set(task)
+  return task
 }
 
 export function lastTimeToBeatSync(): TimeToBeatSyncResult | null {
@@ -156,5 +159,5 @@ export function lastTimeToBeatSync(): TimeToBeatSyncResult | null {
 
 export async function stopTimeToBeatSync(): Promise<void> {
   aborted = true
-  await running?.catch(() => {})
+  await Promise.allSettled(running.all())
 }

@@ -16,6 +16,7 @@ import { normalizeTitle } from '../prices/matcher.js'
 import { QUEUE_PREDICATE } from '../media-domain.js'
 import * as steam from './client.js'
 import { summarizeFinale } from './finale.js'
+import { PerUser } from '../user-state.js'
 
 const RESULT_KEY = 'STEAM_DIAGNOSTIC'
 const CONCURRENCY = 4
@@ -76,12 +77,13 @@ function emptyDiagnostic(): SteamDiagnostic {
   }
 }
 
-let current: SteamDiagnostic | null = null
-let running: Promise<void> | null = null
+const current = new PerUser<SteamDiagnostic | null>(() => null)
+const running = new PerUser<Promise<void> | null>(() => null)
 let aborted = false
 
 export function lastDiagnostic(): SteamDiagnostic | null {
-  if (current) return current
+  const live = current.get()
+  if (live) return live
   try { return JSON.parse(cfg(RESULT_KEY) || 'null') } catch { return null }
 }
 
@@ -203,22 +205,23 @@ async function run(diag: SteamDiagnostic): Promise<void> {
     diag.running = false
     diag.finished_at = new Date().toISOString()
     setCfg(RESULT_KEY, JSON.stringify(diag))
-    current = null
+    current.set(null)
   }
 }
 
 /** Começa um diagnóstico; devolve o estado atual se já houver um rodando. */
 export function startSteamDiagnostic(): { started: boolean; diagnostic: SteamDiagnostic } {
-  if (current && running) return { started: false, diagnostic: current }
+  const live = current.get()
+  if (live && running.get()) return { started: false, diagnostic: live }
   aborted = false
-  current = emptyDiagnostic()
-  const diag = current
-  running = run(diag).finally(() => { running = null })
+  const diag = emptyDiagnostic()
+  current.set(diag)
+  running.set(run(diag).finally(() => { running.set(null) }))
   return { started: true, diagnostic: diag }
 }
 
 /** Interrompe e espera o diagnóstico em andamento (shutdown gracioso). */
 export async function stopSteamDiagnostic(): Promise<void> {
   aborted = true
-  await running
+  await Promise.allSettled(running.all())
 }

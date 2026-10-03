@@ -95,11 +95,32 @@ function ApiKeysSection() {
     mutation.mutate(toSave)
   }
 
+  if (saved && saved.can_edit === false) {
+    return (
+      <div className="mb-8">
+        <div className="mb-4">
+          <h2 className="font-display text-2xl font-bold text-primary mb-1">Chaves de API</h2>
+          <p className="text-muted text-sm">Usadas na busca de filmes, séries, jogos e livros — configuradas pelo administrador do Shelf para todo mundo.</p>
+        </div>
+        <ul className="bg-surface border border-border rounded-xl divide-y divide-border">
+          {API_ENTRIES.map(entry => (
+            <li key={entry.key} className="flex items-center justify-between px-5 py-3">
+              <span className="text-primary text-sm">{entry.label}</span>
+              <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${saved[entry.key]?.set ? 'bg-games-bg text-games' : 'bg-card text-muted'}`}>
+                {saved[entry.key]?.set ? 'Configurada' : 'Não configurada'}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    )
+  }
+
   return (
     <div>
       <div className="mb-6">
         <h2 className="font-display text-2xl font-bold text-primary mb-1">Chaves de API</h2>
-        <p className="text-muted text-sm">Usadas na busca de filmes, séries, jogos e livros</p>
+        <p className="text-muted text-sm">Usadas na busca de filmes, séries, jogos e livros. Valem para todas as contas do Shelf.</p>
       </div>
 
       <div className="space-y-4">
@@ -1160,6 +1181,9 @@ function IntegrationsSection() {
         {igdbNotice && (
           <p role="status" className={`text-xs mb-3 ${igdbNotice.ok ? 'text-games' : 'text-movies'}`}>{igdbNotice.ok ? '✓ ' : '⚠ '}{igdbNotice.text}</p>
         )}
+        {status?.instance.can_edit === false ? (
+          <p className="text-xs text-secondary bg-card rounded-lg px-3 py-2">As credenciais da IGDB valem para todo mundo e são configuradas pelo administrador.</p>
+        ) : (
         <div className="space-y-3">
           <div>
             <label htmlFor="igdb-client-id" className="text-xs text-secondary mb-1 block">Client ID</label>
@@ -1175,6 +1199,7 @@ function IntegrationsSection() {
                className="text-[11px] text-accent hover:underline">Criar o app na Twitch →</a>
           </div>
         </div>
+        )}
         <div className="flex flex-wrap gap-2 mt-4">
           <button type="button" onClick={() => igdbTest.mutate()} disabled={igdbTest.isPending || !status?.igdb.configured}
             className="text-xs px-3 py-2 bg-card border border-border rounded-lg text-primary hover:border-accent transition-colors disabled:opacity-50">
@@ -1211,6 +1236,13 @@ function IntegrationsSection() {
           menor preço histórico e gráfico na página do jogo. Verifica a cada 6 horas. A chave nunca é enviada ao navegador.
         </p>
 
+        {status?.instance.can_edit === false ? (
+          <p className="text-xs text-secondary bg-card rounded-lg px-3 py-2">
+            {status.prices.api_key_set
+              ? 'A chave do IsThereAnyDeal é da instância (configurada pelo administrador). Ligue o acompanhamento para os jogos da sua Wishlist.'
+              : 'O administrador ainda não configurou a chave do IsThereAnyDeal.'}
+          </p>
+        ) : (
         <div className="space-y-3">
           <div>
             <label className="text-xs text-secondary mb-1 block">API Key</label>
@@ -1226,6 +1258,7 @@ function IntegrationsSection() {
               value={String(form.itad_country ?? '')} onChange={e => set('itad_country')(e.target.value.toUpperCase())} spellCheck={false} />
           </div>
         </div>
+        )}
 
         <div className="flex gap-2 mt-4">
           <button type="button" onClick={() => itadTest.mutate()} disabled={itadTest.isPending || !status?.prices.api_key_set}

@@ -9,6 +9,7 @@ import {
 } from '../../integrations/kavita-domain.js'
 import { recordDiaryProgress } from '../../diary-progress.js'
 import { notifyLibraryActivity } from '../../notify.js'
+import { PerUser } from '../../user-state.js'
 
 const app = new Hono()
 
@@ -43,10 +44,11 @@ const insertActivity = db.prepare(`
   VALUES ('kavita', @event_type, 'book', @external_ref, @title, @subtitle, @cover_url, @rating, NULL, NULL, @occurred_at, NULL)
 `)
 
-let token: string | null = null
+/** JWT do Kavita de cada conta (cada pessoa aponta para o próprio servidor). */
+const kavitaToken = new PerUser<string | null>(() => null)
 
 export function resetKavitaAuth(): void {
-  token = null
+  kavitaToken.set(null)
 }
 
 function readState(): KavitaState {
@@ -71,32 +73,33 @@ function parseKavitaTimestamp(value: string | null): string | null {
 async function authenticate(): Promise<boolean> {
   const base = baseUrl()
   const apiKey = cfg('KAVITA_API_KEY')
-  if (!base || !apiKey) { token = null; return false }
+  if (!base || !apiKey) { kavitaToken.set(null); return false }
   try {
     const response = await fetch(
       `${base}/api/Plugin/authenticate?apiKey=${encodeURIComponent(apiKey)}&pluginName=Shelf`,
       { method: 'POST', headers: { Accept: 'application/json' } },
     )
-    if (!response.ok) { token = null; return false }
-    token = ((await response.json()) as { token?: string }).token ?? null
+    if (!response.ok) { kavitaToken.set(null); return false }
+    const token = ((await response.json()) as { token?: string }).token ?? null
+    kavitaToken.set(token)
     return Boolean(token)
   } catch {
-    token = null
+    kavitaToken.set(null)
     return false
   }
 }
 
 async function kavitaFetch(path: string, init: RequestInit = {}, retry = true): Promise<Response | null> {
-  if (!token && !(await authenticate())) return null
+  if (!kavitaToken.get() && !(await authenticate())) return null
   const headers = {
     ...(init.headers ?? {}),
-    Authorization: `Bearer ${token}`,
+    Authorization: `Bearer ${kavitaToken.get()}`,
     Accept: (init.headers as Record<string, string> | undefined)?.Accept ?? 'application/json',
   }
   let response: Response
   try { response = await fetch(`${baseUrl()}${path}`, { ...init, headers }) } catch { return null }
   if (response.status === 401 && retry) {
-    token = null
+    kavitaToken.set(null)
     if (await authenticate()) return kavitaFetch(path, init, false)
     return null
   }
@@ -223,7 +226,7 @@ app.get('/kavita/image', async (c) => {
   if (!response?.ok) return c.body(null, 502)
   return c.body(await response.arrayBuffer(), 200, {
     'Content-Type': response.headers.get('content-type') ?? 'image/jpeg',
-    'Cache-Control': 'public, max-age=86400',
+    'Cache-Control': 'private, max-age=86400',
   })
 })
 

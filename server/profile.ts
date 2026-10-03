@@ -9,7 +9,9 @@
  * - nunca inclui credenciais, e-mail, SteamID ou configuração de integrações;
  * - cada bloco declara a procedência (`source`), para o selo da Steam.
  */
-import { db } from './db.js'
+import { core } from './core-db.js'
+import { currentUserId, db } from './db.js'
+import { avatarUrl } from './auth/accounts.js'
 import { cfg, setCfg } from './integrations/config.js'
 import { LIBRARY_STATUS_PREDICATE, QUEUE_PREDICATE } from './media-domain.js'
 import { fetchPlayerSummary, type SteamPlayerSummary } from './steam/client.js'
@@ -18,6 +20,9 @@ export type DataSource = 'steam' | 'shelf'
 
 export interface ProfileView {
   user: {
+    id: number | null
+    username: string | null
+    bio: string | null
     display_name: string
     avatar_url: string | null
     avatar_source: DataSource | null
@@ -108,8 +113,16 @@ export async function buildProfile(
   const year = now.getFullYear()
   const yearStr = String(year)
 
-  const profile = db.prepare('SELECT display_name, avatar_url, created_at FROM profile WHERE id = 1').get() as
-    { display_name: string; avatar_url: string | null; created_at: string } | undefined
+  // Com contas, nome/foto/bio moram na conta; antes delas, na linha única `profile`.
+  const userId = currentUserId()
+  const account = userId != null
+    ? core('SELECT id, username, display_name, avatar_file, bio, created_at FROM users WHERE id = ?').get(userId) as
+      { id: number; username: string; display_name: string; avatar_file: string | null; bio: string | null; created_at: string } | undefined
+    : undefined
+  const profile = account
+    ? { display_name: account.display_name, avatar_url: avatarUrl(account.avatar_file), created_at: account.created_at }
+    : db.prepare('SELECT display_name, avatar_url, created_at FROM profile WHERE id = 1').get() as
+      { display_name: string; avatar_url: string | null; created_at: string } | undefined
   const firstItem = (db.prepare('SELECT MIN(added_at) AS at FROM media_items').get() as { at: string | null }).at
 
   const steam = await steamAccount(options.fetchSteamSummary ?? fetchPlayerSummary)
@@ -140,6 +153,9 @@ export async function buildProfile(
 
   return {
     user: {
+      id: account?.id ?? null,
+      username: account?.username ?? null,
+      bio: account?.bio ?? null,
       display_name: profile?.display_name ?? 'Você',
       avatar_url,
       avatar_source: ownAvatar ? 'shelf' : steam?.avatar_url ? 'steam' : null,
@@ -232,6 +248,14 @@ export function parseProfileUpdate(body: unknown): { ok: true; update: ProfileUp
 }
 
 export function applyProfileUpdate(update: ProfileUpdate): void {
+  const userId = currentUserId()
+  if (userId != null) {
+    // Com contas, a foto é enviada como arquivo (/api/account/avatar); aqui só o nome.
+    if (update.display_name !== undefined) {
+      core("UPDATE users SET display_name = ?, updated_at = datetime('now') WHERE id = ?").run(update.display_name, userId)
+    }
+    return
+  }
   if (update.display_name !== undefined) {
     db.prepare("UPDATE profile SET display_name = ?, updated_at = datetime('now') WHERE id = 1").run(update.display_name)
   }

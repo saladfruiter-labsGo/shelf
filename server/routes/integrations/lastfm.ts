@@ -3,6 +3,7 @@ import { db } from '../../db.js'
 import { cfg, setCfg } from '../../integrations/config.js'
 import { pickLastfmImage } from '../../integrations/lastfm-domain.js'
 import type { NowPlaying } from '../../integrations/now-playing.js'
+import { PerUser } from '../../user-state.js'
 
 interface LastfmTrack {
   name?: string
@@ -44,10 +45,10 @@ const upsertMediaItem = db.prepare(`
     updated_at   = datetime('now')
 `)
 
-let nowPlaying: NowPlaying | null = null
+const nowPlaying = new PerUser<NowPlaying | null>(() => null)
 
 export function getLastfmNowPlaying(): NowPlaying | null {
-  return nowPlaying
+  return nowPlaying.get()
 }
 
 async function lastfmCall(method: string, params: Record<string, string>): Promise<any> {
@@ -95,7 +96,7 @@ export async function pollLastfm(): Promise<void> {
   const key = cfg('LASTFM_API_KEY')
   const user = cfg('LASTFM_USER')
   if (cfg('LASTFM_ENABLED') !== '1' || !key || !user) {
-    nowPlaying = null
+    nowPlaying.set(null)
     return
   }
 
@@ -105,7 +106,7 @@ export async function pollLastfm(): Promise<void> {
     if (!tracks.length) return
 
     const current = tracks.find(track => track['@attr']?.nowplaying === 'true')
-    nowPlaying = current ? {
+    nowPlaying.set(current ? {
       media_type: 'music',
       title: current.name ?? '',
       subtitle: current.artist?.['#text'] ?? current.artist?.name ?? null,
@@ -114,7 +115,7 @@ export async function pollLastfm(): Promise<void> {
       position_ms: null,
       duration_ms: null,
       updated_at: Date.now(),
-    } : null
+    } : null)
 
     const lastUts = parseInt(cfg('LASTFM_LAST_UTS') || '0')
     const scrobbled = tracks

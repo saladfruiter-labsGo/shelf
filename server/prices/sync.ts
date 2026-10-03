@@ -9,6 +9,8 @@ import * as itad from './providers/isthereanydeal.js'
 import * as repo from './repository.js'
 import { resolveMatch } from './matcher.js'
 import { applyPrices } from './service.js'
+import { forEachActiveUser } from '../db.js'
+import { PerUser } from '../user-state.js'
 
 const FIRST_RUN_DELAY_MS = 30_000
 const INTERVAL_MS        = 6 * 3_600_000
@@ -16,23 +18,25 @@ const BATCH_SIZE         = 200
 /** Pausa entre resoluções para não estourar o limite do provedor. */
 const RESOLVE_GAP_MS     = 250
 
-let running = false
+type LastRun = { at: string; ok: number; failed: number; error: string | null }
+const running = new PerUser(() => false)
+const lastRun = new PerUser<LastRun | null>(() => null)
 let scheduled = false
+let cycleRunning = false
 let timer: NodeJS.Timeout | null = null
-let lastRun: { at: string; ok: number; failed: number; error: string | null } | null = null
 
 export function syncState() {
-  return { running, last_run: lastRun }
+  return { running: running.get(), last_run: lastRun.get() }
 }
 
 /**
  * Um ciclo completo. Nunca lança: falhas viram `last_error` por produto e o
  * último preço conhecido é preservado.
  */
-export async function syncBacklog(): Promise<void> {
-  if (running) return
-  if (!itad.itadEnabled()) return
-  running = true
+export async function syncBacklog(): Promise<number | null> {
+  if (running.get()) return null
+  if (!itad.itadEnabled()) return null
+  running.set(true)
 
   let ok = 0, failed = 0
   let fatal: string | null = null
@@ -101,10 +105,24 @@ export async function syncBacklog(): Promise<void> {
   } catch (e) {
     fatal = (e as Error).message
   } finally {
-    running = false
-    lastRun = { at: new Date().toISOString(), ok, failed, error: fatal }
+    running.set(false)
+    lastRun.set({ at: new Date().toISOString(), ok, failed, error: fatal })
   }
+  return retryAfter
+}
 
+/** Um ciclo para cada conta; o maior Retry-After decide quando voltar. */
+async function scheduledCycle(): Promise<void> {
+  cycleRunning = true
+  let retryAfter: number | null = null
+  try {
+    await forEachActiveUser(async () => {
+      const wait = await syncBacklog()
+      if (wait != null) retryAfter = Math.max(retryAfter ?? 0, wait)
+    }, 'prices')
+  } finally {
+    cycleRunning = false
+  }
   // Rate limit: reagenda respeitando o Retry-After em vez de insistir agora.
   if (scheduled) {
     schedule(retryAfter != null ? Math.min(retryAfter * 1000 + 1000, INTERVAL_MS) : INTERVAL_MS)
@@ -113,7 +131,7 @@ export async function syncBacklog(): Promise<void> {
 
 function schedule(delayMs: number) {
   if (timer) clearTimeout(timer)
-  timer = setTimeout(() => { syncBacklog().catch(() => {}) }, delayMs)
+  timer = setTimeout(() => { scheduledCycle().catch(() => {}) }, delayMs)
   timer.unref?.()
 }
 
@@ -129,5 +147,5 @@ export async function stopPriceSync(): Promise<void> {
   scheduled = false
   if (timer) clearTimeout(timer)
   timer = null
-  while (running) await new Promise(resolve => setTimeout(resolve, 50))
+  while (cycleRunning || running.all().some(Boolean)) await new Promise(resolve => setTimeout(resolve, 50))
 }

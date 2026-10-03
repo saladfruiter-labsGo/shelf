@@ -5,7 +5,7 @@
  * normalização das respostas para o formato interno (dinheiro sempre em
  * centavos, inteiro). Nenhuma regra de negócio mora aqui.
  */
-import { db } from '../../db.js'
+import { cfg } from '../../integrations/config.js'
 
 const API_HOST = 'api.isthereanydeal.com'
 const BASE     = `https://${API_HOST}`
@@ -13,13 +13,8 @@ const TIMEOUT_MS = 15_000
 
 /* ─────────────────────────────── Configuração ─────────────────────────────── */
 
-const getSetting = db.prepare('SELECT value FROM settings WHERE key = ?')
-
-/** Prioridade: valor salvo na UI (settings) → variável de ambiente → vazio. */
-export function cfg(key: string): string {
-  const row = getSetting.get(key) as { value: string } | undefined
-  return row?.value?.trim() || process.env[key] || ''
-}
+/** Prioridade: valor salvo na UI → variável de ambiente → vazio. */
+export { cfg }
 
 export function itadKey(): string      { return cfg('ITAD_API_KEY') }
 export function itadCountry(): string  { return (cfg('ITAD_COUNTRY') || 'BR').toUpperCase().slice(0, 2) }

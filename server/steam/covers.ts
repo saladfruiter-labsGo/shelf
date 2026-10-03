@@ -17,6 +17,7 @@
  */
 import { db } from '../db.js'
 import { cfg, setCfg } from '../integrations/config.js'
+import { PerUser } from '../user-state.js'
 
 // V2: as falhas guardadas antes só conheciam o endereço antigo — muitas eram falsas.
 const MISSES_KEY = 'STEAM_COVER_MISSES_V2'
@@ -147,12 +148,13 @@ export async function ensureSteamCover(game: CoverGame, fetchImpl: typeof fetch 
   return changed
 }
 
-let running: Promise<number> | null = null
+const running = new PerUser<Promise<number> | null>(() => null)
 
 /** Passa por todos os jogos ligados à Steam com capa de outra fonte. */
 export function refreshSteamCovers(limit = 150, fetchImpl: typeof fetch = fetch): Promise<number> {
-  if (running) return running
-  running = (async () => {
+  const existing = running.get()
+  if (existing) return existing
+  const task = (async () => {
     const misses = readMisses()
     const games = (db.prepare(`
       SELECT id, steam_appid, cover_url, cover_custom FROM media_items
@@ -172,10 +174,11 @@ export function refreshSteamCovers(limit = 150, fetchImpl: typeof fetch = fetch)
     }))
     setCfg(MISSES_KEY, JSON.stringify(misses))
     return changed
-  })().finally(() => { running = null })
-  return running
+  })().finally(() => { running.set(null) })
+  running.set(task)
+  return task
 }
 
 export async function stopSteamCovers(): Promise<void> {
-  await running?.catch(() => {})
+  await Promise.allSettled(running.all())
 }

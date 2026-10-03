@@ -1,6 +1,5 @@
-import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { api } from '../lib/api'
 import { imageUrl } from '../lib/images'
 import { TYPE_LABEL, fmtRating, formatDate, formatPercent, timeAgoLong } from '../lib/utils'
@@ -42,18 +41,6 @@ function Stat({ value, label, source }: { value: number | string; label: string;
 }
 
 function ProfileHeader({ view }: { view: ProfileView }) {
-  const qc = useQueryClient()
-  const [editing, setEditing] = useState(false)
-  const [name, setName] = useState(view.user.display_name)
-  const [avatar, setAvatar] = useState(view.user.avatar_source === 'shelf' ? view.user.avatar_url ?? '' : '')
-  const [error, setError] = useState('')
-
-  const save = useMutation({
-    mutationFn: (data: { display_name?: string; avatar_url?: string | null }) => api.profile.update(data),
-    onSuccess: updated => { qc.setQueryData(['profile'], updated); setEditing(false); setError('') },
-    onError: (e: unknown) => setError((e as Error).message || 'Não foi possível salvar.'),
-  })
-
   const { user, accounts } = view
   const avatarUrl = imageUrl(user.avatar_url, 320)
 
@@ -81,58 +68,24 @@ function ProfileHeader({ view }: { view: ProfileView }) {
 
       <div style={{ flex: '1 1 260px', minWidth: 0 }}>
         <p style={{ ...eyebrow, marginBottom: 8 }}>Perfil</p>
-        {editing ? (
-          <form
-            onSubmit={e => {
-              e.preventDefault()
-              save.mutate({ display_name: name, avatar_url: avatar.trim() || null })
-            }}
-            style={{ display: 'flex', flexDirection: 'column', gap: 10, maxWidth: 420 }}
-          >
-            <label style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-              Nome
-              <input value={name} onChange={e => setName(e.target.value)} maxLength={60} required
-                className="w-full bg-card border border-border rounded-lg px-3 py-2 text-primary" style={{ fontSize: 16, marginTop: 4 }} />
-            </label>
-            <label style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-              Avatar <span style={{ color: 'var(--text-muted)' }}>(link https; vazio usa o da Steam)</span>
-              <input value={avatar} onChange={e => setAvatar(e.target.value)} placeholder="https://…" inputMode="url"
-                className="w-full bg-card border border-border rounded-lg px-3 py-2 text-primary" style={{ fontSize: 16, marginTop: 4 }} />
-            </label>
-            {error && <p role="alert" style={{ fontSize: 13, color: 'var(--movies)' }}>{error}</p>}
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button type="submit" disabled={save.isPending} className="btn-accent"
-                style={{ background: 'var(--accent)', color: '#000', border: 'none', borderRadius: 8, padding: '8px 16px', fontWeight: 600, cursor: 'pointer' }}>
-                {save.isPending ? 'Salvando…' : 'Salvar'}
-              </button>
-              <button type="button" onClick={() => { setEditing(false); setError('') }}
-                style={{ background: 'var(--card)', color: 'var(--text-secondary)', border: '1px solid var(--border-strong)', borderRadius: 8, padding: '8px 16px', cursor: 'pointer' }}>
-                Cancelar
-              </button>
-            </div>
-          </form>
-        ) : (
-          <>
-            <h1 style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: 'clamp(36px,5vw,60px)', fontWeight: 800, letterSpacing: '-1.5px', lineHeight: 1.05, color: 'var(--text-primary)', overflowWrap: 'anywhere' }}>
-              {user.display_name}
-            </h1>
-            <p style={{ fontSize: 14, color: 'var(--text-muted)', marginTop: 8 }}>
-              No Shelf desde {formatDate(user.member_since)}
-            </p>
-            <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', marginTop: 12 }}>
-              <button type="button" onClick={() => setEditing(true)} className="link-accent"
-                style={{ fontSize: 13, background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--text-secondary)' }}>
-                ✎ Editar perfil
-              </button>
-              {accounts.steam && (
-                <a href={accounts.steam.profile_url} target="_blank" rel="noopener noreferrer"
-                  style={{ fontSize: 13, color: 'var(--text-secondary)', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                  {accounts.steam.persona || 'Perfil na Steam'} <SourceBadge source="steam" />
-                </a>
-              )}
-            </div>
-          </>
-        )}
+        <h1 style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: 'clamp(36px,5vw,60px)', fontWeight: 800, letterSpacing: '-1.5px', lineHeight: 1.05, color: 'var(--text-primary)', overflowWrap: 'anywhere' }}>
+          {user.display_name}
+        </h1>
+        {user.bio && <p style={{ fontSize: 16, color: 'var(--text-secondary)', marginTop: 10, maxWidth: 560 }}>{user.bio}</p>}
+        <p style={{ fontSize: 14, color: 'var(--text-muted)', marginTop: 8 }}>
+          {user.username ? `@${user.username} · ` : ''}No Shelf desde {formatDate(user.member_since)}
+        </p>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', marginTop: 12 }}>
+          <Link to="/account" className="link-accent" style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+            ✎ Editar perfil e foto
+          </Link>
+          {accounts.steam && (
+            <a href={accounts.steam.profile_url} target="_blank" rel="noopener noreferrer"
+              style={{ fontSize: 13, color: 'var(--text-secondary)', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              {accounts.steam.persona || 'Perfil na Steam'} <SourceBadge source="steam" />
+            </a>
+          )}
+        </div>
       </div>
     </header>
   )

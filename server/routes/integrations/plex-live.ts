@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import { cfg } from '../../integrations/config.js'
 import type { NowPlaying } from '../../integrations/now-playing.js'
 import { fetchPlexImage, mapPlexMetadata, type PlexMeta } from '../../plex.js'
+import { PerUser } from '../../user-state.js'
 
 interface PlexSession extends PlexMeta {
   Player?: { state?: string }
@@ -10,10 +11,10 @@ interface PlexSession extends PlexMeta {
 }
 
 const app = new Hono()
-let nowPlaying: NowPlaying | null = null
+const nowPlaying = new PerUser<NowPlaying | null>(() => null)
 
 export function getPlexNowPlaying(): NowPlaying | null {
-  return nowPlaying
+  return nowPlaying.get()
 }
 
 app.get('/plex/image', async (context) => {
@@ -24,7 +25,7 @@ app.get('/plex/image', async (context) => {
   if (!result.ok) return context.body(null, result.status)
   return context.body(result.body, 200, {
     'Content-Type': result.contentType,
-    'Cache-Control': 'public, max-age=86400',
+    'Cache-Control': 'private, max-age=86400',
   })
 })
 
@@ -32,7 +33,7 @@ export async function pollPlexSessions(): Promise<void> {
   const url = cfg('PLEX_URL')
   const token = cfg('PLEX_TOKEN')
   if (cfg('PLEX_ENABLED') !== '1' || !url || !token) {
-    nowPlaying = null
+    nowPlaying.set(null)
     return
   }
 
@@ -53,12 +54,12 @@ export async function pollPlexSessions(): Promise<void> {
     )
     const session = relevant[0]
     if (!session) {
-      nowPlaying = null
+      nowPlaying.set(null)
       return
     }
 
     const mapped = mapPlexMetadata(session)
-    nowPlaying = {
+    nowPlaying.set({
       media_type: mapped.media_type,
       title: mapped.title,
       subtitle: mapped.subtitle,
@@ -67,7 +68,7 @@ export async function pollPlexSessions(): Promise<void> {
       position_ms: typeof session.viewOffset === 'number' ? session.viewOffset : null,
       duration_ms: typeof session.duration === 'number' ? session.duration : null,
       updated_at: Date.now(),
-    }
+    })
   } catch {
     /* servidor Plex indisponível: o agregador expira o último estado após 60 s */
   }
