@@ -42,6 +42,8 @@ Exceção deliberada: o `hls.js` (~593 KB, ~186 KB gzip), usado só para tocar t
 
 Escolha query keys estáveis e invalide todas as visões afetadas por uma mutation. Mudanças em mídia/diário podem impactar detalhe, coleção, diário, recentes/upcoming e Wrap. Quando atualizar cache diretamente, preserve propriedades derivadas que a resposta não contém, por exemplo `{ ...itemAtual, ...itemAtualizado }` para não perder `progress`.
 
+Formulário de `/integrations`: a página edita tudo num formulário só, gravado pelo botão do fim dela. Ele vive em `src/lib/settings-form.ts` (puro, com testes) e `useSettingsForm`: uma releitura do status (depois de "Ler biblioteca agora", ao voltar para a aba) atualiza **só os campos que o usuário não mexeu** e nunca apaga edição pendente. Resetar o formulário inteiro a cada `status` novo fazia a caixa "Biblioteca e tempo de jogo pela Steam" desmarcar sozinha, a flag nunca era salva e a leitura automática ficava desligada sem ninguém perceber. Os botões de teste/sincronização usam a configuração **salva**; o card da Steam avisa quando há alteração pendente (com "Salvar agora") e mostra se a leitura automática está ligada. Campo novo entra em `formFromStatus` e, se for segredo digitado, em `SECRET_KEYS`.
+
 `api.media.listAll()` pagina até o fim. Use-o apenas quando a tela realmente precisa da coleção completa para ordenar/agregar; listagens simples devem continuar paginadas ou limitadas no servidor.
 
 ## Avaliações e conclusão

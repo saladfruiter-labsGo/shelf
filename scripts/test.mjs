@@ -1,5 +1,5 @@
 /**
- * Runner dos testes do servidor.
+ * Runner dos testes do servidor e da lógica pura do front (`src/lib`).
  *
  * Roda cada arquivo `*.test.ts` num processo próprio via `node --test`.
  *
@@ -18,7 +18,7 @@ import { readdirSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
 import { join } from 'node:path'
 
-const DIRS = ['server', 'server/integrations', 'server/prices', 'server/routes', 'server/steam', 'server/transfer']
+const DIRS = ['server', 'server/integrations', 'server/prices', 'server/routes', 'server/steam', 'server/transfer', 'src/lib']
 const MAX_TRIES = 10
 const NATIVE_ABORT = /RemoveEnvironmentCleanupHook|Assertion failed: \(env\) != nullptr/
 

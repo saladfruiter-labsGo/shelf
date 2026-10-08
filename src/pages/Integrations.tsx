@@ -3,6 +3,8 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../lib/api'
 import { timeAgo } from '../lib/utils'
+import { steamAutoReadState } from '../lib/settings-form'
+import { useSettingsForm } from '../lib/useSettingsForm'
 import type { SearchApiKey, SteamDiagnostic } from '../types'
 
 interface ApiEntry {
@@ -405,49 +407,14 @@ function IntegrationsSection() {
     refetchInterval: 10000,
   })
 
-  const [form, setForm] = useState<Record<string, string | boolean>>({})
+  // Edição ainda não salva sobrevive à releitura do status (ex.: depois de "Ler biblioteca agora").
+  const { form, setForm, dirty, markSaved } = useSettingsForm(status)
   const [copied, setCopied] = useState(false)
   const [msg, setMsg] = useState('')
 
-  useEffect(() => {
-    if (!status) return
-    setForm({
-      plex_enabled: status.plex.enabled,
-      plex_url: status.plex.url,
-      plex_user: status.plex.user,
-      plex_token: '',
-      lastfm_enabled: status.lastfm.enabled,
-      lastfm_api_key: '',
-      lastfm_user: status.lastfm.user,
-      telegram_enabled: status.telegram.enabled,
-      telegram_bot_token: '',
-      telegram_chat_id: status.telegram.chat_id,
-      telegram_thread_id: status.telegram.thread_id,
-      kavita_enabled: status.kavita.enabled,
-      kavita_url: status.kavita.url,
-      kavita_api_key: '',
-      kavita_library_id: status.kavita.library_id,
-      playnite_enabled: status.playnite.enabled,
-      playnite_rating_policy: status.playnite.rating_policy,
-      steam_enabled: status.steam.enabled,
-      steam_id: status.steam.steam_id,
-      steam_api_key: '',
-      steam_login_secure: '',
-      steam_session_id: '',
-      steam_cookies_clear: false,
-      steam_sync_mode: status.steam.sync_mode,
-      steam_sync_removals: status.steam.sync_removals,
-      steam_library_enabled: status.steam.library_enabled,
-      steam_auto_abandon_days: String(status.steam.auto_abandon_days),
-      igdb_client_id: status.igdb.client_id,
-      igdb_client_secret: '',
-      itad_enabled: status.prices.enabled,
-      itad_api_key: '',
-      itad_country: status.prices.country,
-    })
-  }, [status])
-
   const save = useMutation({
+    // O que está na tela neste instante é o que vai para o servidor.
+    onMutate: () => ({ sent: form }),
     mutationFn: () => {
       const payload: Record<string, unknown> = {
         plex_enabled: form.plex_enabled,
@@ -485,13 +452,9 @@ function IntegrationsSection() {
       if (form.steam_cookies_clear) payload.steam_cookies_clear = true
       return api.integrations.update(payload)
     },
-    onSuccess: () => {
+    onSuccess: (_data, _variables, context) => {
+      if (context) markSaved(context.sent)
       qc.invalidateQueries({ queryKey: ['integrations'] })
-      setForm(f => ({
-        ...f,
-        plex_token: '', lastfm_api_key: '', kavita_api_key: '', itad_api_key: '', steam_api_key: '',
-        steam_login_secure: '', steam_session_id: '', steam_cookies_clear: false,
-      }))
       setMsg('Integrações salvas!')
       setTimeout(() => setMsg(''), 3000)
     },
@@ -672,6 +635,10 @@ function IntegrationsSection() {
     : ''
 
   const set = (k: string) => (v: string | boolean) => setForm(f => ({ ...f, [k]: v }))
+
+  // Os botões e a leitura automática da Steam usam a configuração salva, não a que está na tela.
+  const steamDirty = dirty.some(key => key.startsWith('steam_'))
+  const steamAuto = status ? steamAutoReadState(status.steam) : null
 
   return (
     <div className="mt-12">
@@ -1141,6 +1108,25 @@ function IntegrationsSection() {
           </button>
         </div>
 
+        {steamDirty && (
+          <div role="status" className="mt-3 flex flex-wrap items-center gap-3 bg-card border border-border rounded-lg px-3 py-2">
+            <p className="text-[11px] text-secondary flex-1 min-w-[12rem]">
+              Alterações da Steam ainda não salvas. Os botões acima e a leitura automática usam só a configuração salva.
+            </p>
+            <button type="button" onClick={() => save.mutate()} disabled={save.isPending}
+              className="text-xs px-3 py-2 bg-accent text-bg rounded-lg font-medium hover:opacity-90 transition-opacity disabled:opacity-60">
+              {save.isPending ? 'Salvando…' : 'Salvar agora'}
+            </button>
+          </div>
+        )}
+        {steamDirty && save.isError && (
+          <p role="alert" className="text-[11px] text-movies mt-2">Não consegui salvar: {(save.error as Error).message}</p>
+        )}
+
+        {steamAuto && (
+          <p className={`text-[11px] mt-2 ${steamAuto.on ? 'text-games' : 'text-movies'}`}>{steamAuto.label}</p>
+        )}
+
         {status?.steam.library_last_sync && (
           <p className="text-[11px] text-muted mt-2">
             Biblioteca lida {timeAgo(status.steam.library_last_sync.at) === 'agora' ? 'agora' : `há ${timeAgo(status.steam.library_last_sync.at)}`}
@@ -1302,6 +1288,7 @@ function IntegrationsSection() {
           {save.isPending ? 'Salvando…' : 'Salvar integrações'}
         </button>
         {msg && <span className="text-sm text-games animate-fade-in">✓ {msg}</span>}
+        {save.isError && <span role="alert" className="text-sm text-movies">Não consegui salvar: {(save.error as Error).message}</span>}
       </div>
 
       {/* Feed de atividade */}
