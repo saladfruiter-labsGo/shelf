@@ -116,7 +116,7 @@ app.get('/:id', (c) => {
 app.post('/', async (c) => {
   const body = await c.req.json()
   const { external_id, type, title, cover_url, year, genre, runtime, status = 'wishlist',
-          rating = 0, notes, synopsis, creators, author, release_date, completed_at } = body
+          rating = 0, notes, synopsis, creators, author, release_date, completed_at, reuse_existing } = body
 
   if (!external_id || !type || !title) {
     return c.json({ error: 'external_id, type and title are required' }, 400)
@@ -141,8 +141,11 @@ app.post('/', async (c) => {
   } catch (e: any) {
     if (e.message?.includes('UNIQUE')) {
       const existing = db.prepare(
-        'SELECT status FROM media_items WHERE external_id = ? AND type = ?',
+        'SELECT * FROM media_items WHERE external_id = ? AND type = ?',
       ).get(external_id, type) as { status: string } | undefined
+      // Registrar no diário/marcar como visto a partir da busca precisa funcionar
+      // mesmo com a mídia já na Wishlist ou no Backlog: devolve o item existente.
+      if (reuse_existing === true && existing) return c.json(existing, 200)
       return c.json({
         error: existing?.status === 'wishlist'
           ? 'Esta mídia já está no Backlog.'

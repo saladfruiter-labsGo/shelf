@@ -119,6 +119,17 @@ test('criação explica quando a mídia já está no backlog', async () => {
   assert.deepEqual(await duplicate.json(), { error: 'Esta mídia já está no Backlog.' })
 })
 
+test('criação com reuse_existing devolve o item que já está no backlog', async () => {
+  const reused = await app.request('/', {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ external_id: 'bl-2', type: 'movie', title: 'Backlog 2', reuse_existing: true }),
+  })
+  assert.equal(reused.status, 200)
+  const item = await reused.json() as { external_id: string; status: string }
+  assert.equal(item.external_id, 'bl-2')
+  assert.equal(item.status, 'wishlist')
+})
+
 test('edição rejeita enums inválidos e deriva status de game_status', async () => {
   const invalidGameStatus = await app.request(`/${gameId}`, {
     method: 'PATCH', headers: { 'content-type': 'application/json' },

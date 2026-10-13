@@ -429,7 +429,20 @@ export function SearchModal({ open, onClose }: Props) {
         author:       result.author,
         release_date: result.release_date,
         completed_at: (!isSeries && action !== 'watchlist') ? when : null,
+        // Visto/Diário: se a mídia já está na Wishlist ou no Backlog, reaproveita o item.
+        reuse_existing: action !== 'watchlist',
       })
+
+      // Veio da fila (Wishlist/Backlog): ao entrar no diário/visto, sai dela e vira biblioteca.
+      // Séries são promovidas pelos episódios marcados.
+      if (!isSeries && action !== 'watchlist' && item.status === 'wishlist') {
+        await api.media.update(item.id, {
+          status:       'completed',
+          completed_at: when,
+          ...(rating > 0 ? { rating } : {}),
+          ...(result.type === 'game' ? { game_status: 'zerado' as const } : {}),
+        })
+      }
 
       // Games: horas jogadas (opcional) → playtime_seconds
       if (result.type === 'game' && action !== 'watchlist' && hours > 0) {
